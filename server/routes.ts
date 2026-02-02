@@ -79,6 +79,8 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  app.use("/uploads", (await import("express")).static(path.join(process.cwd(), "uploads")));
+
   app.get("/api/products", async (req, res) => {
     try {
       const products = await storage.getAllProducts();
