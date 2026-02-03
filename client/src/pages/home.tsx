@@ -38,6 +38,7 @@ export default function Home() {
     { id: "woocommerce", name: "WooCommerce", currency: "USD" },
     { id: "mercadolibre", name: "Mercado Libre", currency: "MXN" },
     { id: "rakuten", name: "Rakuten", currency: "JPY" },
+    { id: "depop", name: "Depop", currency: "GBP" },
   ];
 
   const analyzeMutation = useMutation({

@@ -46,6 +46,7 @@ const marketplaceLanguages: Record<Marketplace, string> = {
   woocommerce: "en",
   mercadolibre: "es",
   rakuten: "ja",
+  depop: "en",
 };
 
 const marketplaceCurrencies: Record<Marketplace, string> = {
@@ -56,6 +57,7 @@ const marketplaceCurrencies: Record<Marketplace, string> = {
   woocommerce: "USD",
   mercadolibre: "MXN",
   rakuten: "JPY",
+  depop: "GBP",
 };
 
 async function translateText(text: string, targetLang: string): Promise<string> {
