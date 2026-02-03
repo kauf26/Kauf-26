@@ -39,6 +39,7 @@ export default function Home() {
     { id: "mercadolibre", name: "Mercado Libre", currency: "MXN" },
     { id: "rakuten", name: "Rakuten", currency: "JPY" },
     { id: "depop", name: "Depop", currency: "GBP" },
+    { id: "vinted", name: "Vinted", currency: "EUR" },
   ];
 
   const analyzeMutation = useMutation({

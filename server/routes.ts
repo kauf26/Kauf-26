@@ -47,6 +47,7 @@ const marketplaceLanguages: Record<Marketplace, string> = {
   mercadolibre: "es",
   rakuten: "ja",
   depop: "en",
+  vinted: "en",
 };
 
 const marketplaceCurrencies: Record<Marketplace, string> = {
@@ -58,6 +59,7 @@ const marketplaceCurrencies: Record<Marketplace, string> = {
   mercadolibre: "MXN",
   rakuten: "JPY",
   depop: "GBP",
+  vinted: "EUR",
 };
 
 async function translateText(text: string, targetLang: string): Promise<string> {
