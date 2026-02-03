@@ -40,6 +40,7 @@ export default function Home() {
     { id: "rakuten", name: "Rakuten", currency: "JPY" },
     { id: "depop", name: "Depop", currency: "GBP" },
     { id: "vinted", name: "Vinted", currency: "EUR" },
+    { id: "grailed", name: "Grailed", currency: "USD" },
   ];
 
   const analyzeMutation = useMutation({
