@@ -7,11 +7,16 @@ export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+  pin: text("pin"),
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
+});
+
+export const pinSchema = z.object({
+  pin: z.string().length(4).regex(/^\d{4}$/, "PIN must be 4 digits"),
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
