@@ -108,7 +108,7 @@ export default function Sales() {
             <h1 className="text-4xl font-bold tracking-tight">Sales & Fees</h1>
           </div>
           <p className="text-muted-foreground text-lg">
-            Track revenue and manage your 1% service fees
+            Track revenue and manage your 2% service fees
           </p>
         </div>
 
@@ -132,7 +132,7 @@ export default function Sales() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Unpaid Fees (1%)
+                Unpaid Fees (2%)
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -241,7 +241,7 @@ export default function Sales() {
                       </div>
                     </div>
                     <div>
-                      <div className="text-sm text-muted-foreground">Our Fee (1%)</div>
+                      <div className="text-sm text-muted-foreground">Our Fee (2%)</div>
                       <div className="text-lg font-semibold mt-1 text-primary">
                         ${parseFloat(sale.ourFee).toFixed(2)}
                       </div>

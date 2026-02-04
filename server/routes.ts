@@ -246,7 +246,7 @@ export async function registerRoutes(
     try {
       const { listingId, saleAmount, saleCurrency, platformFee } = req.body;
 
-      const ourFee = (parseFloat(saleAmount) * 0.01).toFixed(2);
+      const ourFee = (parseFloat(saleAmount) * 0.02).toFixed(2);
 
       const sale = await storage.createSale({
         listingId,
@@ -416,7 +416,7 @@ export async function registerRoutes(
             currency: 'usd',
             product_data: {
               name: `Service Fee - Sale #${saleId}`,
-              description: `1% service fee for your marketplace sale`,
+              description: `2% service fee for your marketplace sale`,
             },
             unit_amount: feeInCents,
           },
