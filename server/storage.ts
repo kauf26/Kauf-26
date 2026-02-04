@@ -4,9 +4,10 @@ import {
   products, type Product, type InsertProduct,
   listings, type Listing, type InsertListing,
   sales, type Sale, type InsertSale,
+  dashboardLayouts, type DashboardLayout,
   type Marketplace
 } from "@shared/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, isNull } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -30,6 +31,9 @@ export interface IStorage {
   getSalesByListing(listingId: number): Promise<Sale[]>;
   getAllSales(): Promise<Sale[]>;
   updateSaleFeePaid(id: number, paid: boolean): Promise<void>;
+  
+  getDashboardLayout(userId?: string): Promise<DashboardLayout | undefined>;
+  saveDashboardLayout(userId: string | null, layout: string): Promise<DashboardLayout>;
 }
 
 export const storage: IStorage = {
@@ -117,5 +121,29 @@ export const storage: IStorage = {
 
   async updateSaleFeePaid(id: number, paid: boolean) {
     await db.update(sales).set({ feePaid: paid }).where(eq(sales.id, id));
+  },
+
+  async getDashboardLayout(userId?: string) {
+    if (userId) {
+      const [layout] = await db.select().from(dashboardLayouts).where(eq(dashboardLayouts.userId, userId));
+      return layout;
+    }
+    const [layout] = await db.select().from(dashboardLayouts).where(isNull(dashboardLayouts.userId));
+    return layout;
+  },
+
+  async saveDashboardLayout(userId: string | null, layout: string) {
+    const existing = await this.getDashboardLayout(userId || undefined);
+    if (existing) {
+      const [updated] = await db.update(dashboardLayouts)
+        .set({ layout, updatedAt: new Date() })
+        .where(eq(dashboardLayouts.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(dashboardLayouts)
+      .values({ userId, layout })
+      .returning();
+    return created;
   },
 };

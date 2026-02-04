@@ -449,5 +449,27 @@ export async function registerRoutes(
     }
   });
 
+  // Dashboard layout routes
+  app.get("/api/dashboard/layout", async (req, res) => {
+    try {
+      const layout = await storage.getDashboardLayout();
+      res.json(layout || { layout: null });
+    } catch (error) {
+      console.error("Error getting dashboard layout:", error);
+      res.status(500).json({ error: "Failed to get layout" });
+    }
+  });
+
+  app.post("/api/dashboard/layout", async (req, res) => {
+    try {
+      const { layout } = req.body;
+      const saved = await storage.saveDashboardLayout(null, JSON.stringify(layout));
+      res.json(saved);
+    } catch (error) {
+      console.error("Error saving dashboard layout:", error);
+      res.status(500).json({ error: "Failed to save layout" });
+    }
+  });
+
   return httpServer;
 }

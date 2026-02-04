@@ -8,8 +8,9 @@ import Home from "@/pages/home";
 import Listings from "@/pages/listings";
 import Sales from "@/pages/sales";
 import Tools from "@/pages/tools";
+import Dashboard from "@/pages/dashboard";
 import Auth from "@/pages/auth";
-import { Home as HomeIcon, ShoppingBag, DollarSign, Wrench, LogOut } from "lucide-react";
+import { Home as HomeIcon, ShoppingBag, DollarSign, Wrench, LogOut, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 function useAuth() {
@@ -50,6 +51,7 @@ function Navigation() {
 
   const navItems = [
     { path: "/", label: "Upload", icon: HomeIcon },
+    { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { path: "/listings", label: "Listings", icon: ShoppingBag },
     { path: "/sales", label: "Sales", icon: DollarSign },
     { path: "/tools", label: "Tools", icon: Wrench },
@@ -111,6 +113,9 @@ function Router() {
         <Route path="/auth" component={Auth} />
         <Route path="/">
           <ProtectedRoute component={Home} />
+        </Route>
+        <Route path="/dashboard">
+          <ProtectedRoute component={Dashboard} />
         </Route>
         <Route path="/listings">
           <ProtectedRoute component={Listings} />
