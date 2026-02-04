@@ -6,9 +6,7 @@
 // @ts-ignore - __DEV__ is defined by React Native
 const isDev = typeof __DEV__ !== 'undefined' ? __DEV__ : false;
 
-export const API_BASE_URL = isDev 
-  ? 'http://localhost:5000'  // Development - change to LAN IP for physical device testing
-  : 'https://your-app.replit.app';  // Production - REPLACE with your actual Replit URL
+export const API_BASE_URL = 'https://global-marketplace-lister.replit.app';  // Your published Replit app URL
 
 // Helper function for API requests
 export async function apiRequest<T>(
