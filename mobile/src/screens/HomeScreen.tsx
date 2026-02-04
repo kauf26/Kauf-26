@@ -16,16 +16,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { API_BASE_URL } from '../services/api';
 
 const MARKETPLACES = [
-  { id: 'ebay', name: 'eBay', icon: 'cart' },
-  { id: 'amazon', name: 'Amazon', icon: 'logo-amazon' },
-  { id: 'etsy', name: 'Etsy', icon: 'basket' },
-  { id: 'shopify', name: 'Shopify', icon: 'bag' },
-  { id: 'woocommerce', name: 'WooCommerce', icon: 'logo-wordpress' },
-  { id: 'mercadolibre', name: 'Mercado Libre', icon: 'globe' },
-  { id: 'rakuten', name: 'Rakuten', icon: 'storefront' },
-  { id: 'depop', name: 'Depop', icon: 'shirt' },
-  { id: 'vinted', name: 'Vinted', icon: 'pricetag' },
-  { id: 'grailed', name: 'Grailed', icon: 'diamond' },
+  { id: 'ebay', name: 'eBay', icon: 'cart', color: '#e53238' },
+  { id: 'amazon', name: 'Amazon', icon: 'logo-amazon', color: '#ff9900' },
+  { id: 'etsy', name: 'Etsy', icon: 'basket', color: '#f45800' },
+  { id: 'shopify', name: 'Shopify', icon: 'bag', color: '#95bf47' },
+  { id: 'woocommerce', name: 'WooCommerce', icon: 'logo-wordpress', color: '#96588a' },
+  { id: 'mercadolibre', name: 'Mercado Libre', icon: 'globe', color: '#ffe600' },
+  { id: 'rakuten', name: 'Rakuten', icon: 'storefront', color: '#bf0000' },
+  { id: 'depop', name: 'Depop', icon: 'shirt', color: '#ff2300' },
+  { id: 'vinted', name: 'Vinted', icon: 'pricetag', color: '#09b1ba' },
+  { id: 'grailed', name: 'Grailed', icon: 'diamond', color: '#000000' },
 ];
 
 export default function HomeScreen() {
@@ -211,30 +211,33 @@ export default function HomeScreen() {
 
           <Text style={styles.label}>Select Marketplaces</Text>
           <View style={styles.marketplaces}>
-            {MARKETPLACES.map((marketplace) => (
-              <TouchableOpacity
-                key={marketplace.id}
-                style={[
-                  styles.marketplaceChip,
-                  selectedMarketplaces.includes(marketplace.id) && styles.marketplaceChipSelected,
-                ]}
-                onPress={() => toggleMarketplace(marketplace.id)}
-              >
-                <Ionicons
-                  name={marketplace.icon as any}
-                  size={16}
-                  color={selectedMarketplaces.includes(marketplace.id) ? '#ffffff' : '#9ca3af'}
-                />
-                <Text
+            {MARKETPLACES.map((marketplace) => {
+              const isSelected = selectedMarketplaces.includes(marketplace.id);
+              return (
+                <TouchableOpacity
+                  key={marketplace.id}
                   style={[
-                    styles.marketplaceText,
-                    selectedMarketplaces.includes(marketplace.id) && styles.marketplaceTextSelected,
+                    styles.marketplaceChip,
+                    isSelected && { backgroundColor: marketplace.color, borderColor: marketplace.color },
                   ]}
+                  onPress={() => toggleMarketplace(marketplace.id)}
                 >
-                  {marketplace.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
+                  <Ionicons
+                    name={marketplace.icon as any}
+                    size={16}
+                    color={isSelected ? '#ffffff' : '#9ca3af'}
+                  />
+                  <Text
+                    style={[
+                      styles.marketplaceText,
+                      isSelected && styles.marketplaceTextSelected,
+                    ]}
+                  >
+                    {marketplace.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
 

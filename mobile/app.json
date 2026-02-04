@@ -19,8 +19,11 @@
       "bundleIdentifier": "com.globalmarketplacelister.app",
       "buildNumber": "1.0.0",
       "infoPlist": {
-        "NSCameraUsageDescription": "This app uses the camera to photograph products for listing.",
-        "NSPhotoLibraryUsageDescription": "This app accesses your photo library to upload product images."
+        "NSCameraUsageDescription": "Take photos of products to create marketplace listings with AI-powered descriptions.",
+        "NSPhotoLibraryUsageDescription": "Select product photos from your library to list on multiple marketplaces."
+      },
+      "config": {
+        "usesNonExemptEncryption": false
       }
     },
     "android": {
