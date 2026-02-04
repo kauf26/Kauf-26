@@ -1,7 +1,10 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, DollarSign, CheckCircle2, Clock } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { Loader2, DollarSign, CheckCircle2, Clock, CreditCard } from "lucide-react";
 
 interface Sale {
   id: number;
@@ -17,6 +20,9 @@ interface Sale {
 }
 
 export default function Sales() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
   const { data: sales = [], isLoading } = useQuery<Sale[]>({
     queryKey: ["sales"],
     queryFn: async () => {
@@ -25,6 +31,52 @@ export default function Sales() {
       return res.json();
     },
   });
+
+  const payFeeMutation = useMutation({
+    mutationFn: async (saleId: number) => {
+      const res = await fetch(`/api/sales/${saleId}/pay-fee`, {
+        method: "POST",
+      });
+      if (!res.ok) throw new Error("Failed to create payment session");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    },
+    onError: () => {
+      toast({
+        title: "Payment Error",
+        description: "Could not start payment. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const payment = params.get("payment");
+    const saleId = params.get("saleId");
+
+    if (payment === "success" && saleId) {
+      fetch(`/api/sales/${saleId}/mark-paid`, { method: "POST" })
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: ["sales"] });
+          toast({
+            title: "Payment Successful!",
+            description: "Your service fee has been paid. Thank you!",
+          });
+        });
+      window.history.replaceState({}, "", "/sales");
+    } else if (payment === "cancelled") {
+      toast({
+        title: "Payment Cancelled",
+        description: "You can pay the fee anytime from this page.",
+      });
+      window.history.replaceState({}, "", "/sales");
+    }
+  }, [queryClient, toast]);
 
   const totalRevenue = sales.reduce(
     (sum, sale) => sum + parseFloat(sale.saleAmount),
@@ -136,23 +188,42 @@ export default function Sales() {
                         })}
                       </CardDescription>
                     </div>
-                    <Badge
-                      variant={sale.feePaid ? "default" : "secondary"}
-                      className="flex items-center gap-1"
-                      data-testid={`badge-fee-${sale.id}`}
-                    >
-                      {sale.feePaid ? (
-                        <>
-                          <CheckCircle2 className="w-3 h-3" />
-                          Fee Paid
-                        </>
-                      ) : (
-                        <>
-                          <Clock className="w-3 h-3" />
-                          Fee Pending
-                        </>
+                    <div className="flex items-center gap-2">
+                      {!sale.feePaid && (
+                        <Button
+                          size="sm"
+                          onClick={() => payFeeMutation.mutate(sale.id)}
+                          disabled={payFeeMutation.isPending}
+                          data-testid={`button-pay-fee-${sale.id}`}
+                        >
+                          {payFeeMutation.isPending ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <>
+                              <CreditCard className="w-4 h-4 mr-2" />
+                              Pay ${parseFloat(sale.ourFee).toFixed(2)}
+                            </>
+                          )}
+                        </Button>
                       )}
-                    </Badge>
+                      <Badge
+                        variant={sale.feePaid ? "default" : "secondary"}
+                        className="flex items-center gap-1"
+                        data-testid={`badge-fee-${sale.id}`}
+                      >
+                        {sale.feePaid ? (
+                          <>
+                            <CheckCircle2 className="w-3 h-3" />
+                            Fee Paid
+                          </>
+                        ) : (
+                          <>
+                            <Clock className="w-3 h-3" />
+                            Fee Pending
+                          </>
+                        )}
+                      </Badge>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>

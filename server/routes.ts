@@ -6,6 +6,7 @@ import OpenAI from "openai";
 import multer from "multer";
 import path from "path";
 import fs from "fs/promises";
+import { getUncachableStripeClient } from "./stripeClient";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -387,6 +388,64 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error logging in:", error);
       res.status(500).json({ error: "Failed to log in" });
+    }
+  });
+
+  // Stripe payment for 2% fee
+  app.post("/api/sales/:saleId/pay-fee", async (req, res) => {
+    try {
+      const saleId = parseInt(req.params.saleId);
+      const sales = await storage.getAllSales();
+      const sale = sales.find(s => s.id === saleId);
+      
+      if (!sale) {
+        return res.status(404).json({ error: "Sale not found" });
+      }
+
+      if (sale.feePaid) {
+        return res.status(400).json({ error: "Fee already paid" });
+      }
+
+      const stripe = await getUncachableStripeClient();
+      const feeInCents = Math.round(parseFloat(sale.ourFee) * 100);
+
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [{
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: `Service Fee - Sale #${saleId}`,
+              description: `2% service fee for your marketplace sale`,
+            },
+            unit_amount: feeInCents,
+          },
+          quantity: 1,
+        }],
+        mode: 'payment',
+        success_url: `${req.protocol}://${req.get('host')}/sales?payment=success&saleId=${saleId}`,
+        cancel_url: `${req.protocol}://${req.get('host')}/sales?payment=cancelled`,
+        metadata: {
+          saleId: saleId.toString(),
+        },
+      });
+
+      res.json({ url: session.url });
+    } catch (error) {
+      console.error("Error creating checkout session:", error);
+      res.status(500).json({ error: "Failed to create payment session" });
+    }
+  });
+
+  // Mark fee as paid (called after successful payment)
+  app.post("/api/sales/:saleId/mark-paid", async (req, res) => {
+    try {
+      const saleId = parseInt(req.params.saleId);
+      await storage.updateSaleFeePaid(saleId, true);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error marking fee as paid:", error);
+      res.status(500).json({ error: "Failed to mark fee as paid" });
     }
   });
 
