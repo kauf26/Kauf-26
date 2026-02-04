@@ -73,11 +73,17 @@ A React Native mobile app for listing products across multiple marketplaces.
 
 ### API Configuration
 
-Update `src/services/api.ts` with your production API URL before building:
+**CRITICAL:** Update `src/services/api.ts` with your actual production API URL before building:
 
 ```typescript
+// Replace 'your-app' with your actual Replit app name
 export const API_BASE_URL = 'https://your-app.replit.app';
 ```
+
+To find your API URL:
+1. Publish your web app on Replit
+2. Copy the URL (e.g., `https://global-marketplace-lister.yourusername.replit.app`)
+3. Paste it in the `API_BASE_URL` constant
 
 ## Project Structure
 

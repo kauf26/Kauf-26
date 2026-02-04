@@ -1,6 +1,6 @@
 # App Assets Guide
 
-Before submitting to the App Store, you need to replace these placeholder files with your actual assets.
+**IMPORTANT:** The current placeholder images are 1x1 pixel placeholders. Before submitting to the App Store, you MUST replace these with your actual assets.
 
 ## Required Assets
 
