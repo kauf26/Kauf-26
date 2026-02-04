@@ -131,7 +131,7 @@ export async function registerRoutes(
             content: [
               {
                 type: "text",
-                text: "Analyze this product image and provide: 1) A clear, descriptive product title (max 10 words). 2) A compelling 3-sentence product description suitable for e-commerce listings. Focus on key features, benefits, and appeal to potential buyers. Return in JSON format: {\"title\": \"...\", \"description\": \"...\"}",
+                text: "Analyze this product image carefully. If you can identify the exact product (brand, model, specific item), provide the accurate product details from your knowledge. If you cannot identify the exact product, provide a compelling generic description. Return: 1) Product title - be specific with brand/model if identifiable, otherwise a descriptive title (max 10 words). 2) Description - exactly 3 sentences: First sentence describes what it is and key features. Second sentence highlights benefits or use cases. Third sentence mentions condition or appeal to buyers. Return JSON: {\"title\": \"...\", \"description\": \"...\"}",
               },
               {
                 type: "image_url",
@@ -175,7 +175,7 @@ export async function registerRoutes(
             content: [
               {
                 type: "text",
-                text: "Analyze this product image and provide: 1) A clear, descriptive product title (max 10 words). 2) A compelling 3-sentence product description suitable for e-commerce listings. 3) A suggested price in USD based on typical market value. Return in JSON format: {\"title\": \"...\", \"description\": \"...\", \"suggestedPrice\": number}",
+                text: "Analyze this product image carefully. If you can identify the exact product (brand, model, specific item), provide the accurate product details from your knowledge. If you cannot identify the exact product, provide a compelling generic description. Return: 1) Product title - be specific with brand/model if identifiable, otherwise a descriptive title (max 10 words). 2) Description - exactly 3 sentences: First sentence describes what it is and key features. Second sentence highlights benefits or use cases. Third sentence mentions condition or appeal to buyers. 3) Suggested retail price in USD. Return JSON: {\"title\": \"...\", \"description\": \"...\", \"suggestedPrice\": number, \"identified\": boolean}",
               },
               {
                 type: "image_url",
