@@ -254,7 +254,7 @@ export async function registerRoutes(
         saleCurrency,
         platformFee: platformFee || "0",
         ourFee,
-        feePaid: false,
+        feePaid: true,
         buyerInfo: req.body.buyerInfo || null,
         shippingLabelGenerated: false,
       });

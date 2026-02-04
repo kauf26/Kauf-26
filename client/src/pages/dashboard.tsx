@@ -52,20 +52,18 @@ const defaultLayout: LayoutItem[] = [
   { i: "revenue", x: 0, y: 0, w: 4, h: 2, minW: 2, minH: 2 },
   { i: "sales", x: 4, y: 0, w: 4, h: 2, minW: 2, minH: 2 },
   { i: "fees", x: 8, y: 0, w: 4, h: 2, minW: 2, minH: 2 },
-  { i: "pending", x: 0, y: 2, w: 3, h: 2, minW: 2, minH: 2 },
-  { i: "paid", x: 3, y: 2, w: 3, h: 2, minW: 2, minH: 2 },
-  { i: "products", x: 6, y: 2, w: 3, h: 2, minW: 2, minH: 2 },
-  { i: "listings", x: 9, y: 2, w: 3, h: 2, minW: 2, minH: 2 },
+  { i: "netproceeds", x: 0, y: 2, w: 4, h: 2, minW: 2, minH: 2 },
+  { i: "products", x: 4, y: 2, w: 4, h: 2, minW: 2, minH: 2 },
+  { i: "listings", x: 8, y: 2, w: 4, h: 2, minW: 2, minH: 2 },
   { i: "marketplaces", x: 0, y: 4, w: 6, h: 3, minW: 3, minH: 2 },
   { i: "recent", x: 6, y: 4, w: 6, h: 3, minW: 3, minH: 2 },
 ];
 
 const widgetInfo: Record<string, { title: string; icon: React.ReactNode; color: string }> = {
-  revenue: { title: "Total Revenue", icon: <DollarSign className="w-5 h-5" />, color: "text-green-500" },
-  sales: { title: "Total Sales", icon: <ShoppingBag className="w-5 h-5" />, color: "text-blue-500" },
-  fees: { title: "Service Fees (2%)", icon: <TrendingUp className="w-5 h-5" />, color: "text-purple-500" },
-  pending: { title: "Pending Fees", icon: <Clock className="w-5 h-5" />, color: "text-orange-500" },
-  paid: { title: "Paid Fees", icon: <CheckCircle2 className="w-5 h-5" />, color: "text-green-500" },
+  revenue: { title: "Gross Sales", icon: <DollarSign className="w-5 h-5" />, color: "text-blue-500" },
+  sales: { title: "Total Sales", icon: <ShoppingBag className="w-5 h-5" />, color: "text-purple-500" },
+  fees: { title: "Service Fees (2%)", icon: <TrendingUp className="w-5 h-5" />, color: "text-orange-500" },
+  netproceeds: { title: "Net Proceeds", icon: <CheckCircle2 className="w-5 h-5" />, color: "text-green-500" },
   products: { title: "Products", icon: <Package className="w-5 h-5" />, color: "text-cyan-500" },
   listings: { title: "Active Listings", icon: <Globe className="w-5 h-5" />, color: "text-indigo-500" },
   marketplaces: { title: "Marketplace Breakdown", icon: <Globe className="w-5 h-5" />, color: "text-primary" },
@@ -161,8 +159,7 @@ export default function Dashboard() {
 
   const totalRevenue = sales.reduce((sum, sale) => sum + parseFloat(sale.saleAmount), 0);
   const totalFees = sales.reduce((sum, sale) => sum + parseFloat(sale.ourFee), 0);
-  const paidFees = sales.filter(s => s.feePaid).reduce((sum, sale) => sum + parseFloat(sale.ourFee), 0);
-  const pendingFees = totalFees - paidFees;
+  const netProceeds = totalRevenue - totalFees;
   const activeListings = listings.filter(l => l.status === "active").length;
 
   const marketplaceStats = listings.reduce((acc, listing) => {
@@ -198,18 +195,11 @@ export default function Dashboard() {
             <p className="text-sm text-muted-foreground mt-2">Total service fees</p>
           </div>
         );
-      case "pending":
+      case "netproceeds":
         return (
           <div className="text-center">
-            <div className={`text-4xl font-bold ${info.color}`}>${pendingFees.toFixed(2)}</div>
-            <p className="text-sm text-muted-foreground mt-2">Awaiting payment</p>
-          </div>
-        );
-      case "paid":
-        return (
-          <div className="text-center">
-            <div className={`text-4xl font-bold ${info.color}`}>${paidFees.toFixed(2)}</div>
-            <p className="text-sm text-muted-foreground mt-2">Fees settled</p>
+            <div className={`text-4xl font-bold ${info.color}`}>${netProceeds.toFixed(2)}</div>
+            <p className="text-sm text-muted-foreground mt-2">Your earnings</p>
           </div>
         );
       case "products":
