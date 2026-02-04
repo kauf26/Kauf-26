@@ -67,3 +67,29 @@ The platform supports listing to:
 
 ### Currency Support
 Built-in conversion rates for: USD, EUR, GBP, JPY, MXN, BRL, AUD, CAD
+
+## Mobile App (React Native/Expo)
+
+A native iOS mobile app version has been created in the `mobile/` directory.
+
+### Mobile Architecture
+- **Framework**: React Native with Expo
+- **Navigation**: React Navigation (bottom tabs)
+- **Authentication**: 4-digit PIN stored in Expo SecureStore
+- **Image Handling**: expo-image-picker and expo-camera
+
+### Mobile Screens
+- `PinAuthScreen`: 4-digit PIN creation and authentication
+- `HomeScreen`: Camera/photo upload with AI product analysis
+- `ListingsScreen`: View and manage marketplace listings
+- `SalesScreen`: Sales tracking with 2% fee display
+- `ToolsScreen`: Currency converter and shipping label generator
+
+### Building for App Store
+1. Create an Apple Developer account ($99/year)
+2. Install EAS CLI: `npm install -g eas-cli`
+3. Configure: `eas build:configure`
+4. Build: `npm run build:ios`
+5. Submit: `eas submit --platform ios`
+
+See `mobile/README.md` for detailed instructions.

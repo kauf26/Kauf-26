@@ -158,6 +158,48 @@ export async function registerRoutes(
     }
   });
 
+  // Base64 analyze endpoint for mobile app
+  app.post("/api/products/analyze-base64", async (req, res) => {
+    try {
+      const { image } = req.body;
+      
+      if (!image) {
+        return res.status(400).json({ error: "No image provided" });
+      }
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-5.2",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "Analyze this product image and provide: 1) A clear, descriptive product title (max 10 words). 2) A compelling 3-sentence product description suitable for e-commerce listings. 3) A suggested price in USD based on typical market value. Return in JSON format: {\"title\": \"...\", \"description\": \"...\", \"suggestedPrice\": number}",
+              },
+              {
+                type: "image_url",
+                image_url: { url: image },
+              },
+            ],
+          },
+        ],
+        response_format: { type: "json_object" },
+      });
+
+      const result = JSON.parse(response.choices[0]?.message?.content || "{}");
+      
+      res.json({
+        title: result.title || "Untitled Product",
+        description: result.description || "No description available.",
+        suggestedPrice: result.suggestedPrice || 0,
+      });
+    } catch (error) {
+      console.error("Error analyzing product:", error);
+      res.status(500).json({ error: "Failed to analyze product" });
+    }
+  });
+
   app.post("/api/products", async (req, res) => {
     try {
       const { imageUrl, originalTitle, aiDescription, basePrice, currency } = req.body;
