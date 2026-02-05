@@ -22,7 +22,6 @@ const MARKETPLACES = [
   { id: 'shopify', name: 'Shopify', icon: 'bag', color: '#95bf47' },
   { id: 'woocommerce', name: 'WooCommerce', icon: 'logo-wordpress', color: '#96588a' },
   { id: 'walmart', name: 'Walmart', icon: 'storefront', color: '#0071ce' },
-  { id: 'tiktokshop', name: 'TikTok Shop', icon: 'logo-tiktok', color: '#000000' },
   { id: 'mercadolibre', name: 'Mercado Libre', icon: 'globe', color: '#ffe600' },
   { id: 'rakuten', name: 'Rakuten', icon: 'storefront', color: '#bf0000' },
 ];
