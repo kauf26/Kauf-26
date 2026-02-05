@@ -7,7 +7,7 @@ A React Native mobile app for listing products across multiple marketplaces.
 - 4-digit PIN authentication
 - Camera/photo upload for products
 - AI-powered product description generation (with exact match detection)
-- List to 11 marketplaces organized by Local & Global
+- List to 13 marketplaces organized by Local & Global
 - New/Used condition toggle
 - Sales tracking with automatic 2% fee deduction
 - Currency converter
@@ -461,6 +461,8 @@ mobile/
 - AliExpress
 - Mercado Libre
 - Rakuten
+- BigCommerce
+- PrestaShop
 
 ---
 

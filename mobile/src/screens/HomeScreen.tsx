@@ -30,6 +30,8 @@ const GLOBAL_MARKETPLACES = [
   { id: 'aliexpress', name: 'AliExpress', icon: 'pricetag', color: '#e62e04' },
   { id: 'mercadolibre', name: 'Mercado Libre', icon: 'globe', color: '#ffe600' },
   { id: 'rakuten', name: 'Rakuten', icon: 'storefront', color: '#bf0000' },
+  { id: 'bigcommerce', name: 'BigCommerce', icon: 'cart', color: '#34313f' },
+  { id: 'prestashop', name: 'PrestaShop', icon: 'bag-handle', color: '#df0067' },
 ];
 
 const MARKETPLACES = [...LOCAL_MARKETPLACES, ...GLOBAL_MARKETPLACES];

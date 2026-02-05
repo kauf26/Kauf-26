@@ -46,6 +46,8 @@ export default function Home() {
     { id: "aliexpress", name: "AliExpress", currency: "USD" },
     { id: "mercadolibre", name: "Mercado Libre", currency: "MXN" },
     { id: "rakuten", name: "Rakuten", currency: "JPY" },
+    { id: "bigcommerce", name: "BigCommerce", currency: "USD" },
+    { id: "prestashop", name: "PrestaShop", currency: "EUR" },
   ];
 
   const marketplaces = [...localMarketplaces, ...globalMarketplaces];

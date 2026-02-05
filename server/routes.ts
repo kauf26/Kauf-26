@@ -51,6 +51,8 @@ const marketplaceLanguages: Record<Marketplace, string> = {
   aliexpress: "en",
   mercadolibre: "es",
   rakuten: "ja",
+  bigcommerce: "en",
+  prestashop: "en",
 };
 
 const marketplaceCurrencies: Record<Marketplace, string> = {
@@ -65,6 +67,8 @@ const marketplaceCurrencies: Record<Marketplace, string> = {
   aliexpress: "USD",
   mercadolibre: "MXN",
   rakuten: "JPY",
+  bigcommerce: "USD",
+  prestashop: "EUR",
 };
 
 async function translateText(text: string, targetLang: string): Promise<string> {

@@ -60,10 +60,12 @@ The application includes pre-built AI integration modules in `server/replit_inte
 - Environment variable: `DATABASE_URL`
 
 ### Supported Marketplaces
-The platform supports listing to:
-- eBay, Amazon, Etsy, Shopify, WooCommerce (English)
-- Mercado Libre (Spanish)
-- Rakuten (Japanese)
+The platform supports listing to 13 marketplaces:
+- Local: eBay, Amazon, Walmart, Wish, Reverb (English/USD)
+- Global: Etsy, Shopify, WooCommerce, AliExpress, BigCommerce (English/USD)
+- Mercado Libre (Spanish/MXN)
+- Rakuten (Japanese/JPY)
+- PrestaShop (English/EUR)
 
 ### Currency Support
 Built-in conversion rates for: USD, EUR, GBP, JPY, MXN, BRL, AUD, CAD

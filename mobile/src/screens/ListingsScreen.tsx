@@ -25,17 +25,18 @@ interface Listing {
 
 const MARKETPLACE_COLORS: Record<string, string> = {
   ebay: '#e53238',
-  offerup: '#00ab80',
-  depop: '#ff2300',
-  vinted: '#09b1ba',
-  grailed: '#000000',
-  square: '#006aff',
   amazon: '#ff9900',
+  walmart: '#0071ce',
+  wish: '#2fb7ec',
+  reverb: '#f04f59',
   etsy: '#f45800',
   shopify: '#95bf47',
   woocommerce: '#96588a',
+  aliexpress: '#e62e04',
   mercadolibre: '#ffe600',
   rakuten: '#bf0000',
+  bigcommerce: '#34313f',
+  prestashop: '#df0067',
 };
 
 export default function ListingsScreen() {
