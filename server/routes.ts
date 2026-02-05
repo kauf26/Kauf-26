@@ -42,27 +42,29 @@ const currencyRates: Record<string, number> = {
 const marketplaceLanguages: Record<Marketplace, string> = {
   ebay: "en",
   amazon: "en",
+  walmart: "en",
+  wish: "en",
+  reverb: "en",
   etsy: "en",
   shopify: "en",
   woocommerce: "en",
+  aliexpress: "en",
   mercadolibre: "es",
   rakuten: "ja",
-  depop: "en",
-  vinted: "en",
-  grailed: "en",
 };
 
 const marketplaceCurrencies: Record<Marketplace, string> = {
   ebay: "USD",
   amazon: "USD",
+  walmart: "USD",
+  wish: "USD",
+  reverb: "USD",
   etsy: "USD",
   shopify: "USD",
   woocommerce: "USD",
+  aliexpress: "USD",
   mercadolibre: "MXN",
   rakuten: "JPY",
-  depop: "GBP",
-  vinted: "EUR",
-  grailed: "USD",
 };
 
 async function translateText(text: string, targetLang: string): Promise<string> {
