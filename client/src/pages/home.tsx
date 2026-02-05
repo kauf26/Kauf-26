@@ -38,6 +38,7 @@ export default function Home() {
     { id: "shopify", name: "Shopify", currency: "USD" },
     { id: "woocommerce", name: "WooCommerce", currency: "USD" },
     { id: "walmart", name: "Walmart", currency: "USD" },
+    { id: "aliexpress", name: "AliExpress", currency: "USD" },
     { id: "mercadolibre", name: "Mercado Libre", currency: "MXN" },
     { id: "rakuten", name: "Rakuten", currency: "JPY" },
   ];
