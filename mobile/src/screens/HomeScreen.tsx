@@ -15,18 +15,23 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { API_BASE_URL } from '../services/api';
 
-const MARKETPLACES = [
+const LOCAL_MARKETPLACES = [
   { id: 'ebay', name: 'eBay', icon: 'cart', color: '#e53238' },
   { id: 'amazon', name: 'Amazon', icon: 'logo-amazon', color: '#ff9900' },
+  { id: 'walmart', name: 'Walmart', icon: 'storefront', color: '#0071ce' },
+  { id: 'wish', name: 'Wish', icon: 'star', color: '#2fb7ec' },
+];
+
+const GLOBAL_MARKETPLACES = [
   { id: 'etsy', name: 'Etsy', icon: 'basket', color: '#f45800' },
   { id: 'shopify', name: 'Shopify', icon: 'bag', color: '#95bf47' },
   { id: 'woocommerce', name: 'WooCommerce', icon: 'logo-wordpress', color: '#96588a' },
-  { id: 'walmart', name: 'Walmart', icon: 'storefront', color: '#0071ce' },
   { id: 'aliexpress', name: 'AliExpress', icon: 'pricetag', color: '#e62e04' },
-  { id: 'wish', name: 'Wish', icon: 'star', color: '#2fb7ec' },
   { id: 'mercadolibre', name: 'Mercado Libre', icon: 'globe', color: '#ffe600' },
   { id: 'rakuten', name: 'Rakuten', icon: 'storefront', color: '#bf0000' },
 ];
+
+const MARKETPLACES = [...LOCAL_MARKETPLACES, ...GLOBAL_MARKETPLACES];
 
 export default function HomeScreen() {
   const [image, setImage] = useState<string | null>(null);
@@ -246,9 +251,40 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.label}>Select Marketplaces</Text>
+          <Text style={styles.sectionLabel}>Local Marketplaces</Text>
           <View style={styles.marketplaces}>
-            {MARKETPLACES.map((marketplace) => {
+            {LOCAL_MARKETPLACES.map((marketplace) => {
+              const isSelected = selectedMarketplaces.includes(marketplace.id);
+              return (
+                <TouchableOpacity
+                  key={marketplace.id}
+                  style={[
+                    styles.marketplaceChip,
+                    isSelected && { backgroundColor: marketplace.color, borderColor: marketplace.color },
+                  ]}
+                  onPress={() => toggleMarketplace(marketplace.id)}
+                >
+                  <Ionicons
+                    name={marketplace.icon as any}
+                    size={16}
+                    color={isSelected ? '#ffffff' : '#9ca3af'}
+                  />
+                  <Text
+                    style={[
+                      styles.marketplaceText,
+                      isSelected && styles.marketplaceTextSelected,
+                    ]}
+                  >
+                    {marketplace.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <Text style={styles.sectionLabel}>Global Marketplaces</Text>
+          <View style={styles.marketplaces}>
+            {GLOBAL_MARKETPLACES.map((marketplace) => {
               const isSelected = selectedMarketplaces.includes(marketplace.id);
               return (
                 <TouchableOpacity
