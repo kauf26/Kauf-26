@@ -24,6 +24,8 @@ interface ShippingLabel {
   shipFrom: any;
   weight: string;
   dimensions: string;
+  estimatedCost: number;
+  billableWeight: number;
   createdAt: string;
 }
 
@@ -295,6 +297,14 @@ export default function Tools() {
                     <code className="text-xs bg-background px-2 py-1 rounded">
                       {label.trackingNumber}
                     </code>
+                  </div>
+                  <div className="flex items-center justify-between bg-green-500/10 p-2 rounded-md border border-green-500/20">
+                    <span className="text-sm font-medium text-green-600">Estimated Shipping Cost:</span>
+                    <span className="text-lg font-bold text-green-600">${label.estimatedCost.toFixed(2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Billable Weight:</span>
+                    <span>{label.billableWeight} lbs</span>
                   </div>
                   <div className="text-xs text-muted-foreground">
                     Generated: {new Date(label.createdAt).toLocaleString()}

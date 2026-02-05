@@ -343,6 +343,21 @@ export async function registerRoutes(
     try {
       const { saleId, shipTo, shipFrom, weight, dimensions } = req.body;
 
+      // Calculate estimated shipping cost based on weight and dimensions
+      const weightNum = parseFloat(weight) || 1;
+      const dimParts = (dimensions || "10x10x10").split("x").map((d: string) => parseFloat(d) || 10);
+      const dimWeight = (dimParts[0] * dimParts[1] * dimParts[2]) / 139; // Dimensional weight formula
+      const billableWeight = Math.max(weightNum, dimWeight);
+      
+      // Base rates (simulated carrier pricing)
+      let estimatedCost = 4.99; // Base rate
+      if (billableWeight <= 1) estimatedCost = 4.99;
+      else if (billableWeight <= 3) estimatedCost = 7.49;
+      else if (billableWeight <= 5) estimatedCost = 9.99;
+      else if (billableWeight <= 10) estimatedCost = 14.99;
+      else if (billableWeight <= 20) estimatedCost = 19.99;
+      else estimatedCost = 19.99 + (billableWeight - 20) * 0.75;
+
       const labelData = {
         id: `LABEL-${Date.now()}`,
         trackingNumber: `1Z${Math.random().toString(36).substring(2, 15).toUpperCase()}`,
@@ -350,6 +365,8 @@ export async function registerRoutes(
         shipFrom,
         weight,
         dimensions,
+        estimatedCost: Math.round(estimatedCost * 100) / 100,
+        billableWeight: Math.round(billableWeight * 10) / 10,
         createdAt: new Date().toISOString(),
       };
 

@@ -31,7 +31,13 @@ export default function ToolsScreen() {
   const [convertedAmount, setConvertedAmount] = useState<number | null>(null);
 
   const [weight, setWeight] = useState('');
+  const [dimensions, setDimensions] = useState('');
   const [destination, setDestination] = useState('');
+  const [shippingResult, setShippingResult] = useState<{
+    trackingNumber: string;
+    estimatedCost: number;
+    billableWeight: number;
+  } | null>(null);
 
   const handleConvert = () => {
     const value = parseFloat(amount);
@@ -59,10 +65,27 @@ export default function ToolsScreen() {
       return;
     }
 
-    Alert.alert(
-      'Shipping Labels Generated',
-      `Labels generated for ${CARRIERS.join(', ')}. In a production app, these would be downloadable PDFs.`
-    );
+    // Calculate estimated shipping cost
+    const weightNum = parseFloat(weight) || 1;
+    const dimParts = (dimensions || '10x10x10').split('x').map((d) => parseFloat(d) || 10);
+    const dimWeight = (dimParts[0] * dimParts[1] * dimParts[2]) / 139;
+    const billableWeight = Math.max(weightNum, dimWeight);
+
+    let estimatedCost = 4.99;
+    if (billableWeight <= 1) estimatedCost = 4.99;
+    else if (billableWeight <= 3) estimatedCost = 7.49;
+    else if (billableWeight <= 5) estimatedCost = 9.99;
+    else if (billableWeight <= 10) estimatedCost = 14.99;
+    else if (billableWeight <= 20) estimatedCost = 19.99;
+    else estimatedCost = 19.99 + (billableWeight - 20) * 0.75;
+
+    const trackingNumber = `1Z${Math.random().toString(36).substring(2, 15).toUpperCase()}`;
+
+    setShippingResult({
+      trackingNumber,
+      estimatedCost: Math.round(estimatedCost * 100) / 100,
+      billableWeight: Math.round(billableWeight * 10) / 10,
+    });
   };
 
   return (
@@ -184,6 +207,15 @@ export default function ToolsScreen() {
               keyboardType="decimal-pad"
             />
 
+            <Text style={styles.label}>Dimensions (LxWxH in inches)</Text>
+            <TextInput
+              style={styles.input}
+              value={dimensions}
+              onChangeText={setDimensions}
+              placeholder="e.g. 10x8x4"
+              placeholderTextColor="#6b7280"
+            />
+
             <Text style={styles.label}>Destination Country</Text>
             <TextInput
               style={styles.input}
@@ -207,6 +239,23 @@ export default function ToolsScreen() {
               <Ionicons name="document-text" size={20} color="#ffffff" />
               <Text style={styles.generateButtonText}>Generate Labels</Text>
             </TouchableOpacity>
+
+            {shippingResult && (
+              <View style={styles.shippingResultContainer}>
+                <View style={styles.shippingResultRow}>
+                  <Text style={styles.shippingResultLabel}>Tracking:</Text>
+                  <Text style={styles.shippingResultValue}>{shippingResult.trackingNumber}</Text>
+                </View>
+                <View style={styles.shippingCostContainer}>
+                  <Text style={styles.shippingCostLabel}>Estimated Shipping Cost:</Text>
+                  <Text style={styles.shippingCostValue}>${shippingResult.estimatedCost.toFixed(2)}</Text>
+                </View>
+                <View style={styles.shippingResultRow}>
+                  <Text style={styles.shippingResultLabel}>Billable Weight:</Text>
+                  <Text style={styles.shippingResultValue}>{shippingResult.billableWeight} lbs</Text>
+                </View>
+              </View>
+            )}
           </View>
         </View>
       </ScrollView>
@@ -358,5 +407,43 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  shippingResultContainer: {
+    marginTop: 16,
+    backgroundColor: '#0a0a0f',
+    padding: 16,
+    borderRadius: 8,
+  },
+  shippingResultRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  shippingResultLabel: {
+    color: '#9ca3af',
+    fontSize: 14,
+  },
+  shippingResultValue: {
+    color: '#ffffff',
+    fontSize: 14,
+  },
+  shippingCostContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#10b98120',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  shippingCostLabel: {
+    color: '#10b981',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  shippingCostValue: {
+    color: '#10b981',
+    fontSize: 20,
+    fontWeight: 'bold',
   },
 });
