@@ -34,6 +34,7 @@ const MARKETPLACE_COLORS: Record<string, string> = {
   depop: '#ff2300',
   vinted: '#09b1ba',
   grailed: '#000000',
+  offerup: '#00ab80',
 };
 
 export default function ListingsScreen() {

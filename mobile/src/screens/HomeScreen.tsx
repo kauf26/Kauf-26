@@ -26,6 +26,7 @@ const MARKETPLACES = [
   { id: 'depop', name: 'Depop', icon: 'shirt', color: '#ff2300' },
   { id: 'vinted', name: 'Vinted', icon: 'pricetag', color: '#09b1ba' },
   { id: 'grailed', name: 'Grailed', icon: 'diamond', color: '#000000' },
+  { id: 'offerup', name: 'OfferUp', icon: 'location', color: '#00ab80' },
 ];
 
 export default function HomeScreen() {
