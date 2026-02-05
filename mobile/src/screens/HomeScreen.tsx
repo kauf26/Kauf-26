@@ -20,6 +20,7 @@ const LOCAL_MARKETPLACES = [
   { id: 'amazon', name: 'Amazon', icon: 'logo-amazon', color: '#ff9900' },
   { id: 'walmart', name: 'Walmart', icon: 'storefront', color: '#0071ce' },
   { id: 'wish', name: 'Wish', icon: 'star', color: '#2fb7ec' },
+  { id: 'reverb', name: 'Reverb', icon: 'musical-notes', color: '#f04f59' },
 ];
 
 const GLOBAL_MARKETPLACES = [

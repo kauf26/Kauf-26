@@ -36,6 +36,7 @@ export default function Home() {
     { id: "amazon", name: "Amazon", currency: "USD" },
     { id: "walmart", name: "Walmart", currency: "USD" },
     { id: "wish", name: "Wish", currency: "USD" },
+    { id: "reverb", name: "Reverb", currency: "USD" },
   ];
 
   const globalMarketplaces = [
