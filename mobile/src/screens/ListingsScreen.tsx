@@ -35,6 +35,7 @@ const MARKETPLACE_COLORS: Record<string, string> = {
   vinted: '#09b1ba',
   grailed: '#000000',
   offerup: '#00ab80',
+  bigcommerce: '#121118',
 };
 
 export default function ListingsScreen() {

@@ -42,6 +42,7 @@ export default function Home() {
     { id: "vinted", name: "Vinted", currency: "EUR" },
     { id: "grailed", name: "Grailed", currency: "USD" },
     { id: "offerup", name: "OfferUp", currency: "USD" },
+    { id: "bigcommerce", name: "BigCommerce", currency: "USD" },
   ];
 
   const analyzeMutation = useMutation({

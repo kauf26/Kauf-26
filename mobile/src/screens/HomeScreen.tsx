@@ -27,6 +27,7 @@ const MARKETPLACES = [
   { id: 'vinted', name: 'Vinted', icon: 'pricetag', color: '#09b1ba' },
   { id: 'grailed', name: 'Grailed', icon: 'diamond', color: '#000000' },
   { id: 'offerup', name: 'OfferUp', icon: 'location', color: '#00ab80' },
+  { id: 'bigcommerce', name: 'BigCommerce', icon: 'business', color: '#121118' },
 ];
 
 export default function HomeScreen() {
