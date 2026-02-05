@@ -35,6 +35,7 @@ export default function HomeScreen() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
+  const [condition, setCondition] = useState<'new' | 'used'>('new');
   const [selectedMarketplaces, setSelectedMarketplaces] = useState<string[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isListing, setIsListing] = useState(false);
@@ -211,6 +212,42 @@ export default function HomeScreen() {
             keyboardType="decimal-pad"
           />
 
+          <Text style={styles.label}>Condition</Text>
+          <View style={styles.conditionContainer}>
+            <TouchableOpacity
+              style={[
+                styles.conditionButton,
+                condition === 'new' && styles.conditionButtonActive,
+              ]}
+              onPress={() => setCondition('new')}
+            >
+              <Text
+                style={[
+                  styles.conditionText,
+                  condition === 'new' && styles.conditionTextActive,
+                ]}
+              >
+                New
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.conditionButton,
+                condition === 'used' && styles.conditionButtonActive,
+              ]}
+              onPress={() => setCondition('used')}
+            >
+              <Text
+                style={[
+                  styles.conditionText,
+                  condition === 'used' && styles.conditionTextActive,
+                ]}
+              >
+                Used
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           <Text style={styles.label}>Select Marketplaces</Text>
           <View style={styles.marketplaces}>
             {MARKETPLACES.map((marketplace) => {
@@ -375,6 +412,32 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   marketplaceTextSelected: {
+    color: '#ffffff',
+  },
+  conditionContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  conditionButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#374151',
+    backgroundColor: '#1f2937',
+    alignItems: 'center',
+  },
+  conditionButtonActive: {
+    borderColor: '#3b82f6',
+    backgroundColor: '#3b82f6',
+  },
+  conditionText: {
+    color: '#9ca3af',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  conditionTextActive: {
     color: '#ffffff',
   },
   createButton: {

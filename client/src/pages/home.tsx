@@ -24,6 +24,7 @@ export default function Home() {
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState("USD");
+  const [condition, setCondition] = useState<"new" | "used">("new");
   const [selectedMarketplaces, setSelectedMarketplaces] = useState<string[]>([
     "ebay",
     "amazon",
@@ -284,6 +285,36 @@ export default function Home() {
                       <option value="JPY">JPY</option>
                       <option value="MXN">MXN</option>
                     </select>
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <Label>Condition</Label>
+                  <div className="flex gap-4 mt-2">
+                    <button
+                      type="button"
+                      onClick={() => setCondition("new")}
+                      className={`flex-1 py-3 px-4 rounded-lg border-2 font-medium transition-all ${
+                        condition === "new"
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border hover:border-primary/50"
+                      }`}
+                      data-testid="button-condition-new"
+                    >
+                      New
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCondition("used")}
+                      className={`flex-1 py-3 px-4 rounded-lg border-2 font-medium transition-all ${
+                        condition === "used"
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border hover:border-primary/50"
+                      }`}
+                      data-testid="button-condition-used"
+                    >
+                      Used
+                    </button>
                   </div>
                 </div>
               </CardContent>
