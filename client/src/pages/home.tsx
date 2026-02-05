@@ -31,16 +31,8 @@ export default function Home() {
     "etsy",
   ]);
 
-  const localMarketplaces = [
+  const marketplacesList = [
     { id: "ebay", name: "eBay", currency: "USD" },
-    { id: "offerup", name: "OfferUp", currency: "USD" },
-    { id: "depop", name: "Depop", currency: "USD" },
-    { id: "vinted", name: "Vinted", currency: "USD" },
-    { id: "grailed", name: "Grailed", currency: "USD" },
-    { id: "square", name: "Square", currency: "USD" },
-  ];
-
-  const globalMarketplaces = [
     { id: "amazon", name: "Amazon", currency: "USD" },
     { id: "etsy", name: "Etsy", currency: "USD" },
     { id: "shopify", name: "Shopify", currency: "USD" },
@@ -49,7 +41,7 @@ export default function Home() {
     { id: "rakuten", name: "Rakuten", currency: "JPY" },
   ];
 
-  const marketplaces = [...localMarketplaces, ...globalMarketplaces];
+  const marketplaces = marketplacesList;
 
   const analyzeMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -335,35 +327,9 @@ export default function Home() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="mb-4">
-                  <h4 className="text-sm font-semibold text-muted-foreground mb-3">Local Marketplaces</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    {localMarketplaces.map((marketplace) => (
-                      <label
-                        key={marketplace.id}
-                        className="flex items-start space-x-3 cursor-pointer p-3 border rounded-lg hover:bg-accent/50 transition-colors"
-                        data-testid={`label-marketplace-${marketplace.id}`}
-                      >
-                        <Checkbox
-                          checked={selectedMarketplaces.includes(marketplace.id)}
-                          onCheckedChange={() => toggleMarketplace(marketplace.id)}
-                          data-testid={`checkbox-marketplace-${marketplace.id}`}
-                        />
-                        <div>
-                          <div className="font-medium text-sm">{marketplace.name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {marketplace.currency}
-                          </div>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
                 <div className="mb-6">
-                  <h4 className="text-sm font-semibold text-muted-foreground mb-3">Global Marketplaces</h4>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                    {globalMarketplaces.map((marketplace) => (
+                    {marketplaces.map((marketplace) => (
                       <label
                         key={marketplace.id}
                         className="flex items-start space-x-3 cursor-pointer p-3 border rounded-lg hover:bg-accent/50 transition-colors"
