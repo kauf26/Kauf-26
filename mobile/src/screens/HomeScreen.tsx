@@ -23,6 +23,7 @@ const MARKETPLACES = [
   { id: 'woocommerce', name: 'WooCommerce', icon: 'logo-wordpress', color: '#96588a' },
   { id: 'walmart', name: 'Walmart', icon: 'storefront', color: '#0071ce' },
   { id: 'aliexpress', name: 'AliExpress', icon: 'pricetag', color: '#e62e04' },
+  { id: 'wish', name: 'Wish', icon: 'star', color: '#2fb7ec' },
   { id: 'mercadolibre', name: 'Mercado Libre', icon: 'globe', color: '#ffe600' },
   { id: 'rakuten', name: 'Rakuten', icon: 'storefront', color: '#bf0000' },
 ];
