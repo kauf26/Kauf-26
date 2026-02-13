@@ -1,6 +1,6 @@
-import { Switch, Route, Link, useLocation, Redirect } from "wouter";
+import { Switch, Route, Link, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
@@ -9,45 +9,11 @@ import Listings from "@/pages/listings";
 import Sales from "@/pages/sales";
 import Tools from "@/pages/tools";
 import Dashboard from "@/pages/dashboard";
-import Auth from "@/pages/auth";
-import { Home as HomeIcon, ShoppingBag, DollarSign, Wrench, LogOut, LayoutDashboard } from "lucide-react";
+import { Home as HomeIcon, ShoppingBag, DollarSign, Wrench, LayoutDashboard } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-function useAuth() {
-  const { data: authStatus } = useQuery({
-    queryKey: ["authStatus"],
-    queryFn: async () => {
-      const res = await fetch("/api/auth/status");
-      if (!res.ok) throw new Error("Failed to check auth");
-      return res.json();
-    },
-  });
-
-  const isAuthenticated = sessionStorage.getItem("authenticated") === "true";
-  const needsAuth = authStatus?.hasPinSet && !isAuthenticated;
-  const needsSetup = authStatus && !authStatus.hasPinSet;
-
-  return { isAuthenticated, needsAuth, needsSetup, authStatus };
-}
-
-function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
-  const { needsAuth, needsSetup } = useAuth();
-  
-  if (needsAuth || needsSetup) {
-    return <Redirect to="/auth" />;
-  }
-  
-  return <Component />;
-}
-
 function Navigation() {
-  const [location, setLocation] = useLocation();
-  const { authStatus } = useAuth();
-
-  const handleLogout = () => {
-    sessionStorage.removeItem("authenticated");
-    setLocation("/auth");
-  };
+  const [location] = useLocation();
 
   const navItems = [
     { path: "/", label: "Upload", icon: HomeIcon },
@@ -56,8 +22,6 @@ function Navigation() {
     { path: "/sales", label: "Sales", icon: DollarSign },
     { path: "/tools", label: "Tools", icon: Wrench },
   ];
-
-  if (location === "/auth") return null;
 
   return (
     <nav className="border-b bg-card">
@@ -86,18 +50,6 @@ function Navigation() {
                 </Link>
               );
             })}
-            {authStatus?.hasPinSet && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleLogout}
-                className="flex items-center gap-2 text-muted-foreground"
-                data-testid="nav-logout"
-              >
-                <LogOut className="w-4 h-4" />
-                Lock
-              </Button>
-            )}
           </div>
         </div>
       </div>
@@ -110,22 +62,11 @@ function Router() {
     <>
       <Navigation />
       <Switch>
-        <Route path="/auth" component={Auth} />
-        <Route path="/">
-          <ProtectedRoute component={Home} />
-        </Route>
-        <Route path="/dashboard">
-          <ProtectedRoute component={Dashboard} />
-        </Route>
-        <Route path="/listings">
-          <ProtectedRoute component={Listings} />
-        </Route>
-        <Route path="/sales">
-          <ProtectedRoute component={Sales} />
-        </Route>
-        <Route path="/tools">
-          <ProtectedRoute component={Tools} />
-        </Route>
+        <Route path="/" component={Home} />
+        <Route path="/dashboard" component={Dashboard} />
+        <Route path="/listings" component={Listings} />
+        <Route path="/sales" component={Sales} />
+        <Route path="/tools" component={Tools} />
         <Route component={NotFound} />
       </Switch>
     </>

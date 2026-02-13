@@ -399,63 +399,6 @@ export async function registerRoutes(
     }
   });
 
-  // Auth routes
-  app.get("/api/auth/status", async (req, res) => {
-    try {
-      const user = await storage.getFirstUser();
-      res.json({
-        hasUser: !!user,
-        hasPinSet: !!(user?.pin),
-      });
-    } catch (error) {
-      console.error("Error checking auth status:", error);
-      res.status(500).json({ error: "Failed to check auth status" });
-    }
-  });
-
-  app.post("/api/auth/setup", async (req, res) => {
-    try {
-      const { pin } = req.body;
-      if (!pin || !/^\d{4}$/.test(pin)) {
-        return res.status(400).json({ error: "PIN must be 4 digits" });
-      }
-
-      let user = await storage.getFirstUser();
-      if (!user) {
-        user = await storage.createUser({ username: "owner", password: "default" });
-      }
-      
-      await storage.updateUserPin(user.id, pin);
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Error setting up PIN:", error);
-      res.status(500).json({ error: "Failed to set up PIN" });
-    }
-  });
-
-  app.post("/api/auth/login", async (req, res) => {
-    try {
-      const { pin } = req.body;
-      if (!pin || !/^\d{4}$/.test(pin)) {
-        return res.status(400).json({ error: "PIN must be 4 digits" });
-      }
-
-      const user = await storage.getFirstUser();
-      if (!user || !user.pin) {
-        return res.status(401).json({ error: "No PIN set up" });
-      }
-
-      if (user.pin !== pin) {
-        return res.status(401).json({ error: "Incorrect PIN" });
-      }
-
-      res.json({ success: true, userId: user.id });
-    } catch (error) {
-      console.error("Error logging in:", error);
-      res.status(500).json({ error: "Failed to log in" });
-    }
-  });
-
   // Stripe payment for 2% fee
   app.post("/api/sales/:saleId/pay-fee", async (req, res) => {
     try {
