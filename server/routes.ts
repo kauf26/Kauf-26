@@ -426,10 +426,13 @@ export async function registerRoutes(
       const config = await storage.initAppConfig();
       const trialStartedAt = new Date(config.trialStartedAt);
       const trialDurationMs = 30 * 24 * 60 * 60 * 1000;
+      const subscriptionOfferMs = 90 * 24 * 60 * 60 * 1000;
       const elapsed = Date.now() - trialStartedAt.getTime();
       const isTrialActive = elapsed < trialDurationMs;
       const trialDaysRemaining = Math.max(0, Math.ceil((trialDurationMs - elapsed) / (24 * 60 * 60 * 1000)));
       const trialEndsAt = new Date(trialStartedAt.getTime() + trialDurationMs);
+      const canSubscribeMonthly = elapsed >= subscriptionOfferMs;
+      const daysUntilSubscriptionOffer = Math.max(0, Math.ceil((subscriptionOfferMs - elapsed) / (24 * 60 * 60 * 1000)));
 
       res.json({
         isTrialActive,
@@ -438,6 +441,8 @@ export async function registerRoutes(
         trialStartedAt: trialStartedAt.toISOString(),
         subscriptionStatus: config.subscriptionStatus,
         hasActiveSubscription: config.subscriptionStatus === "active",
+        canSubscribeMonthly,
+        daysUntilSubscriptionOffer,
       });
     } catch (error) {
       console.error("Error fetching subscription status:", error);

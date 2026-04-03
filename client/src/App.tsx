@@ -18,6 +18,8 @@ interface SubscriptionStatus {
   trialEndsAt: string;
   subscriptionStatus: string;
   hasActiveSubscription: boolean;
+  canSubscribeMonthly: boolean;
+  daysUntilSubscriptionOffer: number;
 }
 
 function TrialBanner({ status }: { status: SubscriptionStatus }) {
