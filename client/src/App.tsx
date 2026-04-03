@@ -10,6 +10,8 @@ import Sales from "@/pages/sales";
 import Tools from "@/pages/tools";
 import Dashboard from "@/pages/dashboard";
 import Terms from "@/pages/terms";
+import Privacy from "@/pages/privacy";
+import Submit from "@/pages/submit";
 import { Home as HomeIcon, ShoppingBag, DollarSign, Wrench, LayoutDashboard, Clock, Zap, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -131,13 +133,17 @@ function Router() {
         <Route path="/sales" component={Sales} />
         <Route path="/tools" component={Tools} />
         <Route path="/terms" component={Terms} />
+        <Route path="/privacy" component={Privacy} />
+        <Route path="/submit" component={Submit} />
         <Route component={NotFound} />
       </Switch>
-      <footer className="border-t bg-card mt-auto py-4 px-4 text-center text-xs text-muted-foreground">
-        <span>Global Marketplace Lister is a listing assistance tool only. All transactions occur between you and the respective marketplace. </span>
-        <Link href="/terms" className="underline hover:text-foreground transition-colors">
-          Terms of Service & Legal Disclaimer
-        </Link>
+      <footer className="border-t bg-card mt-auto py-4 px-4 text-center text-xs text-muted-foreground space-x-3">
+        <span>Global Marketplace Lister — listing assistance tool only.</span>
+        <Link href="/privacy" className="underline hover:text-foreground transition-colors">Privacy Policy</Link>
+        <span>·</span>
+        <Link href="/terms" className="underline hover:text-foreground transition-colors">Terms of Service</Link>
+        <span>·</span>
+        <Link href="/submit" className="underline hover:text-foreground transition-colors">Submit to App Stores</Link>
       </footer>
     </>
   );
