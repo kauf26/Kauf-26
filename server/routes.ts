@@ -294,7 +294,9 @@ export async function registerRoutes(
     try {
       const { listingId, saleAmount, saleCurrency, platformFee } = req.body;
 
-      const ourFee = (parseFloat(saleAmount) * 0.02).toFixed(2);
+      const config = await storage.getAppConfig();
+      const isTrialActive = config ? (Date.now() - new Date(config.trialStartedAt).getTime()) < 30 * 24 * 60 * 60 * 1000 : true;
+      const ourFee = isTrialActive ? "0.00" : (parseFloat(saleAmount) * 0.01).toFixed(2);
 
       const sale = await storage.createSale({
         listingId,
@@ -399,7 +401,63 @@ export async function registerRoutes(
     }
   });
 
-  // Stripe payment for 2% fee
+  // Subscription status
+  app.get("/api/subscription/status", async (req, res) => {
+    try {
+      const config = await storage.initAppConfig();
+      const trialStartedAt = new Date(config.trialStartedAt);
+      const trialDurationMs = 30 * 24 * 60 * 60 * 1000;
+      const elapsed = Date.now() - trialStartedAt.getTime();
+      const isTrialActive = elapsed < trialDurationMs;
+      const trialDaysRemaining = Math.max(0, Math.ceil((trialDurationMs - elapsed) / (24 * 60 * 60 * 1000)));
+      const trialEndsAt = new Date(trialStartedAt.getTime() + trialDurationMs);
+
+      res.json({
+        isTrialActive,
+        trialDaysRemaining,
+        trialEndsAt: trialEndsAt.toISOString(),
+        trialStartedAt: trialStartedAt.toISOString(),
+        subscriptionStatus: config.subscriptionStatus,
+        hasActiveSubscription: config.subscriptionStatus === "active",
+      });
+    } catch (error) {
+      console.error("Error fetching subscription status:", error);
+      res.status(500).json({ error: "Failed to fetch subscription status" });
+    }
+  });
+
+  // Create subscription checkout session
+  app.post("/api/subscription/checkout", async (req, res) => {
+    try {
+      const stripe = await getUncachableStripeClient();
+
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [{
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: 'Global Lister — Pro Plan',
+              description: '1% fee on all marketplace transactions. Keep listing across all platforms.',
+            },
+            unit_amount: 999,
+            recurring: { interval: 'month' },
+          },
+          quantity: 1,
+        }],
+        mode: 'subscription',
+        success_url: `${req.protocol}://${req.get('host')}/?subscribed=true`,
+        cancel_url: `${req.protocol}://${req.get('host')}/?subscribed=false`,
+      });
+
+      res.json({ url: session.url });
+    } catch (error) {
+      console.error("Error creating subscription checkout:", error);
+      res.status(500).json({ error: "Failed to create subscription session" });
+    }
+  });
+
+  // Stripe payment for 1% fee
   app.post("/api/sales/:saleId/pay-fee", async (req, res) => {
     try {
       const saleId = parseInt(req.params.saleId);
@@ -424,7 +482,7 @@ export async function registerRoutes(
             currency: 'usd',
             product_data: {
               name: `Service Fee - Sale #${saleId}`,
-              description: `2% service fee for your marketplace sale`,
+              description: `1% service fee for your marketplace sale`,
             },
             unit_amount: feeInCents,
           },

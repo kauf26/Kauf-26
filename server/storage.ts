@@ -5,6 +5,7 @@ import {
   listings, type Listing, type InsertListing,
   sales, type Sale, type InsertSale,
   dashboardLayouts, type DashboardLayout,
+  appConfig, type AppConfig,
   type Marketplace
 } from "@shared/schema";
 import { eq, desc, isNull } from "drizzle-orm";
@@ -34,6 +35,10 @@ export interface IStorage {
   
   getDashboardLayout(userId?: string): Promise<DashboardLayout | undefined>;
   saveDashboardLayout(userId: string | null, layout: string): Promise<DashboardLayout>;
+
+  getAppConfig(): Promise<AppConfig | undefined>;
+  initAppConfig(): Promise<AppConfig>;
+  updateSubscription(stripeCustomerId: string, stripeSubscriptionId: string, status: string): Promise<void>;
 }
 
 export const storage: IStorage = {
@@ -145,5 +150,26 @@ export const storage: IStorage = {
       .values({ userId, layout })
       .returning();
     return created;
+  },
+
+  async getAppConfig() {
+    const [config] = await db.select().from(appConfig).limit(1);
+    return config;
+  },
+
+  async initAppConfig() {
+    const existing = await this.getAppConfig();
+    if (existing) return existing;
+    const [created] = await db.insert(appConfig).values({}).returning();
+    return created;
+  },
+
+  async updateSubscription(stripeCustomerId: string, stripeSubscriptionId: string, status: string) {
+    const existing = await this.getAppConfig();
+    if (existing) {
+      await db.update(appConfig)
+        .set({ stripeCustomerId, stripeSubscriptionId, subscriptionStatus: status })
+        .where(eq(appConfig.id, existing.id));
+    }
   },
 };

@@ -52,7 +52,7 @@ export default function Sales() {
             <h1 className="text-4xl font-bold tracking-tight">Sales & Earnings</h1>
           </div>
           <p className="text-muted-foreground text-lg">
-            Track your sales with 2% service fee auto-deducted from proceeds
+            Track your sales — 1% service fee applies after your 30-day free trial
           </p>
         </div>
 

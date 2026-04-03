@@ -116,6 +116,16 @@ export type InsertConversation = z.infer<typeof insertConversationSchema>;
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 
+export const appConfig = pgTable("app_config", {
+  id: serial("id").primaryKey(),
+  trialStartedAt: timestamp("trial_started_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  subscriptionStatus: text("subscription_status").notNull().default("trial"),
+});
+
+export type AppConfig = typeof appConfig.$inferSelect;
+
 export const dashboardLayouts = pgTable("dashboard_layouts", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }),
