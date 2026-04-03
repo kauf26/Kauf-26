@@ -75,7 +75,7 @@ async function translateText(text: string, targetLang: string): Promise<string> 
   if (targetLang === "en") return text;
   
   const response = await openai.chat.completions.create({
-    model: "gpt-5.2",
+    model: "gpt-4o",
     messages: [
       {
         role: "system",
@@ -130,7 +130,7 @@ export async function registerRoutes(
       const imageUrl = `data:image/${path.extname(req.file.originalname).slice(1)};base64,${base64Image}`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-5.2",
+        model: "gpt-4o",
         messages: [
           {
             role: "user",
@@ -174,7 +174,7 @@ export async function registerRoutes(
       }
 
       const response = await openai.chat.completions.create({
-        model: "gpt-5.2",
+        model: "gpt-4o",
         messages: [
           {
             role: "user",
