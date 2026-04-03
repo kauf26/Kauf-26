@@ -1,16 +1,9 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, DollarSign, CheckCircle2, TrendingUp, CreditCard, Clock, Zap, Star } from "lucide-react";
-
-interface SubscriptionStatus {
-  isTrialActive: boolean;
-  hasActiveSubscription: boolean;
-  canSubscribeMonthly: boolean;
-  daysUntilSubscriptionOffer: number;
-}
+import { Loader2, DollarSign, CheckCircle2, TrendingUp, CreditCard } from "lucide-react";
 
 interface Sale {
   id: number;
@@ -38,16 +31,6 @@ export default function Sales() {
     },
   });
 
-  const { data: subStatus } = useQuery<SubscriptionStatus>({
-    queryKey: ["subscription-status"],
-    queryFn: async () => {
-      const res = await fetch("/api/subscription/status");
-      if (!res.ok) throw new Error("Failed to fetch status");
-      return res.json();
-    },
-    staleTime: 60 * 1000,
-  });
-
   const payFeeMutation = useMutation({
     mutationFn: async (saleId: number) => {
       const res = await fetch(`/api/sales/${saleId}/pay-fee`, { method: "POST" });
@@ -66,24 +49,6 @@ export default function Sales() {
     },
   });
 
-  const subscribeMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch("/api/subscription/checkout", { method: "POST" });
-      if (!res.ok) throw new Error("Failed to create checkout");
-      return res.json();
-    },
-    onSuccess: (data) => {
-      window.location.href = data.url;
-    },
-    onError: () => {
-      toast({
-        title: "Error",
-        description: "Could not start subscription checkout. Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
-
   const totalRevenue = sales.reduce(
     (sum, sale) => sum + parseFloat(sale.saleAmount),
     0
@@ -91,16 +56,6 @@ export default function Sales() {
 
   const totalFees = sales.reduce((sum, sale) => sum + parseFloat(sale.ourFee), 0);
   const netProceeds = totalRevenue - totalFees;
-
-  const now = new Date();
-  const thisMonthSales = sales.filter((sale) => {
-    const d = new Date(sale.saleDate);
-    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
-  });
-  const thisMonthTotal = thisMonthSales.reduce((sum, s) => sum + parseFloat(s.saleAmount), 0);
-  const thisMonthFeeAt1Pct = thisMonthTotal * 0.01;
-  const monthlyPlanSaves = thisMonthFeeAt1Pct > 9.99;
-  const monthlySavings = thisMonthFeeAt1Pct - 9.99;
 
   if (isLoading) {
     return (
@@ -168,81 +123,6 @@ export default function Sales() {
             </CardContent>
           </Card>
         </div>
-
-        {subStatus && !subStatus.hasActiveSubscription && !subStatus.isTrialActive && (
-          subStatus.canSubscribeMonthly ? (
-            <Card className="mb-6 border-violet-500/40 bg-violet-500/5">
-              <CardHeader>
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-violet-500/20">
-                    <Star className="w-5 h-5 text-violet-400" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-violet-300">Switch to a Flat Monthly Plan</CardTitle>
-                    <CardDescription>You've been using Global Lister for 90+ days — save money with a simple flat rate</CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-4">
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-violet-300">$9.99<span className="text-sm font-normal text-muted-foreground">/mo</span></div>
-                        <div className="text-xs text-muted-foreground">Flat monthly rate</div>
-                      </div>
-                      <div className="text-muted-foreground">vs</div>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-orange-400">1%<span className="text-sm font-normal text-muted-foreground"> per sale</span></div>
-                        <div className="text-xs text-muted-foreground">Pay as you go</div>
-                      </div>
-                    </div>
-                    {thisMonthTotal > 0 ? (
-                      <div className={`rounded-lg px-4 py-3 text-sm ${monthlyPlanSaves ? "bg-green-500/10 border border-green-500/30" : "bg-muted/30 border border-muted/50"}`}>
-                        <div className="font-medium mb-1">
-                          {monthlyPlanSaves ? "✓ Monthly plan would save you money right now" : "Pay-per-sale is cheaper for you right now"}
-                        </div>
-                        <div className="text-muted-foreground text-xs space-y-0.5">
-                          <div>This month's sales: <span className="text-foreground font-medium">${thisMonthTotal.toFixed(2)}</span></div>
-                          <div>1% fee on that: <span className="text-orange-400 font-medium">${thisMonthFeeAt1Pct.toFixed(2)}</span></div>
-                          {monthlyPlanSaves
-                            ? <div className="text-green-400">Monthly plan would save you <strong>${monthlySavings.toFixed(2)}</strong> this month</div>
-                            : <div>Monthly plan breaks even when sales exceed <strong>$999/mo</strong></div>
-                          }
-                        </div>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        Monthly plan saves you money once your sales exceed <strong>$999/month</strong>
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-2 shrink-0">
-                    <Button
-                      onClick={() => subscribeMutation.mutate()}
-                      disabled={subscribeMutation.isPending}
-                      className="bg-violet-600 hover:bg-violet-700 text-white"
-                      data-testid="button-subscribe-monthly"
-                    >
-                      <Zap className="w-4 h-4 mr-2" />
-                      {subscribeMutation.isPending ? "Loading..." : "Switch to $9.99/mo"}
-                    </Button>
-                    <p className="text-xs text-muted-foreground text-center">Or keep paying 1% per sale</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="mb-6 border-muted/40 bg-muted/5">
-              <CardContent className="py-4">
-                <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                  <Clock className="w-4 h-4 shrink-0" />
-                  <span>A flat <strong>$9.99/month</strong> plan becomes available after 90 days of use — unlocks in <strong>{subStatus.daysUntilSubscriptionOffer} days</strong></span>
-                </div>
-              </CardContent>
-            </Card>
-          )
-        )}
 
         {sales.length === 0 ? (
           <Card>

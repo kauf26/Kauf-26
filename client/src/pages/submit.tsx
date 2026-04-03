@@ -54,7 +54,7 @@ KEY FEATURES
 • Built-in translation for international marketplaces
 • Sales tracking with fee management
 • 30-day free trial — no credit card required
-• Simple 1% service fee per sale after trial, or $9.99/month flat rate
+• Simple 1% service fee per sale after your 30-day free trial
 
 WHO IT'S FOR
 Perfect for resellers, small business owners, estate sale shoppers, thrift flippers, collectibles dealers, and anyone who sells on multiple platforms.

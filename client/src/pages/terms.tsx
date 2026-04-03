@@ -45,7 +45,7 @@ export default function Terms() {
             <CardContent className="pt-6 space-y-3">
               <h2 className="text-lg font-semibold text-foreground">3. Service Fee Disclosure</h2>
               <p>
-                Following a 30-day free trial period, the Service charges a fee of <strong className="text-foreground">1% of each self-reported sale amount</strong> entered by the user, or an optional flat subscription fee of <strong className="text-foreground">$9.99 per month</strong> available after 90 days of use. These fees are charged solely for access to and use of the Service software.
+                Following a 30-day free trial period, the Service charges a fee of <strong className="text-foreground">1% of each self-reported sale amount</strong> entered by the user. This fee is charged solely for access to and use of the Service software.
               </p>
               <p>
                 <strong className="text-foreground">Important:</strong> The Service fee is not a commission on actual transaction proceeds received by the user. The fee is calculated based solely on the sale amount entered by the user within the App. The Service is not a party to any transaction between the user and any buyer or Marketplace. The Service has no right, claim, or interest in any transaction proceeds, and its fee does not constitute a claim on, lien against, or interest in any actual funds received from any sale.
