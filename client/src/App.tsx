@@ -12,6 +12,7 @@ import Dashboard from "@/pages/dashboard";
 import Terms from "@/pages/terms";
 import Privacy from "@/pages/privacy";
 import Submit from "@/pages/submit";
+import Create from "@/pages/create";
 import { Home as HomeIcon, ShoppingBag, DollarSign, Wrench, LayoutDashboard, Clock, Zap, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -132,6 +133,7 @@ function Router() {
         <Route path="/listings" component={Listings} />
         <Route path="/sales" component={Sales} />
         <Route path="/tools" component={Tools} />
+        <Route path="/create" component={Create} />
         <Route path="/terms" component={Terms} />
         <Route path="/privacy" component={Privacy} />
         <Route path="/submit" component={Submit} />
