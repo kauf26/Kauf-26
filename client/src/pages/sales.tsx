@@ -90,8 +90,17 @@ export default function Sales() {
   );
 
   const totalFees = sales.reduce((sum, sale) => sum + parseFloat(sale.ourFee), 0);
-
   const netProceeds = totalRevenue - totalFees;
+
+  const now = new Date();
+  const thisMonthSales = sales.filter((sale) => {
+    const d = new Date(sale.saleDate);
+    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+  });
+  const thisMonthTotal = thisMonthSales.reduce((sum, s) => sum + parseFloat(s.saleAmount), 0);
+  const thisMonthFeeAt1Pct = thisMonthTotal * 0.01;
+  const monthlyPlanSaves = thisMonthFeeAt1Pct > 9.99;
+  const monthlySavings = thisMonthFeeAt1Pct - 9.99;
 
   if (isLoading) {
     return (
@@ -176,7 +185,7 @@ export default function Sales() {
               </CardHeader>
               <CardContent>
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div className="space-y-1">
+                  <div className="space-y-3">
                     <div className="flex items-center gap-4">
                       <div className="text-center">
                         <div className="text-2xl font-bold text-violet-300">$9.99<span className="text-sm font-normal text-muted-foreground">/mo</span></div>
@@ -188,9 +197,25 @@ export default function Sales() {
                         <div className="text-xs text-muted-foreground">Pay as you go</div>
                       </div>
                     </div>
-                    <p className="text-xs text-muted-foreground pt-1">
-                      Monthly plan saves you money once your total sales exceed $999/month
-                    </p>
+                    {thisMonthTotal > 0 ? (
+                      <div className={`rounded-lg px-4 py-3 text-sm ${monthlyPlanSaves ? "bg-green-500/10 border border-green-500/30" : "bg-muted/30 border border-muted/50"}`}>
+                        <div className="font-medium mb-1">
+                          {monthlyPlanSaves ? "✓ Monthly plan would save you money right now" : "Pay-per-sale is cheaper for you right now"}
+                        </div>
+                        <div className="text-muted-foreground text-xs space-y-0.5">
+                          <div>This month's sales: <span className="text-foreground font-medium">${thisMonthTotal.toFixed(2)}</span></div>
+                          <div>1% fee on that: <span className="text-orange-400 font-medium">${thisMonthFeeAt1Pct.toFixed(2)}</span></div>
+                          {monthlyPlanSaves
+                            ? <div className="text-green-400">Monthly plan would save you <strong>${monthlySavings.toFixed(2)}</strong> this month</div>
+                            : <div>Monthly plan breaks even when sales exceed <strong>$999/mo</strong></div>
+                          }
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">
+                        Monthly plan saves you money once your sales exceed <strong>$999/month</strong>
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-col gap-2 shrink-0">
                     <Button
