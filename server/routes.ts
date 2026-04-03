@@ -305,7 +305,7 @@ export async function registerRoutes(
         saleCurrency,
         platformFee: platformFee || "0",
         ourFee,
-        feePaid: true,
+        feePaid: isTrialActive,
         buyerInfo: req.body.buyerInfo || null,
         shippingLabelGenerated: false,
       });

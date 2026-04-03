@@ -1,6 +1,6 @@
 import { Switch, Route, Link, useLocation } from "wouter";
 import { queryClient } from "./lib/queryClient";
-import { QueryClientProvider, useQuery, useMutation } from "@tanstack/react-query";
+import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import NotFound from "@/pages/not-found";
@@ -21,17 +21,6 @@ interface SubscriptionStatus {
 }
 
 function TrialBanner({ status }: { status: SubscriptionStatus }) {
-  const upgradeMutation = useMutation({
-    mutationFn: async () => {
-      const res = await fetch("/api/subscription/checkout", { method: "POST" });
-      if (!res.ok) throw new Error("Failed to create checkout");
-      return res.json();
-    },
-    onSuccess: (data) => {
-      window.location.href = data.url;
-    },
-  });
-
   if (status.hasActiveSubscription) {
     return (
       <div className="bg-green-500/10 border-b border-green-500/20 px-4 py-2 flex items-center justify-center gap-2 text-sm">
@@ -49,11 +38,10 @@ function TrialBanner({ status }: { status: SubscriptionStatus }) {
         <Button
           size="sm"
           className="h-7 px-3 bg-red-500 hover:bg-red-600 text-white"
-          onClick={() => upgradeMutation.mutate()}
-          disabled={upgradeMutation.isPending}
+          onClick={() => window.location.href = "/sales"}
           data-testid="banner-upgrade-button"
         >
-          {upgradeMutation.isPending ? "Loading..." : "Upgrade Now — $9.99/mo"}
+          Pay Fees in Sales
         </Button>
       </div>
     );
@@ -66,16 +54,9 @@ function TrialBanner({ status }: { status: SubscriptionStatus }) {
       <span className={urgency ? "text-orange-300" : "text-blue-300"}>
         Free trial: <strong>{status.trialDaysRemaining} day{status.trialDaysRemaining !== 1 ? "s" : ""} remaining</strong> — 1% fee applies after trial
       </span>
-      <Button
-        size="sm"
-        variant="outline"
-        className={`h-7 px-3 ${urgency ? "border-orange-500 text-orange-300 hover:bg-orange-500/20" : "border-blue-500 text-blue-300 hover:bg-blue-500/20"}`}
-        onClick={() => upgradeMutation.mutate()}
-        disabled={upgradeMutation.isPending}
-        data-testid="banner-upgrade-button"
-      >
-        {upgradeMutation.isPending ? "Loading..." : "Upgrade Early"}
-      </Button>
+      <span className={urgency ? "text-orange-400 text-xs" : "text-blue-400 text-xs"}>
+        No charge until trial ends.
+      </span>
     </div>
   );
 }
