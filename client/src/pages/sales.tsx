@@ -76,7 +76,7 @@ export default function Sales() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Service Fees (2%)
+                Service Fees (1%)
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -163,7 +163,7 @@ export default function Sales() {
                         </div>
                       </div>
                       <div>
-                        <div className="text-sm text-muted-foreground">Service Fee (2%)</div>
+                        <div className="text-sm text-muted-foreground">Service Fee (1%)</div>
                         <div className="text-lg font-semibold mt-1 text-orange-400">
                           -${ourFee.toFixed(2)}
                         </div>

@@ -21,6 +21,7 @@ export interface IStorage {
   getProduct(id: number): Promise<Product | undefined>;
   getAllProducts(): Promise<Product[]>;
   deleteProduct(id: number): Promise<void>;
+  updateProductQuantity(id: number, quantity: number): Promise<void>;
   
   createListing(listing: InsertListing): Promise<Listing>;
   getListingsByProduct(productId: number): Promise<Listing[]>;
@@ -82,6 +83,10 @@ export const storage: IStorage = {
 
   async deleteProduct(id: number) {
     await db.delete(products).where(eq(products.id, id));
+  },
+
+  async updateProductQuantity(id: number, quantity: number) {
+    await db.update(products).set({ quantity }).where(eq(products.id, id));
   },
 
   async createListing(listing: InsertListing) {

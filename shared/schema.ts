@@ -29,6 +29,7 @@ export const products = pgTable("products", {
   aiDescription: text("ai_description").notNull(),
   basePrice: decimal("base_price", { precision: 10, scale: 2 }).notNull(),
   currency: text("currency").notNull().default("USD"),
+  quantity: integer("quantity").notNull().default(1),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 

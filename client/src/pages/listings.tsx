@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2, Loader2, Package } from "lucide-react";
+import { Trash2, Loader2, Package, Hash } from "lucide-react";
 
 interface Product {
   id: number;
@@ -12,6 +12,7 @@ interface Product {
   aiDescription: string;
   basePrice: string;
   currency: string;
+  quantity: number;
   createdAt: string;
 }
 
@@ -124,9 +125,17 @@ export default function Listings() {
                           <CardDescription data-testid={`text-description-${product.id}`}>
                             {product.aiDescription}
                           </CardDescription>
-                          <div className="mt-2 flex items-center gap-2">
+                          <div className="mt-2 flex items-center gap-2 flex-wrap">
                             <Badge variant="outline" data-testid={`badge-price-${product.id}`}>
                               {product.currency} {product.basePrice}
+                            </Badge>
+                            <Badge
+                              variant={product.quantity === 0 ? "destructive" : "secondary"}
+                              className="flex items-center gap-1"
+                              data-testid={`badge-quantity-${product.id}`}
+                            >
+                              <Hash className="w-3 h-3" />
+                              {product.quantity === 0 ? "Sold Out" : `${product.quantity} in stock`}
                             </Badge>
                             <Badge variant="secondary" data-testid={`badge-count-${product.id}`}>
                               {productListings.length} Listings
@@ -171,10 +180,10 @@ export default function Listings() {
                               {listing.localCurrency} {parseFloat(listing.localPrice).toFixed(2)}
                             </span>
                             <Badge
-                              variant={listing.status === "active" ? "default" : "secondary"}
+                              variant={listing.status === "active" ? "default" : listing.status === "sold_out" ? "destructive" : "secondary"}
                               className="text-xs"
                             >
-                              {listing.status}
+                              {listing.status === "sold_out" ? "Sold Out" : listing.status}
                             </Badge>
                           </div>
                         </div>

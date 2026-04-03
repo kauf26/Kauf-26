@@ -208,7 +208,7 @@ export async function registerRoutes(
 
   app.post("/api/products", async (req, res) => {
     try {
-      const { imageUrl, originalTitle, aiDescription, basePrice, currency } = req.body;
+      const { imageUrl, originalTitle, aiDescription, basePrice, currency, quantity } = req.body;
 
       const product = await storage.createProduct({
         imageUrl,
@@ -216,6 +216,7 @@ export async function registerRoutes(
         aiDescription,
         basePrice,
         currency: currency || "USD",
+        quantity: quantity ? parseInt(quantity) : 1,
       });
 
       res.status(201).json(product);
@@ -308,6 +309,24 @@ export async function registerRoutes(
         buyerInfo: req.body.buyerInfo || null,
         shippingLabelGenerated: false,
       });
+
+      // Find the listing to get its product, then decrement quantity
+      const allListings = await storage.getAllListings();
+      const listing = allListings.find(l => l.id === listingId);
+      if (listing) {
+        const product = await storage.getProduct(listing.productId);
+        if (product) {
+          const newQty = Math.max(0, product.quantity - 1);
+          await storage.updateProductQuantity(product.id, newQty);
+          // If sold out, mark all listings for this product as sold_out
+          if (newQty === 0) {
+            const productListings = await storage.getListingsByProduct(product.id);
+            for (const pl of productListings) {
+              await storage.updateListingStatus(pl.id, "sold_out");
+            }
+          }
+        }
+      }
 
       res.status(201).json(sale);
     } catch (error) {

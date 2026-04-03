@@ -23,6 +23,7 @@ export default function Home() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [price, setPrice] = useState("");
+  const [quantity, setQuantity] = useState("1");
   const [currency, setCurrency] = useState("USD");
   const [condition, setCondition] = useState<"new" | "used">("new");
   const [selectedMarketplaces, setSelectedMarketplaces] = useState<string[]>([
@@ -92,6 +93,7 @@ export default function Home() {
           aiDescription: analysis.description,
           basePrice: price,
           currency,
+          quantity: parseInt(quantity) || 1,
         }),
       });
       if (!productRes.ok) throw new Error("Failed to create product");
@@ -262,7 +264,7 @@ export default function Home() {
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div>
                     <Label htmlFor="price">Base Price</Label>
                     <Input
@@ -274,6 +276,20 @@ export default function Home() {
                       placeholder="0.00"
                       className="mt-2"
                       data-testid="input-price"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="quantity">Quantity Available</Label>
+                    <Input
+                      id="quantity"
+                      type="number"
+                      min="1"
+                      step="1"
+                      value={quantity}
+                      onChange={(e) => setQuantity(e.target.value)}
+                      placeholder="1"
+                      className="mt-2"
+                      data-testid="input-quantity"
                     />
                   </div>
                   <div>
