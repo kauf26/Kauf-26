@@ -6,6 +6,7 @@ import {
   sales, type Sale, type InsertSale,
   dashboardLayouts, type DashboardLayout,
   appConfig, type AppConfig,
+  marketplaceCredentials, type MarketplaceCredentials,
   type Marketplace
 } from "@shared/schema";
 import { eq, desc, isNull } from "drizzle-orm";
@@ -40,6 +41,10 @@ export interface IStorage {
   getAppConfig(): Promise<AppConfig | undefined>;
   initAppConfig(): Promise<AppConfig>;
   updateSubscription(stripeCustomerId: string, stripeSubscriptionId: string, status: string): Promise<void>;
+
+  getAllMarketplaceCredentials(): Promise<MarketplaceCredentials[]>;
+  upsertMarketplaceCredentials(marketplace: string, credentials: string): Promise<MarketplaceCredentials>;
+  deleteMarketplaceCredentials(marketplace: string): Promise<void>;
 }
 
 export const storage: IStorage = {
@@ -176,5 +181,29 @@ export const storage: IStorage = {
         .set({ stripeCustomerId, stripeSubscriptionId, subscriptionStatus: status })
         .where(eq(appConfig.id, existing.id));
     }
+  },
+
+  async getAllMarketplaceCredentials() {
+    return db.select().from(marketplaceCredentials);
+  },
+
+  async upsertMarketplaceCredentials(marketplace: string, credentials: string) {
+    const existing = await db.select().from(marketplaceCredentials)
+      .where(eq(marketplaceCredentials.marketplace, marketplace)).limit(1);
+    if (existing.length > 0) {
+      const [updated] = await db.update(marketplaceCredentials)
+        .set({ credentials, connected: true, updatedAt: new Date() })
+        .where(eq(marketplaceCredentials.marketplace, marketplace))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(marketplaceCredentials)
+      .values({ marketplace, credentials, connected: true })
+      .returning();
+    return created;
+  },
+
+  async deleteMarketplaceCredentials(marketplace: string) {
+    await db.delete(marketplaceCredentials).where(eq(marketplaceCredentials.marketplace, marketplace));
   },
 };

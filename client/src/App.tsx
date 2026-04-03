@@ -13,7 +13,8 @@ import Terms from "@/pages/terms";
 import Privacy from "@/pages/privacy";
 import Submit from "@/pages/submit";
 import Create from "@/pages/create";
-import { Home as HomeIcon, ShoppingBag, DollarSign, Wrench, LayoutDashboard, Clock, Zap, AlertTriangle } from "lucide-react";
+import SettingsPage from "@/pages/settings";
+import { Home as HomeIcon, ShoppingBag, DollarSign, Wrench, LayoutDashboard, Clock, Zap, AlertTriangle, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface SubscriptionStatus {
@@ -76,6 +77,7 @@ function Navigation() {
     { path: "/listings", label: "Listings", icon: ShoppingBag },
     { path: "/sales", label: "Sales", icon: DollarSign },
     { path: "/tools", label: "Tools", icon: Wrench },
+    { path: "/settings", label: "Connections", icon: Settings },
   ];
 
   return (
@@ -137,6 +139,7 @@ function Router() {
         <Route path="/terms" component={Terms} />
         <Route path="/privacy" component={Privacy} />
         <Route path="/submit" component={Submit} />
+        <Route path="/settings" component={SettingsPage} />
         <Route component={NotFound} />
       </Switch>
       <footer className="border-t bg-card mt-auto py-4 px-4 text-center text-xs text-muted-foreground space-x-3">

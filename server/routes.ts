@@ -422,6 +422,41 @@ export async function registerRoutes(
     }
   });
 
+  // Marketplace Credentials
+  app.get("/api/marketplace-credentials", async (req, res) => {
+    try {
+      const creds = await storage.getAllMarketplaceCredentials();
+      res.json(creds);
+    } catch (error) {
+      console.error("Error fetching credentials:", error);
+      res.status(500).json({ error: "Failed to fetch credentials" });
+    }
+  });
+
+  app.post("/api/marketplace-credentials", async (req, res) => {
+    try {
+      const { marketplace, credentials } = req.body;
+      if (!marketplace || !credentials) {
+        return res.status(400).json({ error: "marketplace and credentials required" });
+      }
+      const saved = await storage.upsertMarketplaceCredentials(marketplace, JSON.stringify(credentials));
+      res.json(saved);
+    } catch (error) {
+      console.error("Error saving credentials:", error);
+      res.status(500).json({ error: "Failed to save credentials" });
+    }
+  });
+
+  app.delete("/api/marketplace-credentials/:marketplace", async (req, res) => {
+    try {
+      await storage.deleteMarketplaceCredentials(req.params.marketplace);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting credentials:", error);
+      res.status(500).json({ error: "Failed to delete credentials" });
+    }
+  });
+
   // Subscription status
   app.get("/api/subscription/status", async (req, res) => {
     try {

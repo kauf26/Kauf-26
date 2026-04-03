@@ -117,6 +117,22 @@ export type InsertConversation = z.infer<typeof insertConversationSchema>;
 export type Message = typeof messages.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 
+export const marketplaceCredentials = pgTable("marketplace_credentials", {
+  id: serial("id").primaryKey(),
+  marketplace: text("marketplace").notNull().unique(),
+  credentials: text("credentials").notNull(),
+  connected: boolean("connected").notNull().default(false),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertMarketplaceCredentialsSchema = createInsertSchema(marketplaceCredentials).omit({
+  id: true,
+  updatedAt: true,
+});
+
+export type MarketplaceCredentials = typeof marketplaceCredentials.$inferSelect;
+export type InsertMarketplaceCredentials = z.infer<typeof insertMarketplaceCredentialsSchema>;
+
 export const appConfig = pgTable("app_config", {
   id: serial("id").primaryKey(),
   trialStartedAt: timestamp("trial_started_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
