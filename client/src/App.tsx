@@ -9,6 +9,7 @@ import Listings from "@/pages/listings";
 import Sales from "@/pages/sales";
 import Tools from "@/pages/tools";
 import Dashboard from "@/pages/dashboard";
+import Terms from "@/pages/terms";
 import { Home as HomeIcon, ShoppingBag, DollarSign, Wrench, LayoutDashboard, Clock, Zap, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -129,8 +130,15 @@ function Router() {
         <Route path="/listings" component={Listings} />
         <Route path="/sales" component={Sales} />
         <Route path="/tools" component={Tools} />
+        <Route path="/terms" component={Terms} />
         <Route component={NotFound} />
       </Switch>
+      <footer className="border-t bg-card mt-auto py-4 px-4 text-center text-xs text-muted-foreground">
+        <span>Global Marketplace Lister is a listing assistance tool only. All transactions occur between you and the respective marketplace. </span>
+        <Link href="/terms" className="underline hover:text-foreground transition-colors">
+          Terms of Service & Legal Disclaimer
+        </Link>
+      </footer>
     </>
   );
 }
