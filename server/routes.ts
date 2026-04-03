@@ -137,7 +137,7 @@ export async function registerRoutes(
             content: [
               {
                 type: "text",
-                text: "Analyze this product image carefully. Search your knowledge for an EXACT MATCH - the specific brand, model number, and product name.\n\nIF EXACT MATCH FOUND:\n- Title: The exact brand, model, and product name (e.g. 'Apple iPhone 15 Pro Max 256GB Natural Titanium')\n- Description: Start with '[EXACT MATCH]' then provide the full official product description including all key specs, features, dimensions, materials, and notable details. Be thorough and detailed - include everything a buyer would want to know.\n- exactMatch: true\n\nIF NO EXACT MATCH FOUND:\n- Title: A descriptive title (max 10 words)\n- Description: Exactly 3 sentences. First sentence describes what the product is. Second sentence highlights key features or benefits. Third sentence explains why a buyer would want it.\n- exactMatch: false\n\nReturn JSON: {\"title\": \"...\", \"description\": \"...\", \"exactMatch\": boolean}",
+                text: "You are an expert product identifier for e-commerce listings. Analyze this product image carefully.\n\nSTEP 1: Try to identify the EXACT product — brand, model name, model number, color/variant.\n\nIF YOU RECOGNIZE THE EXACT PRODUCT (e.g. 'Nike Air Max 270', 'Sony WH-1000XM5', 'KitchenAid Stand Mixer 5Qt'):\n- title: Full exact product name with brand and model (e.g. 'Sony WH-1000XM5 Wireless Noise Cancelling Headphones - Black')\n- description: Write the full official-style product description as it would appear on the manufacturer website or Amazon listing. Include: what it is, key specs, key features and benefits, materials/construction, what's in the box if known, and who it's best for. Be thorough — aim for 150-250 words.\n- exactMatch: true\n- suggestedPrice: your best estimate of the retail/resale price in USD as a number\n\nIF YOU CANNOT IDENTIFY THE EXACT PRODUCT:\n- title: A clear descriptive title (max 12 words)\n- description: Write exactly 3 sentences. Sentence 1: what the product is. Sentence 2: its key visible features or materials. Sentence 3: who would want it and why.\n- exactMatch: false\n- suggestedPrice: your best estimate of a fair selling price in USD as a number\n\nReturn ONLY valid JSON: {\"title\": \"...\", \"description\": \"...\", \"exactMatch\": boolean, \"suggestedPrice\": number}",
               },
               {
                 type: "image_url",
@@ -152,11 +152,13 @@ export async function registerRoutes(
       const result = JSON.parse(response.choices[0]?.message?.content || "{}");
 
       const publicPath = `/uploads/${req.file.filename}`;
-      
+
       res.json({
         imageUrl: publicPath,
         title: result.title || "Untitled Product",
         description: result.description || "No description available.",
+        exactMatch: result.exactMatch === true,
+        suggestedPrice: result.suggestedPrice || null,
       });
     } catch (error) {
       console.error("Error analyzing product:", error);

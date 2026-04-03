@@ -8,12 +8,14 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowLeft, BadgeCheck, Info } from "lucide-react";
 
 interface AnalysisResult {
   imageUrl: string;
   title: string;
   description: string;
+  exactMatch: boolean;
+  suggestedPrice: number | null;
 }
 
 const localMarketplaces = [
@@ -53,7 +55,11 @@ export default function Create() {
       return;
     }
     try {
-      setAnalysis(JSON.parse(raw));
+      const parsed = JSON.parse(raw);
+      setAnalysis(parsed);
+      if (parsed.suggestedPrice) {
+        setPrice(String(parsed.suggestedPrice));
+      }
     } catch {
       setLocation("/");
     }
@@ -140,8 +146,23 @@ export default function Create() {
           {/* Photo + AI details */}
           <Card data-testid="card-analysis">
             <CardHeader>
-              <CardTitle>Your Product</CardTitle>
-              <CardDescription>Edit the title and description if needed</CardDescription>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <CardTitle>Your Product</CardTitle>
+                  <CardDescription>Edit the title and description if needed</CardDescription>
+                </div>
+                {analysis.exactMatch ? (
+                  <div className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/30 text-green-400 text-xs font-medium px-2.5 py-1 rounded-full shrink-0">
+                    <BadgeCheck className="w-3.5 h-3.5" />
+                    Exact Match Found
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 bg-muted/40 border border-muted text-muted-foreground text-xs px-2.5 py-1 rounded-full shrink-0">
+                    <Info className="w-3.5 h-3.5" />
+                    AI Generated
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
               <img
@@ -182,7 +203,12 @@ export default function Create() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-3 gap-4">
                 <div>
-                  <Label htmlFor="price">Price</Label>
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="price">Price</Label>
+                    {analysis?.suggestedPrice && (
+                      <span className="text-xs text-muted-foreground">(AI suggested)</span>
+                    )}
+                  </div>
                   <Input
                     id="price"
                     type="number"
