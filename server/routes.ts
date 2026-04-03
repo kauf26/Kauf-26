@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { marketplaces, type Marketplace } from "@shared/schema";
+import { registerAuthRoutes } from "./replit_integrations/auth";
 import OpenAI from "openai";
 import multer from "multer";
 import path from "path";
@@ -93,6 +94,8 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   app.use("/uploads", (await import("express")).static(path.join(process.cwd(), "uploads")));
+
+  registerAuthRoutes(app);
 
   app.get("/api/products", async (req, res) => {
     try {

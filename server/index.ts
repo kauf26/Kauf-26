@@ -5,6 +5,7 @@ import { createServer } from "http";
 import { runMigrations } from 'stripe-replit-sync';
 import { getStripeSync } from "./stripeClient";
 import { WebhookHandlers } from "./webhookHandlers";
+import { setupAuth } from "./replit_integrations/auth";
 
 const app = express();
 const httpServer = createServer(app);
@@ -130,7 +131,9 @@ app.use((req, res, next) => {
 (async () => {
   try {
     console.log("Starting server initialization...");
-    
+
+    await setupAuth(app);
+
     await registerRoutes(httpServer, app);
     console.log("Routes registered successfully");
 

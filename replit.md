@@ -70,6 +70,28 @@ The platform supports listing to 13 marketplaces:
 ### Currency Support
 Built-in conversion rates for: USD, EUR, GBP, JPY, MXN, BRL, AUD, CAD
 
+## Authentication
+
+The app uses Replit Auth (OpenID Connect) for user sign-in. Users can sign in with:
+- **Google** account
+- **Apple** account
+- **GitHub** account
+- **Email & password**
+
+### Auth Architecture
+- `server/replit_integrations/auth/replitAuth.ts` — Passport.js OIDC strategy setup, `/api/login`, `/api/callback`, `/api/logout` routes
+- `server/replit_integrations/auth/storage.ts` — Upserts users from OAuth claims into the `users` table
+- `server/replit_integrations/auth/routes.ts` — `/api/auth/user` endpoint (protected)
+- `client/src/hooks/use-auth.ts` — React hook for auth state
+- Sessions stored in `sessions` table via connect-pg-simple
+- Environment vars required: `REPL_ID`, `REPLIT_DOMAINS`, `SESSION_SECRET` (all provided by Replit automatically)
+
+### Users Table (updated for OAuth)
+The `users` table now stores OAuth profile data (`email`, `first_name`, `last_name`, `profile_image_url`) instead of username/password. Old PIN-based auth has been removed.
+
+### Protected Routes
+All app routes redirect to `/login` if the user is not authenticated. Public routes: `/login`, `/privacy`, `/terms`, `/submit`.
+
 ## Mobile App (React Native/Expo)
 
 A native iOS mobile app version has been created in the `mobile/` directory.

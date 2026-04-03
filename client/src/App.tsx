@@ -1,4 +1,4 @@
-import { Switch, Route, Link, useLocation } from "wouter";
+import { Switch, Route, Link, useLocation, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -14,8 +14,10 @@ import Privacy from "@/pages/privacy";
 import Submit from "@/pages/submit";
 import Create from "@/pages/create";
 import SettingsPage from "@/pages/settings";
-import { Home as HomeIcon, ShoppingBag, DollarSign, Wrench, LayoutDashboard, Clock, Zap, AlertTriangle, Settings } from "lucide-react";
+import LoginPage from "@/pages/login";
+import { Home as HomeIcon, ShoppingBag, DollarSign, Wrench, LayoutDashboard, Clock, Zap, AlertTriangle, Settings, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/use-auth";
 
 interface SubscriptionStatus {
   isTrialActive: boolean;
@@ -70,6 +72,7 @@ function TrialBanner({ status }: { status: SubscriptionStatus }) {
 
 function Navigation() {
   const [location] = useLocation();
+  const { user, isAuthenticated, logout } = useAuth();
 
   const navItems = [
     { path: "/", label: "Upload", icon: HomeIcon },
@@ -89,7 +92,7 @@ function Navigation() {
             <span className="font-bold text-lg">Global Lister</span>
           </Link>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = location === item.path;
@@ -98,15 +101,40 @@ function Navigation() {
                   <Button
                     variant={isActive ? "default" : "ghost"}
                     size="sm"
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-1.5"
                     data-testid={`nav-${item.label.toLowerCase()}`}
                   >
                     <Icon className="w-4 h-4" />
-                    {item.label}
+                    <span className="hidden md:inline">{item.label}</span>
                   </Button>
                 </Link>
               );
             })}
+
+            {isAuthenticated && (
+              <div className="flex items-center gap-2 ml-2 pl-2 border-l">
+                {user?.profileImageUrl ? (
+                  <img src={user.profileImageUrl} alt="avatar" className="w-7 h-7 rounded-full" />
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center">
+                    <User className="w-4 h-4 text-primary" />
+                  </div>
+                )}
+                <span className="text-sm text-muted-foreground hidden md:inline">
+                  {user?.firstName || user?.email?.split("@")[0] || "Account"}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => logout()}
+                  data-testid="button-logout"
+                  className="gap-1.5 text-muted-foreground"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span className="hidden md:inline">Sign out</span>
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -114,7 +142,8 @@ function Navigation() {
   );
 }
 
-function Router() {
+function ProtectedRouter() {
+  const { isAuthenticated, isLoading } = useAuth();
   const { data: subscriptionStatus } = useQuery<SubscriptionStatus>({
     queryKey: ["subscription-status"],
     queryFn: async () => {
@@ -123,7 +152,20 @@ function Router() {
       return res.json();
     },
     staleTime: 60 * 1000,
+    enabled: isAuthenticated,
   });
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Redirect to="/login" />;
+  }
 
   return (
     <>
@@ -136,9 +178,6 @@ function Router() {
         <Route path="/sales" component={Sales} />
         <Route path="/tools" component={Tools} />
         <Route path="/create" component={Create} />
-        <Route path="/terms" component={Terms} />
-        <Route path="/privacy" component={Privacy} />
-        <Route path="/submit" component={Submit} />
         <Route path="/settings" component={SettingsPage} />
         <Route component={NotFound} />
       </Switch>
@@ -151,6 +190,18 @@ function Router() {
         <Link href="/submit" className="underline hover:text-foreground transition-colors">Submit to App Stores</Link>
       </footer>
     </>
+  );
+}
+
+function Router() {
+  return (
+    <Switch>
+      <Route path="/login" component={LoginPage} />
+      <Route path="/terms" component={Terms} />
+      <Route path="/privacy" component={Privacy} />
+      <Route path="/submit" component={Submit} />
+      <Route component={ProtectedRouter} />
+    </Switch>
   );
 }
 

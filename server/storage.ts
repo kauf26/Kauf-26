@@ -13,10 +13,6 @@ import { eq, desc, isNull } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
-  getUserByUsername(username: string): Promise<User | undefined>;
-  createUser(user: InsertUser): Promise<User>;
-  updateUserPin(id: string, pin: string): Promise<void>;
-  getFirstUser(): Promise<User | undefined>;
   
   createProduct(product: InsertProduct): Promise<Product>;
   getProduct(id: number): Promise<Product | undefined>;
@@ -50,25 +46,6 @@ export interface IStorage {
 export const storage: IStorage = {
   async getUser(id: string) {
     const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user;
-  },
-
-  async getUserByUsername(username: string) {
-    const [user] = await db.select().from(users).where(eq(users.username, username));
-    return user;
-  },
-
-  async createUser(insertUser: InsertUser) {
-    const [user] = await db.insert(users).values(insertUser).returning();
-    return user;
-  },
-
-  async updateUserPin(id: string, pin: string) {
-    await db.update(users).set({ pin }).where(eq(users.id, id));
-  },
-
-  async getFirstUser() {
-    const [user] = await db.select().from(users).limit(1);
     return user;
   },
 
