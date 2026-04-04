@@ -66,3 +66,15 @@ id = "OcdW87icFdCk1au19B72B"
 uri = "file://global-marketplace-lister-source-code.txt"
 type = "text"
 title = "Global Marketplace Lister — Complete Source Code"
+
+[[outputs]]
+id = "HZjtgkxSiZ0Q9_QdohDvZ"
+uri = "file://docs/apple-signin-setup.txt"
+type = "text"
+title = "Apple Sign In — Step-by-Step Setup Guide"
+
+[[outputs]]
+id = "g-4dDz2x71ZgMbT1dRzTu"
+uri = "file://docs/google-signin-setup.txt"
+type = "text"
+title = "Google Sign In — Step-by-Step Setup Guide"

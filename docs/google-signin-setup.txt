@@ -1,0 +1,168 @@
+================================================================================
+  GOOGLE SIGN IN — COMPLETE SETUP GUIDE
+  Global Marketplace Lister
+================================================================================
+
+WHAT YOU NEED BEFORE STARTING
+  • A Google account (free)
+  • Your live domain: kauf26.com
+  • About 10 minutes
+
+YOU WILL COLLECT THESE 2 VALUES AT THE END:
+  • GOOGLE_CLIENT_ID     — looks like: 123456789-abcdef.apps.googleusercontent.com
+  • GOOGLE_CLIENT_SECRET — looks like: GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxx
+
+================================================================================
+STEP 1 — CREATE OR SELECT A GOOGLE CLOUD PROJECT
+================================================================================
+
+1. Go to console.cloud.google.com and sign in with your Google account.
+2. Click the project dropdown at the top of the page (next to "Google Cloud").
+3. Click "New Project".
+4. Project name: Global Lister
+5. Click "Create".
+6. Wait a few seconds for the project to be created, then select it.
+
+NOTE: If you already have a Google Cloud project you want to use, just select
+it from the dropdown instead of creating a new one.
+
+================================================================================
+STEP 2 — ENABLE THE GOOGLE+ API / PEOPLE API
+================================================================================
+
+1. In your project, go to the left sidebar → APIs & Services → Library.
+2. Search for "Google People API".
+3. Click on it → click "Enable".
+
+This API is what gives the app access to the user's name, email, and profile
+photo after they sign in with Google.
+
+================================================================================
+STEP 3 — CONFIGURE THE OAUTH CONSENT SCREEN
+================================================================================
+
+Before creating credentials, you must set up the consent screen — this is what
+users see when they click "Sign in with Google."
+
+1. Go to: APIs & Services → OAuth consent screen.
+2. User Type: select "External" → click Create.
+3. Fill in the required fields:
+     App name:              Global Marketplace Lister
+     User support email:    kaufit@yahoo.com
+     App logo:              (optional — upload your app icon)
+     App domain:
+       Application home page:        https://kauf26.com
+       Application privacy policy:   https://kauf26.com/privacy
+       Application terms of service: https://kauf26.com/terms
+     Developer contact email:        kaufit@yahoo.com
+4. Click "Save and Continue".
+5. On the Scopes page, click "Add or Remove Scopes".
+6. Add these scopes:
+     .../auth/userinfo.email
+     .../auth/userinfo.profile
+     openid
+7. Click "Update" → "Save and Continue".
+8. On the Test users page:
+   • While your app is in "Testing" mode, only accounts you add here can sign in.
+   • Add your own Google email address so you can test.
+   • You can add up to 100 test users.
+9. Click "Save and Continue" → "Back to Dashboard".
+
+TO PUBLISH (allow any Google user to sign in):
+  • On the OAuth consent screen page, click "Publish App" → Confirm.
+  • Google may review your app if you request sensitive scopes, but for basic
+    profile + email it usually publishes immediately.
+
+================================================================================
+STEP 4 — CREATE OAUTH 2.0 CREDENTIALS
+================================================================================
+
+1. Go to: APIs & Services → Credentials → click "+ Create Credentials".
+2. Select "OAuth client ID".
+3. Application type: Web application.
+4. Name: Global Lister Web Client
+5. Under "Authorized JavaScript origins" add:
+     https://kauf26.com
+     (also add your Replit dev URL if you want to test in development:)
+     https://[your-replit-dev-domain]
+6. Under "Authorized redirect URIs" add:
+     https://kauf26.com/api/auth/google/callback
+     (also add your Replit dev URL for testing:)
+     https://[your-replit-dev-domain]/api/auth/google/callback
+7. Click "Create".
+8. A popup appears showing:
+     Client ID:     123456789-abcdef.apps.googleusercontent.com  → GOOGLE_CLIENT_ID
+     Client Secret: GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxx              → GOOGLE_CLIENT_SECRET
+9. Copy both values. You can also download them as a JSON file for safekeeping.
+
+================================================================================
+STEP 5 — ENTER THE 2 VALUES IN REPLIT SECRETS
+================================================================================
+
+Go to your Replit project → Secrets tab → add these 2 secrets:
+
+  Secret name           Value
+  ──────────────────────────────────────────────────────────────────────────
+  GOOGLE_CLIENT_ID      123456789-abcdef.apps.googleusercontent.com
+  GOOGLE_CLIENT_SECRET  GOCSPX-xxxxxxxxxxxxxxxxxxxxxxxx
+
+After saving both secrets, restart the app. The server log will show:
+  [auth] Google OAuth strategy registered
+
+================================================================================
+STEP 6 — FOR THE NATIVE ANDROID APP (Google Play submission)
+================================================================================
+
+When you wrap the app as a native Android app (via PWABuilder or Capacitor),
+Google Sign-In for Android uses a DIFFERENT credential type:
+
+1. In Google Cloud Console → Credentials → "+ Create Credentials" → OAuth client ID.
+2. Application type: Android.
+3. Package name: com.kauf26.app  (or whatever your Android package name is)
+4. SHA-1 certificate fingerprint:
+   • For testing (debug keystore), run in terminal:
+       keytool -keystore ~/.android/debug.keystore -list -v
+       Password: android
+   • For production (release keystore), use your actual release keystore SHA-1.
+5. Click Create — no secret is needed for Android, only the Client ID matters.
+6. The Android app automatically uses Google's native sign-in — no redirect URLs.
+
+NOTE: The web Client ID and Android Client ID are separate entries in Google
+Cloud Console, but they can both be in the same project.
+
+================================================================================
+CALLBACK URL REGISTERED WITH GOOGLE (for reference)
+================================================================================
+
+Production:
+  https://kauf26.com/api/auth/google/callback
+
+Development/testing (add your Replit dev URL here):
+  https://[your-replit-dev-domain]/api/auth/google/callback
+
+IMPORTANT: If the redirect URI is not in this exact list, Google will show
+"redirect_uri_mismatch" error. Make sure there is no trailing slash.
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+"redirect_uri_mismatch" error:
+  → The URL being used for the callback does not exactly match what you
+    registered. Check for extra slashes, http vs https, or wrong domain.
+
+"Access blocked: This app has not completed the Google verification process":
+  → Your OAuth consent screen is in "Testing" mode and the email trying to
+    sign in is not in the Test Users list. Either add that email to test users,
+    or publish the app (Step 3 above).
+
+"Error 400: invalid_client":
+  → The GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is wrong or has extra spaces.
+    Double-check they were copied correctly.
+
+Users can only see name and email if the consent screen is configured correctly:
+  → Make sure the openid, email, and profile scopes are enabled (Step 3).
+
+================================================================================
+  END OF GOOGLE SIGN IN SETUP GUIDE
+================================================================================
