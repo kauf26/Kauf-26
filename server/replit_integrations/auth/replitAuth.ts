@@ -1,25 +1,17 @@
-import * as client from "openid-client";
-import { Strategy, type VerifyFunction } from "openid-client/passport";
-
+import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import passport from "passport";
 import session from "express-session";
 import type { Express, RequestHandler } from "express";
-import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
+import { createRequire } from "module";
 import { authStorage } from "./storage";
 
-const getOidcConfig = memoize(
-  async () => {
-    return await client.discovery(
-      new URL(process.env.ISSUER_URL ?? "https://replit.com/oidc"),
-      process.env.REPL_ID!
-    );
-  },
-  { maxAge: 3600 * 1000 }
-);
+// passport-apple has no @types and needs CJS require in an ESM project
+const require = createRequire(import.meta.url);
+const AppleStrategy = require("passport-apple");
 
 export function getSession() {
-  const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
+  const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 7 days
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
     conString: process.env.DATABASE_URL,
@@ -40,43 +32,10 @@ export function getSession() {
   });
 }
 
-function updateUserSession(
-  user: any,
-  tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers
-) {
-  user.claims = tokens.claims();
-  user.access_token = tokens.access_token;
-  user.refresh_token = tokens.refresh_token;
-  user.expires_at = user.claims?.exp;
-}
-
-async function upsertUser(claims: any) {
-  await authStorage.upsertUser({
-    id: claims["sub"],
-    email: claims["email"],
-    firstName: claims["first_name"],
-    lastName: claims["last_name"],
-    profileImageUrl: claims["profile_image_url"],
-  });
-}
-
-const CUSTOM_DOMAIN = "kauf26.com";
-
-// Resolve the best domain for auth callbacks
-// Custom domain takes priority, then REPLIT_DOMAINS, then dev fallback
-function resolveCallbackDomain(reqHostname: string): string {
-  // If request came in through the custom domain, use it
-  if (reqHostname === CUSTOM_DOMAIN || reqHostname === `www.${CUSTOM_DOMAIN}`) {
-    return CUSTOM_DOMAIN;
-  }
-  // If it's a real replit domain (not localhost), use it directly
-  if (reqHostname !== "localhost" && !reqHostname.startsWith("0.0.0.0")) {
-    return reqHostname;
-  }
-  // Fallback: use REPLIT_DOMAINS or custom domain
-  const replitDomains = process.env.REPLIT_DOMAINS;
-  if (replitDomains) return replitDomains.split(",")[0].trim();
-  return CUSTOM_DOMAIN;
+function getBaseUrl(): string {
+  const domains = process.env.REPLIT_DOMAINS;
+  if (domains) return `https://${domains.split(",")[0].trim()}`;
+  return process.env.APP_BASE_URL || "https://kauf26.com";
 }
 
 export async function setupAuth(app: Express) {
@@ -85,91 +44,148 @@ export async function setupAuth(app: Express) {
   app.use(passport.initialize());
   app.use(passport.session());
 
-  const config = await getOidcConfig();
+  passport.serializeUser((user, cb) => cb(null, user));
+  passport.deserializeUser((user, cb) => cb(null, user as Express.User));
 
-  const verify: VerifyFunction = async (
-    tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
-    verified: passport.AuthenticateCallback
-  ) => {
-    const user = {};
-    updateUserSession(user, tokens);
-    await upsertUser(tokens.claims());
-    verified(null, user);
-  };
+  // ── Google OAuth 2.0 ──────────────────────────────────────────────────────
+  const googleClientId = process.env.GOOGLE_CLIENT_ID;
+  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
-  const registeredStrategies = new Set<string>();
+  if (googleClientId && googleClientSecret) {
+    passport.use(
+      new GoogleStrategy(
+        {
+          clientID: googleClientId,
+          clientSecret: googleClientSecret,
+          callbackURL: "/api/auth/google/callback",
+          scope: ["profile", "email"],
+        },
+        async (
+          _accessToken: string,
+          _refreshToken: string,
+          profile: any,
+          done: Function
+        ) => {
+          try {
+            const userId = `google_${profile.id}`;
+            const email = profile.emails?.[0]?.value;
+            const firstName = profile.name?.givenName;
+            const lastName = profile.name?.familyName;
+            const profileImageUrl = profile.photos?.[0]?.value;
 
-  const ensureStrategy = (domain: string) => {
-    const name = `replitauth:${domain}`;
-    if (!registeredStrategies.has(name)) {
-      passport.use(new Strategy(
-        { name, config, scope: "openid email profile offline_access", callbackURL: `https://${domain}/api/callback` },
-        verify
-      ));
-      registeredStrategies.add(name);
-    }
-    return name;
-  };
+            await authStorage.upsertUser({
+              id: userId,
+              email,
+              firstName,
+              lastName,
+              profileImageUrl,
+            });
 
-  passport.serializeUser((user: Express.User, cb) => cb(null, user));
-  passport.deserializeUser((user: Express.User, cb) => cb(null, user));
+            done(null, {
+              claims: { sub: userId },
+              provider: "google",
+              email,
+              firstName,
+              lastName,
+              profileImageUrl,
+            });
+          } catch (err) {
+            done(err);
+          }
+        }
+      )
+    );
+    console.log("[auth] Google OAuth strategy registered");
+  } else {
+    console.warn("[auth] GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET not set — Google sign-in disabled");
+  }
 
-  app.get("/api/login", (req, res, next) => {
-    const domain = resolveCallbackDomain(req.hostname);
-    const strategyName = ensureStrategy(domain);
-    passport.authenticate(strategyName, {
-      prompt: "login consent",
-      scope: ["openid", "email", "profile", "offline_access"],
-    })(req, res, next);
-  });
+  // ── Apple Sign In ─────────────────────────────────────────────────────────
+  const appleClientId = process.env.APPLE_CLIENT_ID;
+  const appleTeamId = process.env.APPLE_TEAM_ID;
+  const appleKeyId = process.env.APPLE_KEY_ID;
+  const applePrivateKey = process.env.APPLE_PRIVATE_KEY;
 
-  app.get("/api/callback", (req, res, next) => {
-    const domain = resolveCallbackDomain(req.hostname);
-    const strategyName = ensureStrategy(domain);
-    passport.authenticate(strategyName, {
-      successReturnToOrRedirect: "/",
-      failureRedirect: "/api/login",
-    })(req, res, next);
-  });
+  if (appleClientId && appleTeamId && appleKeyId && applePrivateKey) {
+    passport.use(
+      new AppleStrategy(
+        {
+          clientID: appleClientId,
+          teamID: appleTeamId,
+          keyID: appleKeyId,
+          // Stored in env as single line with literal \n — convert back to real newlines
+          privateKeyString: applePrivateKey.replace(/\\n/g, "\n"),
+          // Apple requires an absolute HTTPS callback URL registered in their portal
+          callbackURL: `${getBaseUrl()}/api/auth/apple/callback`,
+          scope: ["name", "email"],
+        },
+        async (
+          _accessToken: string,
+          _refreshToken: string,
+          idToken: any,
+          profile: any,
+          done: Function
+        ) => {
+          try {
+            const userId = `apple_${profile.id}`;
+            // Apple only sends name/email on the VERY FIRST sign-in — store what we get
+            const email = profile.email ?? idToken?.email ?? undefined;
+            const firstName = profile.name?.firstName ?? undefined;
+            const lastName = profile.name?.lastName ?? undefined;
 
+            await authStorage.upsertUser({ id: userId, email, firstName, lastName });
+
+            done(null, {
+              claims: { sub: userId },
+              provider: "apple",
+              email,
+              firstName,
+              lastName,
+            });
+          } catch (err) {
+            done(err);
+          }
+        }
+      )
+    );
+    console.log("[auth] Apple Sign In strategy registered");
+  } else {
+    console.warn("[auth] Apple Sign In credentials not set — Apple sign-in disabled");
+  }
+
+  // ── Google routes ─────────────────────────────────────────────────────────
+  app.get(
+    "/api/auth/google",
+    passport.authenticate("google", { scope: ["profile", "email"] })
+  );
+
+  app.get(
+    "/api/auth/google/callback",
+    passport.authenticate("google", { failureRedirect: "/login?error=google" }),
+    (_req, res) => res.redirect("/")
+  );
+
+  // ── Apple routes — Apple uses POST for the callback, not GET ──────────────
+  app.get("/api/auth/apple", passport.authenticate("apple"));
+
+  app.post(
+    "/api/auth/apple/callback",
+    passport.authenticate("apple", { failureRedirect: "/login?error=apple" }),
+    (_req, res) => res.redirect("/")
+  );
+
+  // ── Backward compat: /api/login now just goes to the login page ───────────
+  app.get("/api/login", (_req, res) => res.redirect("/login"));
+
+  // ── Logout ────────────────────────────────────────────────────────────────
   app.get("/api/logout", (req, res) => {
-    const domain = resolveCallbackDomain(req.hostname);
-    req.logout(() => {
-      res.redirect(
-        client.buildEndSessionUrl(config, {
-          client_id: process.env.REPL_ID!,
-          post_logout_redirect_uri: `https://${domain}`,
-        }).href
-      );
-    });
+    req.logout(() => res.redirect("/login"));
   });
 }
 
-export const isAuthenticated: RequestHandler = async (req, res, next) => {
-  const user = req.user as any;
-
-  if (!req.isAuthenticated() || !user.expires_at) {
+export const isAuthenticated: RequestHandler = (req, res, next) => {
+  if (!req.isAuthenticated()) {
     return res.status(401).json({ message: "Unauthorized" });
   }
-
-  const now = Math.floor(Date.now() / 1000);
-  if (now <= user.expires_at) {
-    return next();
-  }
-
-  const refreshToken = user.refresh_token;
-  if (!refreshToken) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
-
-  try {
-    const config = await getOidcConfig();
-    const tokenResponse = await client.refreshTokenGrant(config, refreshToken);
-    updateUserSession(user, tokenResponse);
-    return next();
-  } catch (error) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
+  return next();
 };
