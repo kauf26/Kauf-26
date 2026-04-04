@@ -6,6 +6,7 @@ import { runMigrations } from 'stripe-replit-sync';
 import { getStripeSync } from "./stripeClient";
 import { WebhookHandlers } from "./webhookHandlers";
 import { setupAuth } from "./replit_integrations/auth";
+import { scheduleImageCleanup } from "./cleanup";
 import pg from "pg";
 
 async function runSchemaMigrations() {
@@ -171,6 +172,8 @@ app.use((req, res, next) => {
 
     await registerRoutes(httpServer, app);
     console.log("Routes registered successfully");
+
+    scheduleImageCleanup();
 
     app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
       const status = err.status || err.statusCode || 500;

@@ -636,6 +636,19 @@ export async function registerRoutes(
     }
   });
 
+  // Manual image cleanup trigger (admin use / testing)
+  app.post("/api/admin/cleanup-images", async (req, res) => {
+    try {
+      const { cleanupOldImages } = await import("./cleanup");
+      const dryRun = req.query.dryRun === "true";
+      const result = await cleanupOldImages(dryRun);
+      res.json({ success: true, dryRun, ...result });
+    } catch (error) {
+      console.error("Error running cleanup:", error);
+      res.status(500).json({ error: "Cleanup failed" });
+    }
+  });
+
   // Delete account — wipes all user data and ends the session (Apple required)
   app.delete("/api/account", async (req, res) => {
     try {
