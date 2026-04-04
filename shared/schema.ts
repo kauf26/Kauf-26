@@ -31,6 +31,7 @@ export type UpsertUser = typeof users.$inferInsert;
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   imageUrl: text("image_url").notNull(),
+  additionalImages: text("additional_images").array().notNull().default(sql`ARRAY[]::text[]`),
   originalTitle: text("original_title").notNull(),
   aiDescription: text("ai_description").notNull(),
   basePrice: decimal("base_price", { precision: 10, scale: 2 }).notNull(),

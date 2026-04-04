@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useMutation } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, ArrowLeft, BadgeCheck, Info } from "lucide-react";
+import { Loader2, ArrowLeft, BadgeCheck, Info, Plus, X } from "lucide-react";
 
 interface AnalysisResult {
   imageUrl: string;
@@ -48,6 +48,9 @@ export default function Create() {
   const [currency, setCurrency] = useState("USD");
   const [condition, setCondition] = useState<"new" | "used">("new");
   const [selectedMarketplaces, setSelectedMarketplaces] = useState<string[]>(["ebay", "amazon", "etsy"]);
+  const [additionalImages, setAdditionalImages] = useState<string[]>([]);
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const additionalInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const raw = sessionStorage.getItem("pendingAnalysis");
@@ -66,6 +69,31 @@ export default function Create() {
     }
   }, [setLocation]);
 
+  const handleAdditionalImages = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+    const remaining = 5 - additionalImages.length;
+    const toUpload = files.slice(0, remaining);
+    setUploadingImages(true);
+    try {
+      const formData = new FormData();
+      toUpload.forEach((f) => formData.append("images", f));
+      const res = await fetch("/api/products/upload-additional", { method: "POST", body: formData });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      setAdditionalImages((prev) => [...prev, ...data.urls]);
+    } catch {
+      toast({ title: "Upload Failed", description: "Could not upload images. Please try again.", variant: "destructive" });
+    } finally {
+      setUploadingImages(false);
+      if (additionalInputRef.current) additionalInputRef.current.value = "";
+    }
+  };
+
+  const removeAdditionalImage = (index: number) => {
+    setAdditionalImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const createProductMutation = useMutation({
     mutationFn: async () => {
       if (!analysis || !price) throw new Error("Missing data");
@@ -75,6 +103,7 @@ export default function Create() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           imageUrl: analysis.imageUrl,
+          additionalImages,
           originalTitle: analysis.title,
           aiDescription: analysis.description,
           basePrice: price,
@@ -172,6 +201,54 @@ export default function Create() {
                 className="w-full h-64 object-cover rounded-lg border"
                 data-testid="img-preview"
               />
+
+              {/* Additional photos */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <Label>Additional Photos <span className="text-muted-foreground font-normal">({additionalImages.length}/5)</span></Label>
+                </div>
+                <input
+                  ref={additionalInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={handleAdditionalImages}
+                  data-testid="input-additional-images"
+                />
+                <div className="grid grid-cols-3 gap-2">
+                  {additionalImages.map((url, i) => (
+                    <div key={i} className="relative aspect-square rounded-lg overflow-hidden border" data-testid={`img-additional-${i}`}>
+                      <img src={url} alt={`Additional ${i + 1}`} className="w-full h-full object-cover" />
+                      <button
+                        onClick={() => removeAdditionalImage(i)}
+                        className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5 hover:bg-black/80 transition-colors"
+                        data-testid={`button-remove-image-${i}`}
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                  {additionalImages.length < 5 && (
+                    <button
+                      onClick={() => additionalInputRef.current?.click()}
+                      disabled={uploadingImages}
+                      className="aspect-square rounded-lg border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center gap-1 hover:border-primary/50 hover:bg-primary/5 transition-colors text-muted-foreground hover:text-primary"
+                      data-testid="button-add-photo"
+                    >
+                      {uploadingImages ? (
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                      ) : (
+                        <>
+                          <Plus className="w-5 h-5" />
+                          <span className="text-xs font-medium">Add Photo</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+
               <div>
                 <Label htmlFor="title">Title</Label>
                 <Input

@@ -224,12 +224,27 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/products/upload-additional", upload.array("images", 5), async (req, res) => {
+    try {
+      const files = req.files as Express.Multer.File[];
+      if (!files || files.length === 0) {
+        return res.status(400).json({ error: "No images uploaded" });
+      }
+      const urls = files.map((f) => `/uploads/${f.filename}`);
+      res.json({ urls });
+    } catch (error: any) {
+      console.error("Error uploading additional images:", error?.message || error);
+      res.status(500).json({ error: "Failed to upload images" });
+    }
+  });
+
   app.post("/api/products", async (req, res) => {
     try {
-      const { imageUrl, originalTitle, aiDescription, basePrice, currency, quantity } = req.body;
+      const { imageUrl, additionalImages, originalTitle, aiDescription, basePrice, currency, quantity } = req.body;
 
       const product = await storage.createProduct({
         imageUrl,
+        additionalImages: Array.isArray(additionalImages) ? additionalImages : [],
         originalTitle,
         aiDescription,
         basePrice,
