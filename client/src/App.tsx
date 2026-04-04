@@ -15,6 +15,7 @@ import Submit from "@/pages/submit";
 import Create from "@/pages/create";
 import SettingsPage from "@/pages/settings";
 import LoginPage from "@/pages/login";
+import Screenshots from "@/pages/screenshots";
 import { Home as HomeIcon, ShoppingBag, DollarSign, Wrench, LayoutDashboard, Clock, Zap, AlertTriangle, Settings, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
@@ -200,6 +201,7 @@ function Router() {
       <Route path="/terms" component={Terms} />
       <Route path="/privacy" component={Privacy} />
       <Route path="/submit" component={Submit} />
+      <Route path="/screenshots" component={Screenshots} />
       <Route component={ProtectedRouter} />
     </Switch>
   );

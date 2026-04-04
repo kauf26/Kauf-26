@@ -1,0 +1,62 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "wrdmKXioyS0ELoAnWwzAi"
+uri = "file://screenshots/iphone-upload.png"
+type = "image"
+title = "iPhone — Upload Screen"
+
+[[outputs]]
+id = "W1VarcZh_J1v9k2V1BUVj"
+uri = "file://screenshots/iphone-analyze.png"
+type = "image"
+title = "iPhone — AI Listing Creator"
+
+[[outputs]]
+id = "wTiZmE0KaYwf1sQOQyKNd"
+uri = "file://screenshots/iphone-listings.png"
+type = "image"
+title = "iPhone — My Listings"
+
+[[outputs]]
+id = "OS9tbV3H3slCdaQiAVMq7"
+uri = "file://screenshots/iphone-sales.png"
+type = "image"
+title = "iPhone — Sales Tracker"
+
+[[outputs]]
+id = "bdi_atsTIHueInvqEwtvg"
+uri = "file://screenshots/iphone-dashboard.png"
+type = "image"
+title = "iPhone — Dashboard"
+
+[[outputs]]
+id = "iD-WnT1IjGIrvFc2jYRSU"
+uri = "file://screenshots/ipad-upload.png"
+type = "image"
+title = "iPad — Upload Screen"
+
+[[outputs]]
+id = "zwT7g5d0DUn9FKQAkt8Fq"
+uri = "file://screenshots/ipad-analyze.png"
+type = "image"
+title = "iPad — AI Listing Creator"
+
+[[outputs]]
+id = "d-ooc3_Mt_nmAIR9k0BA0"
+uri = "file://screenshots/ipad-listings.png"
+type = "image"
+title = "iPad — My Listings"
+
+[[outputs]]
+id = "RHlN53hE8jZ4vDVNeVuOY"
+uri = "file://screenshots/ipad-sales.png"
+type = "image"
+title = "iPad — Sales Tracker"
+
+[[outputs]]
+id = "ChFqAszOeEeV1CUjzue1n"
+uri = "file://screenshots/ipad-dashboard.png"
+type = "image"
+title = "iPad — Dashboard"
