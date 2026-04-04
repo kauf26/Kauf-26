@@ -29,7 +29,7 @@ export default function Home() {
       setPreviewing(false);
       toast({
         title: "Analysis Failed",
-        description: "Could not analyze the image. Please try again.",
+        description: "Could not analyze the image. Make sure it's a clear photo of a product and try again.",
         variant: "destructive",
       });
     },

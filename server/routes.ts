@@ -130,7 +130,18 @@ export async function registerRoutes(
 
       const imageBuffer = await fs.readFile(req.file.path);
       const base64Image = imageBuffer.toString("base64");
-      const imageUrl = `data:image/${path.extname(req.file.originalname).slice(1)};base64,${base64Image}`;
+      const extToMime: Record<string, string> = {
+        jpg: "image/jpeg",
+        jpeg: "image/jpeg",
+        png: "image/png",
+        gif: "image/gif",
+        webp: "image/webp",
+        heic: "image/heic",
+        heif: "image/heif",
+      };
+      const ext = path.extname(req.file.originalname).slice(1).toLowerCase();
+      const mimeType = req.file.mimetype || extToMime[ext] || `image/${ext}`;
+      const imageUrl = `data:${mimeType};base64,${base64Image}`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
@@ -163,9 +174,13 @@ export async function registerRoutes(
         exactMatch: result.exactMatch === true,
         suggestedPrice: result.suggestedPrice || null,
       });
-    } catch (error) {
-      console.error("Error analyzing product:", error);
+    } catch (error: any) {
+      console.error("Error analyzing product:", error?.message || error);
       res.status(500).json({ error: "Failed to analyze product" });
+    } finally {
+      if (req.file?.path) {
+        fs.unlink(req.file.path).catch(() => {});
+      }
     }
   });
 
