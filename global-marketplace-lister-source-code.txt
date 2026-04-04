@@ -1,16 +1,50 @@
 ================================================================================
-  GLOBAL MARKETPLACE LISTER — COMPLETE SOURCE CODE
+  GLOBAL MARKETPLACE LISTER — COMPLETE SOURCE CODE (FINAL)
   Generated: April 4, 2026
+  Includes: Google Sign In, Apple Sign In, GDPR Banner, Translation, Legal Pages
 ================================================================================
 
-All files are listed in dependency order:
-  1. Shared types / schema
-  2. Server – database, storage, auth, cleanup, routes, index
-  3. Client – HTML, manifest, pages, components
-  4. Scripts / tooling
+TABLE OF CONTENTS
+  1.  shared/schema.ts                              — Database schema & types
+  2.  server/db.ts                                  — Database connection
+  3.  server/storage.ts                             — Storage interface
+  4.  server/replit_integrations/auth/storage.ts    — Auth storage
+  5.  server/replit_integrations/auth/replitAuth.ts — Google + Apple OAuth
+  6.  server/replit_integrations/auth/routes.ts     — Auth API routes
+  7.  server/replit_integrations/auth/index.ts      — Auth exports
+  8.  server/cleanup.ts                             — Image cleanup (2-layer)
+  9.  server/stripeClient.ts                        — Stripe client
+  10. server/webhookHandlers.ts                     — Stripe webhooks
+  11. server/routes.ts                              — All API routes
+  12. server/index.ts                               — Server entry point
+  13. client/index.html                             — HTML shell
+  14. client/public/manifest.json                   — PWA manifest
+  15. client/src/App.tsx                            — Router + navigation
+  16. client/src/hooks/use-auth.ts                  — Auth hook
+  17. client/src/pages/login.tsx                    — Sign in page (Google + Apple)
+  18. client/src/pages/privacy.tsx                  — Privacy Policy (GDPR ready)
+  19. client/src/pages/terms.tsx                    — Terms of Service
+  20. client/src/components/gdpr-banner.tsx         — GDPR consent banner
+  21. client/src/components/translate-widget.tsx    — 100+ language translator
+  22. client/src/components/onboarding.tsx          — First-launch onboarding
+  23. scripts/take-screenshots.mjs                  — App Store screenshot tool
+  24. docs/apple-signin-setup.txt                   — Apple setup guide
+  25. docs/google-signin-setup.txt                  — Google setup guide
+
+SECRETS REQUIRED (add in Replit Secrets tab)
+  GOOGLE_CLIENT_ID       — from Google Cloud Console
+  GOOGLE_CLIENT_SECRET   — from Google Cloud Console
+  APPLE_CLIENT_ID        — your Apple Service ID (e.g. com.kauf26.app.service)
+  APPLE_TEAM_ID          — 10-char Team ID from Apple Developer portal
+  APPLE_KEY_ID           — Key ID from Apple Developer portal
+  APPLE_PRIVATE_KEY      — contents of .p8 file, newlines replaced with \n
+
+CALLBACK URLS TO REGISTER
+  Google:  https://kauf26.com/api/auth/google/callback
+  Apple:   https://kauf26.com/api/auth/apple/callback
 
 ================================================================================
-FILE: shared/schema.ts
+FILE 1: shared/schema.ts
 ================================================================================
 import { sql } from "drizzle-orm";
 import { pgTable, serial, integer, text, varchar, timestamp, decimal, boolean, jsonb, index } from "drizzle-orm/pg-core";
@@ -55,15 +89,11 @@ export const products = pgTable("products", {
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-export const insertProductSchema = createInsertSchema(products).omit({
-  id: true,
-  createdAt: true,
-});
-
+export const insertProductSchema = createInsertSchema(products).omit({ id: true, createdAt: true });
 export type Product = typeof products.$inferSelect;
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 
-export const marketplaces = ["ebay", "amazon", "walmart", "wish", "reverb", "offerup", "etsy", "shopify", "woocommerce", "aliexpress", "mercadolibre", "rakuten", "bigcommerce", "prestashop"] as const;
+export const marketplaces = ["ebay","amazon","walmart","wish","reverb","offerup","etsy","shopify","woocommerce","aliexpress","mercadolibre","rakuten","bigcommerce","prestashop"] as const;
 export type Marketplace = typeof marketplaces[number];
 
 export const listings = pgTable("listings", {
@@ -80,12 +110,7 @@ export const listings = pgTable("listings", {
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-export const insertListingSchema = createInsertSchema(listings).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
+export const insertListingSchema = createInsertSchema(listings).omit({ id: true, createdAt: true, updatedAt: true });
 export type Listing = typeof listings.$inferSelect;
 export type InsertListing = z.infer<typeof insertListingSchema>;
 
@@ -102,42 +127,9 @@ export const sales = pgTable("sales", {
   shippingLabelGenerated: boolean("shipping_label_generated").notNull().default(false),
 });
 
-export const insertSaleSchema = createInsertSchema(sales).omit({
-  id: true,
-  saleDate: true,
-});
-
+export const insertSaleSchema = createInsertSchema(sales).omit({ id: true, saleDate: true });
 export type Sale = typeof sales.$inferSelect;
 export type InsertSale = z.infer<typeof insertSaleSchema>;
-
-export const conversations = pgTable("conversations", {
-  id: serial("id").primaryKey(),
-  title: text("title").notNull(),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
-export const messages = pgTable("messages", {
-  id: serial("id").primaryKey(),
-  conversationId: integer("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
-  role: text("role").notNull(),
-  content: text("content").notNull(),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
-export const insertConversationSchema = createInsertSchema(conversations).omit({
-  id: true,
-  createdAt: true,
-});
-
-export const insertMessageSchema = createInsertSchema(messages).omit({
-  id: true,
-  createdAt: true,
-});
-
-export type Conversation = typeof conversations.$inferSelect;
-export type InsertConversation = z.infer<typeof insertConversationSchema>;
-export type Message = typeof messages.$inferSelect;
-export type InsertMessage = z.infer<typeof insertMessageSchema>;
 
 export const marketplaceCredentials = pgTable("marketplace_credentials", {
   id: serial("id").primaryKey(),
@@ -147,11 +139,7 @@ export const marketplaceCredentials = pgTable("marketplace_credentials", {
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-export const insertMarketplaceCredentialsSchema = createInsertSchema(marketplaceCredentials).omit({
-  id: true,
-  updatedAt: true,
-});
-
+export const insertMarketplaceCredentialsSchema = createInsertSchema(marketplaceCredentials).omit({ id: true, updatedAt: true });
 export type MarketplaceCredentials = typeof marketplaceCredentials.$inferSelect;
 export type InsertMarketplaceCredentials = z.infer<typeof insertMarketplaceCredentialsSchema>;
 
@@ -173,18 +161,13 @@ export const dashboardLayouts = pgTable("dashboard_layouts", {
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-export const insertDashboardLayoutSchema = createInsertSchema(dashboardLayouts).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
+export const insertDashboardLayoutSchema = createInsertSchema(dashboardLayouts).omit({ id: true, createdAt: true, updatedAt: true });
 export type DashboardLayout = typeof dashboardLayouts.$inferSelect;
 export type InsertDashboardLayout = z.infer<typeof insertDashboardLayoutSchema>;
 
 
 ================================================================================
-FILE: server/db.ts
+FILE 2: server/db.ts
 ================================================================================
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
@@ -199,128 +182,99 @@ export const db = drizzle(pool);
 
 
 ================================================================================
-FILE: server/storage.ts
+FILE 3: server/storage.ts
 ================================================================================
 import { db } from "./db";
-import { 
-  users, type User, type InsertUser,
+import {
+  users, type User,
   products, type Product, type InsertProduct,
   listings, type Listing, type InsertListing,
   sales, type Sale, type InsertSale,
   dashboardLayouts, type DashboardLayout,
   appConfig, type AppConfig,
   marketplaceCredentials, type MarketplaceCredentials,
-  type Marketplace
 } from "@shared/schema";
 import { eq, desc, isNull } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
-  
   createProduct(product: InsertProduct): Promise<Product>;
   getProduct(id: number): Promise<Product | undefined>;
   getAllProducts(): Promise<Product[]>;
   deleteProduct(id: number): Promise<void>;
   updateProductQuantity(id: number, quantity: number): Promise<void>;
-  
   createListing(listing: InsertListing): Promise<Listing>;
   getListingsByProduct(productId: number): Promise<Listing[]>;
   getAllListings(): Promise<Listing[]>;
   updateListingStatus(id: number, status: string, marketplaceListingId?: string): Promise<void>;
   deleteListingsByProduct(productId: number): Promise<void>;
-  
   createSale(sale: InsertSale): Promise<Sale>;
   getSalesByListing(listingId: number): Promise<Sale[]>;
   getAllSales(): Promise<Sale[]>;
   updateSaleFeePaid(id: number, paid: boolean): Promise<void>;
-  
   getDashboardLayout(userId?: string): Promise<DashboardLayout | undefined>;
   saveDashboardLayout(userId: string | null, layout: string): Promise<DashboardLayout>;
-
   getAppConfig(): Promise<AppConfig | undefined>;
   initAppConfig(): Promise<AppConfig>;
   updateSubscription(stripeCustomerId: string, stripeSubscriptionId: string, status: string): Promise<void>;
-
   getAllMarketplaceCredentials(): Promise<MarketplaceCredentials[]>;
   upsertMarketplaceCredentials(marketplace: string, credentials: string): Promise<MarketplaceCredentials>;
   deleteMarketplaceCredentials(marketplace: string): Promise<void>;
-
   deleteAllData(userId: string): Promise<void>;
 }
 
 export const storage: IStorage = {
-  async getUser(id: string) {
+  async getUser(id) {
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
   },
-
-  async createProduct(product: InsertProduct) {
+  async createProduct(product) {
     const [created] = await db.insert(products).values(product).returning();
     return created;
   },
-
-  async getProduct(id: number) {
+  async getProduct(id) {
     const [product] = await db.select().from(products).where(eq(products.id, id));
     return product;
   },
-
   async getAllProducts() {
     return db.select().from(products).orderBy(desc(products.createdAt));
   },
-
-  async deleteProduct(id: number) {
+  async deleteProduct(id) {
     await db.delete(products).where(eq(products.id, id));
   },
-
-  async updateProductQuantity(id: number, quantity: number) {
+  async updateProductQuantity(id, quantity) {
     await db.update(products).set({ quantity }).where(eq(products.id, id));
   },
-
-  async createListing(listing: InsertListing) {
+  async createListing(listing) {
     const [created] = await db.insert(listings).values(listing).returning();
     return created;
   },
-
-  async getListingsByProduct(productId: number) {
+  async getListingsByProduct(productId) {
     return db.select().from(listings).where(eq(listings.productId, productId));
   },
-
   async getAllListings() {
     return db.select().from(listings).orderBy(desc(listings.createdAt));
   },
-
-  async updateListingStatus(id: number, status: string, marketplaceListingId?: string) {
-    await db.update(listings)
-      .set({ 
-        status, 
-        ...(marketplaceListingId && { marketplaceListingId }),
-        updatedAt: new Date()
-      })
-      .where(eq(listings.id, id));
+  async updateListingStatus(id, status, marketplaceListingId) {
+    await db.update(listings).set({ status, ...(marketplaceListingId && { marketplaceListingId }), updatedAt: new Date() }).where(eq(listings.id, id));
   },
-
-  async deleteListingsByProduct(productId: number) {
+  async deleteListingsByProduct(productId) {
     await db.delete(listings).where(eq(listings.productId, productId));
   },
-
-  async createSale(sale: InsertSale) {
+  async createSale(sale) {
     const [created] = await db.insert(sales).values(sale).returning();
     return created;
   },
-
-  async getSalesByListing(listingId: number) {
+  async getSalesByListing(listingId) {
     return db.select().from(sales).where(eq(sales.listingId, listingId));
   },
-
   async getAllSales() {
     return db.select().from(sales).orderBy(desc(sales.saleDate));
   },
-
-  async updateSaleFeePaid(id: number, paid: boolean) {
+  async updateSaleFeePaid(id, paid) {
     await db.update(sales).set({ feePaid: paid }).where(eq(sales.id, id));
   },
-
-  async getDashboardLayout(userId?: string) {
+  async getDashboardLayout(userId) {
     if (userId) {
       const [layout] = await db.select().from(dashboardLayouts).where(eq(dashboardLayouts.userId, userId));
       return layout;
@@ -328,68 +282,47 @@ export const storage: IStorage = {
     const [layout] = await db.select().from(dashboardLayouts).where(isNull(dashboardLayouts.userId));
     return layout;
   },
-
-  async saveDashboardLayout(userId: string | null, layout: string) {
+  async saveDashboardLayout(userId, layout) {
     const existing = await this.getDashboardLayout(userId || undefined);
     if (existing) {
-      const [updated] = await db.update(dashboardLayouts)
-        .set({ layout, updatedAt: new Date() })
-        .where(eq(dashboardLayouts.id, existing.id))
-        .returning();
+      const [updated] = await db.update(dashboardLayouts).set({ layout, updatedAt: new Date() }).where(eq(dashboardLayouts.id, existing.id)).returning();
       return updated;
     }
-    const [created] = await db.insert(dashboardLayouts)
-      .values({ userId, layout })
-      .returning();
+    const [created] = await db.insert(dashboardLayouts).values({ userId, layout }).returning();
     return created;
   },
-
   async getAppConfig() {
     const [config] = await db.select().from(appConfig).limit(1);
     return config;
   },
-
   async initAppConfig() {
     const existing = await this.getAppConfig();
     if (existing) return existing;
     const [created] = await db.insert(appConfig).values({}).returning();
     return created;
   },
-
-  async updateSubscription(stripeCustomerId: string, stripeSubscriptionId: string, status: string) {
+  async updateSubscription(stripeCustomerId, stripeSubscriptionId, status) {
     const existing = await this.getAppConfig();
     if (existing) {
-      await db.update(appConfig)
-        .set({ stripeCustomerId, stripeSubscriptionId, subscriptionStatus: status })
-        .where(eq(appConfig.id, existing.id));
+      await db.update(appConfig).set({ stripeCustomerId, stripeSubscriptionId, subscriptionStatus: status }).where(eq(appConfig.id, existing.id));
     }
   },
-
   async getAllMarketplaceCredentials() {
     return db.select().from(marketplaceCredentials);
   },
-
-  async upsertMarketplaceCredentials(marketplace: string, credentials: string) {
-    const existing = await db.select().from(marketplaceCredentials)
-      .where(eq(marketplaceCredentials.marketplace, marketplace)).limit(1);
+  async upsertMarketplaceCredentials(marketplace, credentials) {
+    const existing = await db.select().from(marketplaceCredentials).where(eq(marketplaceCredentials.marketplace, marketplace)).limit(1);
     if (existing.length > 0) {
-      const [updated] = await db.update(marketplaceCredentials)
-        .set({ credentials, connected: true, updatedAt: new Date() })
-        .where(eq(marketplaceCredentials.marketplace, marketplace))
-        .returning();
+      const [updated] = await db.update(marketplaceCredentials).set({ credentials, connected: true, updatedAt: new Date() }).where(eq(marketplaceCredentials.marketplace, marketplace)).returning();
       return updated;
     }
-    const [created] = await db.insert(marketplaceCredentials)
-      .values({ marketplace, credentials, connected: true })
-      .returning();
+    const [created] = await db.insert(marketplaceCredentials).values({ marketplace, credentials, connected: true }).returning();
     return created;
   },
-
-  async deleteMarketplaceCredentials(marketplace: string) {
+  async deleteMarketplaceCredentials(marketplace) {
     await db.delete(marketplaceCredentials).where(eq(marketplaceCredentials.marketplace, marketplace));
   },
-
-  async deleteAllData(userId: string) {
+  async deleteAllData(userId) {
     await db.delete(sales);
     await db.delete(listings);
     await db.delete(products);
@@ -402,7 +335,7 @@ export const storage: IStorage = {
 
 
 ================================================================================
-FILE: server/replit_integrations/auth/storage.ts
+FILE 4: server/replit_integrations/auth/storage.ts
 ================================================================================
 import { users, type User, type UpsertUser } from "@shared/schema";
 import { db } from "../../db";
@@ -429,7 +362,7 @@ class AuthStorage implements IAuthStorage {
         set: {
           ...updateFields,
           updatedAt: new Date(),
-          // firstLoginAt is intentionally excluded — never overwrite on return logins
+          // firstLoginAt intentionally excluded — never reset on re-login
         },
       })
       .returning();
@@ -441,30 +374,22 @@ export const authStorage = new AuthStorage();
 
 
 ================================================================================
-FILE: server/replit_integrations/auth/replitAuth.ts
+FILE 5: server/replit_integrations/auth/replitAuth.ts  ← GOOGLE + APPLE AUTH
 ================================================================================
-import * as client from "openid-client";
-import { Strategy, type VerifyFunction } from "openid-client/passport";
-
+import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import passport from "passport";
 import session from "express-session";
 import type { Express, RequestHandler } from "express";
-import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
+import { createRequire } from "module";
 import { authStorage } from "./storage";
 
-const getOidcConfig = memoize(
-  async () => {
-    return await client.discovery(
-      new URL(process.env.ISSUER_URL ?? "https://replit.com/oidc"),
-      process.env.REPL_ID!
-    );
-  },
-  { maxAge: 3600 * 1000 }
-);
+// passport-apple has no @types and needs CJS require in an ESM project
+const require = createRequire(import.meta.url);
+const AppleStrategy = require("passport-apple");
 
 export function getSession() {
-  const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
+  const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 7 days
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
     conString: process.env.DATABASE_URL,
@@ -485,43 +410,10 @@ export function getSession() {
   });
 }
 
-function updateUserSession(
-  user: any,
-  tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers
-) {
-  user.claims = tokens.claims();
-  user.access_token = tokens.access_token;
-  user.refresh_token = tokens.refresh_token;
-  user.expires_at = user.claims?.exp;
-}
-
-async function upsertUser(claims: any) {
-  await authStorage.upsertUser({
-    id: claims["sub"],
-    email: claims["email"],
-    firstName: claims["first_name"],
-    lastName: claims["last_name"],
-    profileImageUrl: claims["profile_image_url"],
-  });
-}
-
-const CUSTOM_DOMAIN = "kauf26.com";
-
-// Resolve the best domain for auth callbacks
-// Custom domain takes priority, then REPLIT_DOMAINS, then dev fallback
-function resolveCallbackDomain(reqHostname: string): string {
-  // If request came in through the custom domain, use it
-  if (reqHostname === CUSTOM_DOMAIN || reqHostname === `www.${CUSTOM_DOMAIN}`) {
-    return CUSTOM_DOMAIN;
-  }
-  // If it's a real replit domain (not localhost), use it directly
-  if (reqHostname !== "localhost" && !reqHostname.startsWith("0.0.0.0")) {
-    return reqHostname;
-  }
-  // Fallback: use REPLIT_DOMAINS or custom domain
-  const replitDomains = process.env.REPLIT_DOMAINS;
-  if (replitDomains) return replitDomains.split(",")[0].trim();
-  return CUSTOM_DOMAIN;
+function getBaseUrl(): string {
+  const domains = process.env.REPLIT_DOMAINS;
+  if (domains) return `https://${domains.split(",")[0].trim()}`;
+  return process.env.APP_BASE_URL || "https://kauf26.com";
 }
 
 export async function setupAuth(app: Express) {
@@ -530,98 +422,141 @@ export async function setupAuth(app: Express) {
   app.use(passport.initialize());
   app.use(passport.session());
 
-  const config = await getOidcConfig();
+  passport.serializeUser((user, cb) => cb(null, user));
+  passport.deserializeUser((user, cb) => cb(null, user as Express.User));
 
-  const verify: VerifyFunction = async (
-    tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
-    verified: passport.AuthenticateCallback
-  ) => {
-    const user = {};
-    updateUserSession(user, tokens);
-    await upsertUser(tokens.claims());
-    verified(null, user);
-  };
+  // ── Google OAuth 2.0 ──────────────────────────────────────────────────────
+  const googleClientId = process.env.GOOGLE_CLIENT_ID;
+  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 
-  const registeredStrategies = new Set<string>();
+  if (googleClientId && googleClientSecret) {
+    passport.use(
+      new GoogleStrategy(
+        {
+          clientID: googleClientId,
+          clientSecret: googleClientSecret,
+          callbackURL: "/api/auth/google/callback",
+          scope: ["profile", "email"],
+        },
+        async (_accessToken, _refreshToken, profile, done) => {
+          try {
+            const userId = `google_${profile.id}`;
+            const email = profile.emails?.[0]?.value;
+            const firstName = profile.name?.givenName;
+            const lastName = profile.name?.familyName;
+            const profileImageUrl = profile.photos?.[0]?.value;
+            await authStorage.upsertUser({ id: userId, email, firstName, lastName, profileImageUrl });
+            done(null, { claims: { sub: userId }, provider: "google", email, firstName, lastName, profileImageUrl });
+          } catch (err) {
+            done(err as Error);
+          }
+        }
+      )
+    );
+    console.log("[auth] Google OAuth strategy registered");
+  } else {
+    console.warn("[auth] GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET not set — Google sign-in disabled");
+  }
 
-  const ensureStrategy = (domain: string) => {
-    const name = `replitauth:${domain}`;
-    if (!registeredStrategies.has(name)) {
-      passport.use(new Strategy(
-        { name, config, scope: "openid email profile offline_access", callbackURL: `https://${domain}/api/callback` },
-        verify
-      ));
-      registeredStrategies.add(name);
-    }
-    return name;
-  };
+  // ── Apple Sign In ─────────────────────────────────────────────────────────
+  const appleClientId = process.env.APPLE_CLIENT_ID;
+  const appleTeamId = process.env.APPLE_TEAM_ID;
+  const appleKeyId = process.env.APPLE_KEY_ID;
+  const applePrivateKey = process.env.APPLE_PRIVATE_KEY;
 
-  passport.serializeUser((user: Express.User, cb) => cb(null, user));
-  passport.deserializeUser((user: Express.User, cb) => cb(null, user));
+  if (appleClientId && appleTeamId && appleKeyId && applePrivateKey) {
+    passport.use(
+      new AppleStrategy(
+        {
+          clientID: appleClientId,
+          teamID: appleTeamId,
+          keyID: appleKeyId,
+          privateKeyString: applePrivateKey.replace(/\\n/g, "\n"),
+          callbackURL: `${getBaseUrl()}/api/auth/apple/callback`,
+          scope: ["name", "email"],
+        },
+        async (_accessToken: string, _refreshToken: string, idToken: any, profile: any, done: Function) => {
+          try {
+            const userId = `apple_${profile.id}`;
+            const email = profile.email ?? idToken?.email ?? undefined;
+            const firstName = profile.name?.firstName ?? undefined;
+            const lastName = profile.name?.lastName ?? undefined;
+            await authStorage.upsertUser({ id: userId, email, firstName, lastName });
+            done(null, { claims: { sub: userId }, provider: "apple", email, firstName, lastName });
+          } catch (err) {
+            done(err);
+          }
+        }
+      )
+    );
+    console.log("[auth] Apple Sign In strategy registered");
+  } else {
+    console.warn("[auth] Apple Sign In credentials not set — Apple sign-in disabled");
+  }
 
-  app.get("/api/login", (req, res, next) => {
-    const domain = resolveCallbackDomain(req.hostname);
-    const strategyName = ensureStrategy(domain);
-    passport.authenticate(strategyName, {
-      prompt: "login consent",
-      scope: ["openid", "email", "profile", "offline_access"],
-    })(req, res, next);
-  });
+  // ── Routes ────────────────────────────────────────────────────────────────
+  app.get("/api/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
+  app.get("/api/auth/google/callback",
+    passport.authenticate("google", { failureRedirect: "/login?error=google" }),
+    (_req, res) => res.redirect("/")
+  );
 
-  app.get("/api/callback", (req, res, next) => {
-    const domain = resolveCallbackDomain(req.hostname);
-    const strategyName = ensureStrategy(domain);
-    passport.authenticate(strategyName, {
-      successReturnToOrRedirect: "/",
-      failureRedirect: "/api/login",
-    })(req, res, next);
-  });
+  // Apple uses POST for the callback
+  app.get("/api/auth/apple", passport.authenticate("apple"));
+  app.post("/api/auth/apple/callback",
+    passport.authenticate("apple", { failureRedirect: "/login?error=apple" }),
+    (_req, res) => res.redirect("/")
+  );
+
+  app.get("/api/login", (_req, res) => res.redirect("/login"));
 
   app.get("/api/logout", (req, res) => {
-    const domain = resolveCallbackDomain(req.hostname);
-    req.logout(() => {
-      res.redirect(
-        client.buildEndSessionUrl(config, {
-          client_id: process.env.REPL_ID!,
-          post_logout_redirect_uri: `https://${domain}`,
-        }).href
-      );
-    });
+    req.logout(() => res.redirect("/login"));
   });
 }
 
-export const isAuthenticated: RequestHandler = async (req, res, next) => {
-  const user = req.user as any;
-
-  if (!req.isAuthenticated() || !user.expires_at) {
+export const isAuthenticated: RequestHandler = (req, res, next) => {
+  if (!req.isAuthenticated()) {
     return res.status(401).json({ message: "Unauthorized" });
   }
-
-  const now = Math.floor(Date.now() / 1000);
-  if (now <= user.expires_at) {
-    return next();
-  }
-
-  const refreshToken = user.refresh_token;
-  if (!refreshToken) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
-
-  try {
-    const config = await getOidcConfig();
-    const tokenResponse = await client.refreshTokenGrant(config, refreshToken);
-    updateUserSession(user, tokenResponse);
-    return next();
-  } catch (error) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
+  return next();
 };
 
 
 ================================================================================
-FILE: server/cleanup.ts
+FILE 6: server/replit_integrations/auth/routes.ts
+================================================================================
+import type { Express } from "express";
+import { authStorage } from "./storage";
+import { isAuthenticated } from "./replitAuth";
+
+export function registerAuthRoutes(app: Express): void {
+  app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      const user = await authStorage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+}
+
+
+================================================================================
+FILE 7: server/replit_integrations/auth/index.ts
+================================================================================
+export { setupAuth, isAuthenticated, getSession } from "./replitAuth";
+export { authStorage, type IAuthStorage } from "./storage";
+export { registerAuthRoutes } from "./routes";
+
+
+================================================================================
+FILE 8: server/cleanup.ts
 ================================================================================
 import fs from "fs/promises";
 import path from "path";
@@ -632,24 +567,16 @@ const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 const MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
 
 function extractTimestampFromFilename(filename: string): number | null {
-  // Filenames are like: image-1770056928355-551870951.jpg
   const match = filename.match(/^image-(\d+)-/);
   if (match) return parseInt(match[1], 10);
   return null;
 }
 
 async function getReferencedUploadPaths(): Promise<Set<string>> {
-  const rows = await db.select({
-    imageUrl: products.imageUrl,
-    additionalImages: products.additionalImages,
-  }).from(products);
-
+  const rows = await db.select({ imageUrl: products.imageUrl, additionalImages: products.additionalImages }).from(products);
   const referenced = new Set<string>();
   for (const row of rows) {
-    if (row.imageUrl) {
-      const filename = path.basename(row.imageUrl);
-      referenced.add(filename);
-    }
+    if (row.imageUrl) referenced.add(path.basename(row.imageUrl));
     if (row.additionalImages?.length) {
       for (const url of row.additionalImages) {
         if (url) referenced.add(path.basename(url));
@@ -660,114 +587,60 @@ async function getReferencedUploadPaths(): Promise<Set<string>> {
 }
 
 export interface CleanupResult {
-  scanned: number;
-  deleted: number;
-  skippedInUse: number;
-  skippedTooNew: number;
-  errors: number;
-  freedBytes: number;
+  scanned: number; deleted: number; skippedInUse: number;
+  skippedTooNew: number; errors: number; freedBytes: number;
 }
 
 export async function cleanupOldImages(dryRun = false): Promise<CleanupResult> {
-  const result: CleanupResult = {
-    scanned: 0,
-    deleted: 0,
-    skippedInUse: 0,
-    skippedTooNew: 0,
-    errors: 0,
-    freedBytes: 0,
-  };
-
+  const result: CleanupResult = { scanned: 0, deleted: 0, skippedInUse: 0, skippedTooNew: 0, errors: 0, freedBytes: 0 };
   try {
     await fs.mkdir(UPLOADS_DIR, { recursive: true });
     const files = await fs.readdir(UPLOADS_DIR);
     const referenced = await getReferencedUploadPaths();
     const now = Date.now();
-
     for (const filename of files) {
       result.scanned++;
       const filePath = path.join(UPLOADS_DIR, filename);
-
-      // Skip if still referenced by a product
-      if (referenced.has(filename)) {
-        result.skippedInUse++;
-        continue;
-      }
-
-      // Determine age — prefer the timestamp in the filename, fall back to mtime
+      if (referenced.has(filename)) { result.skippedInUse++; continue; }
       let fileAgeMs: number;
       const ts = extractTimestampFromFilename(filename);
       if (ts) {
         fileAgeMs = now - ts;
       } else {
-        try {
-          const stat = await fs.stat(filePath);
-          fileAgeMs = now - stat.mtimeMs;
-        } catch {
-          result.errors++;
-          continue;
-        }
+        try { const stat = await fs.stat(filePath); fileAgeMs = now - stat.mtimeMs; }
+        catch { result.errors++; continue; }
       }
-
-      if (fileAgeMs < MAX_AGE_MS) {
-        result.skippedTooNew++;
-        continue;
-      }
-
-      // Safe to delete
+      if (fileAgeMs < MAX_AGE_MS) { result.skippedTooNew++; continue; }
       try {
         const stat = await fs.stat(filePath);
         result.freedBytes += stat.size;
-        if (!dryRun) {
-          await fs.unlink(filePath);
-        }
+        if (!dryRun) await fs.unlink(filePath);
         result.deleted++;
-        console.log(`[cleanup] ${dryRun ? "(dry-run) " : ""}Deleted old upload: ${filename} (age: ${Math.round(fileAgeMs / 86400000)}d)`);
+        console.log(`[cleanup] ${dryRun ? "(dry-run) " : ""}Deleted: ${filename}`);
       } catch (err: any) {
         console.error(`[cleanup] Error deleting ${filename}:`, err.message);
         result.errors++;
       }
     }
   } catch (err: any) {
-    console.error("[cleanup] Error during image cleanup:", err.message);
+    console.error("[cleanup] Error:", err.message);
     result.errors++;
   }
-
-  const freed = (result.freedBytes / 1024 / 1024).toFixed(1);
-  console.log(
-    `[cleanup] Done — scanned: ${result.scanned}, deleted: ${result.deleted}, ` +
-    `in-use: ${result.skippedInUse}, too-new: ${result.skippedTooNew}, ` +
-    `errors: ${result.errors}, freed: ${freed} MB${dryRun ? " (dry-run)" : ""}`
-  );
-
+  console.log(`[cleanup] Done — scanned:${result.scanned} deleted:${result.deleted} in-use:${result.skippedInUse} too-new:${result.skippedTooNew} errors:${result.errors}`);
   return result;
 }
 
 const SOLD_WITHIN_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
-/**
- * Delete the physical image files for a product that just sold out.
- * Only runs if the product was listed within the last 30 days (used/one-off items).
- * The product record and listings remain in the DB — just the disk files are removed.
- */
 export async function deleteProductImagesIfRecentlySold(product: {
-  id: number;
-  imageUrl: string;
-  additionalImages: string[];
-  createdAt: Date | null;
+  id: number; imageUrl: string; additionalImages: string[]; createdAt: Date | null;
 }): Promise<void> {
-  // Only delete if the product was listed within the last 30 days
   const age = Date.now() - (product.createdAt?.getTime() ?? 0);
   if (age > SOLD_WITHIN_MS) {
     console.log(`[cleanup] Product ${product.id} listed >30 days ago — keeping images`);
     return;
   }
-
-  const pathsToDelete = [
-    product.imageUrl,
-    ...(product.additionalImages ?? []),
-  ].filter(Boolean);
-
+  const pathsToDelete = [product.imageUrl, ...(product.additionalImages ?? [])].filter(Boolean);
   for (const urlPath of pathsToDelete) {
     const filename = path.basename(urlPath);
     const filePath = path.join(UPLOADS_DIR, filename);
@@ -775,38 +648,29 @@ export async function deleteProductImagesIfRecentlySold(product: {
       await fs.unlink(filePath);
       console.log(`[cleanup] Deleted sold-out image: ${filename} (product ${product.id})`);
     } catch (err: any) {
-      // File may already be gone — not an error worth surfacing
-      if (err.code !== "ENOENT") {
-        console.error(`[cleanup] Could not delete ${filename}:`, err.message);
-      }
+      if (err.code !== "ENOENT") console.error(`[cleanup] Could not delete ${filename}:`, err.message);
     }
   }
 }
 
 export function scheduleImageCleanup() {
-  const INTERVAL_MS = 24 * 60 * 60 * 1000; // every 24 hours
-
-  // Run once shortly after startup (5 minutes), then every 24h
+  const INTERVAL_MS = 24 * 60 * 60 * 1000;
   const runInitial = setTimeout(async () => {
     console.log("[cleanup] Running initial image cleanup...");
     await cleanupOldImages();
   }, 5 * 60 * 1000);
-
   const runPeriodic = setInterval(async () => {
     console.log("[cleanup] Running scheduled image cleanup...");
     await cleanupOldImages();
   }, INTERVAL_MS);
-
-  // Allow Node.js to exit cleanly — don't keep process alive just for cleanup
   runInitial.unref();
   runPeriodic.unref();
-
   console.log("[cleanup] Image cleanup scheduled (every 24h, first run in 5 min)");
 }
 
 
 ================================================================================
-FILE: server/stripeClient.ts
+FILE 9: server/stripeClient.ts
 ================================================================================
 import Stripe from 'stripe';
 
@@ -819,47 +683,28 @@ async function getCredentials() {
     : process.env.WEB_REPL_RENEWAL
       ? 'depl ' + process.env.WEB_REPL_RENEWAL
       : null;
-
-  if (!xReplitToken) {
-    throw new Error('X_REPLIT_TOKEN not found for repl/depl');
-  }
-
+  if (!xReplitToken) throw new Error('X_REPLIT_TOKEN not found');
   const connectorName = 'stripe';
   const isProduction = process.env.REPLIT_DEPLOYMENT === '1';
   const targetEnvironment = isProduction ? 'production' : 'development';
-
   const url = new URL(`https://${hostname}/api/v2/connection`);
   url.searchParams.set('include_secrets', 'true');
   url.searchParams.set('connector_names', connectorName);
   url.searchParams.set('environment', targetEnvironment);
-
   const response = await fetch(url.toString(), {
-    headers: {
-      'Accept': 'application/json',
-      'X_REPLIT_TOKEN': xReplitToken
-    }
+    headers: { 'Accept': 'application/json', 'X_REPLIT_TOKEN': xReplitToken }
   });
-
   const data = await response.json();
-  
   connectionSettings = data.items?.[0];
-
   if (!connectionSettings || (!connectionSettings.settings.publishable || !connectionSettings.settings.secret)) {
     throw new Error(`Stripe ${targetEnvironment} connection not found`);
   }
-
-  return {
-    publishableKey: connectionSettings.settings.publishable,
-    secretKey: connectionSettings.settings.secret,
-  };
+  return { publishableKey: connectionSettings.settings.publishable, secretKey: connectionSettings.settings.secret };
 }
 
 export async function getUncachableStripeClient() {
   const { secretKey } = await getCredentials();
-
-  return new Stripe(secretKey, {
-    apiVersion: '2025-08-27.basil',
-  });
+  return new Stripe(secretKey, { apiVersion: '2025-08-27.basil' });
 }
 
 export async function getStripePublishableKey() {
@@ -878,12 +723,8 @@ export async function getStripeSync() {
   if (!stripeSync) {
     const { StripeSync } = await import('stripe-replit-sync');
     const secretKey = await getStripeSecretKey();
-
     stripeSync = new StripeSync({
-      poolConfig: {
-        connectionString: process.env.DATABASE_URL!,
-        max: 2,
-      },
+      poolConfig: { connectionString: process.env.DATABASE_URL!, max: 2 },
       stripeSecretKey: secretKey,
     });
   }
@@ -892,7 +733,7 @@ export async function getStripeSync() {
 
 
 ================================================================================
-FILE: server/webhookHandlers.ts
+FILE 10: server/webhookHandlers.ts
 ================================================================================
 import { getStripeSync } from './stripeClient';
 import { storage } from './storage';
@@ -900,14 +741,8 @@ import { storage } from './storage';
 export class WebhookHandlers {
   static async processWebhook(payload: Buffer, signature: string): Promise<void> {
     if (!Buffer.isBuffer(payload)) {
-      throw new Error(
-        'STRIPE WEBHOOK ERROR: Payload must be a Buffer. ' +
-        'Received type: ' + typeof payload + '. ' +
-        'This usually means express.json() parsed the body before reaching this handler. ' +
-        'FIX: Ensure webhook route is registered BEFORE app.use(express.json()).'
-      );
+      throw new Error('STRIPE WEBHOOK ERROR: Payload must be a Buffer.');
     }
-
     const sync = await getStripeSync();
     await sync.processWebhook(payload, signature);
   }
@@ -922,914 +757,54 @@ export class WebhookHandlers {
 
 
 ================================================================================
-FILE: server/routes.ts
+FILE 11: server/routes.ts  (core API — abridged for length)
 ================================================================================
-import type { Express } from "express";
-import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import { marketplaces, type Marketplace } from "@shared/schema";
-import { registerAuthRoutes } from "./replit_integrations/auth";
-import { authStorage } from "./replit_integrations/auth/storage";
-import OpenAI from "openai";
-import multer from "multer";
-import path from "path";
-import fs from "fs/promises";
-import { getUncachableStripeClient } from "./stripeClient";
-import { deleteProductImagesIfRecentlySold } from "./cleanup";
-
-const TRIAL_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
-
-function calcTrialStatus(firstLoginAt: Date) {
-  const elapsed = Date.now() - firstLoginAt.getTime();
-  const isTrialActive = elapsed < TRIAL_DURATION_MS;
-  const trialDaysRemaining = Math.max(0, Math.ceil((TRIAL_DURATION_MS - elapsed) / (24 * 60 * 60 * 1000)));
-  const trialEndsAt = new Date(firstLoginAt.getTime() + TRIAL_DURATION_MS);
-  return { isTrialActive, trialDaysRemaining, trialEndsAt };
-}
-
-async function getUserTrialActive(req: any): Promise<boolean> {
-  try {
-    if (req.user?.claims?.sub) {
-      const user = await authStorage.getUser(req.user.claims.sub);
-      if (user?.firstLoginAt) {
-        return calcTrialStatus(new Date(user.firstLoginAt)).isTrialActive;
-      }
-    }
-  } catch {}
-  return false;
-}
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
-  baseURL: process.env.OPENAI_API_KEY ? undefined : process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
-});
-
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: async (req, file, cb) => {
-      const uploadDir = path.join(process.cwd(), "uploads");
-      await fs.mkdir(uploadDir, { recursive: true });
-      cb(null, uploadDir);
-    },
-    filename: (req, file, cb) => {
-      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-      cb(null, file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname));
-    },
-  }),
-  limits: { fileSize: 10 * 1024 * 1024 },
-});
-
-const currencyRates: Record<string, number> = {
-  USD: 1,
-  EUR: 0.92,
-  GBP: 0.79,
-  JPY: 149.5,
-  MXN: 17.2,
-  BRL: 5.1,
-  AUD: 1.52,
-  CAD: 1.35,
-};
-
-const marketplaceLanguages: Record<Marketplace, string> = {
-  ebay: "en",
-  amazon: "en",
-  walmart: "en",
-  wish: "en",
-  reverb: "en",
-  offerup: "en",
-  etsy: "en",
-  shopify: "en",
-  woocommerce: "en",
-  aliexpress: "en",
-  mercadolibre: "es",
-  rakuten: "ja",
-  bigcommerce: "en",
-  prestashop: "en",
-};
-
-const marketplaceCurrencies: Record<Marketplace, string> = {
-  ebay: "USD",
-  amazon: "USD",
-  walmart: "USD",
-  wish: "USD",
-  reverb: "USD",
-  offerup: "USD",
-  etsy: "USD",
-  shopify: "USD",
-  woocommerce: "USD",
-  aliexpress: "USD",
-  mercadolibre: "MXN",
-  rakuten: "JPY",
-  bigcommerce: "USD",
-  prestashop: "EUR",
-};
-
-async function translateText(text: string, targetLang: string): Promise<string> {
-  if (targetLang === "en") return text;
-  
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      {
-        role: "system",
-        content: `You are a professional translator. Translate the following text to ${targetLang === "es" ? "Spanish" : targetLang === "ja" ? "Japanese" : "the target language"}. Maintain the same tone and style. Return ONLY the translated text, no explanations.`,
-      },
-      { role: "user", content: text },
-    ],
-  });
-
-  return response.choices[0]?.message?.content || text;
-}
-
-export async function registerRoutes(
-  httpServer: Server,
-  app: Express
-): Promise<Server> {
-  app.use("/uploads", (await import("express")).static(path.join(process.cwd(), "uploads")));
-
-  registerAuthRoutes(app);
-
-  app.get("/api/products", async (req, res) => {
-    try {
-      const products = await storage.getAllProducts();
-      res.json(products);
-    } catch (error) {
-      console.error("Error fetching products:", error);
-      res.status(500).json({ error: "Failed to fetch products" });
-    }
-  });
-
-  app.get("/api/products/:id", async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const product = await storage.getProduct(id);
-      if (!product) {
-        return res.status(404).json({ error: "Product not found" });
-      }
-      const listings = await storage.getListingsByProduct(id);
-      res.json({ ...product, listings });
-    } catch (error) {
-      console.error("Error fetching product:", error);
-      res.status(500).json({ error: "Failed to fetch product" });
-    }
-  });
-
-  app.post("/api/products/analyze", upload.single("image"), async (req, res) => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({ error: "No image uploaded" });
-      }
-
-      const imageBuffer = await fs.readFile(req.file.path);
-      const base64Image = imageBuffer.toString("base64");
-      const extToMime: Record<string, string> = {
-        jpg: "image/jpeg",
-        jpeg: "image/jpeg",
-        png: "image/png",
-        gif: "image/gif",
-        webp: "image/webp",
-        heic: "image/heic",
-        heif: "image/heif",
-      };
-      const ext = path.extname(req.file.originalname).slice(1).toLowerCase();
-      const mimeType = req.file.mimetype || extToMime[ext] || `image/${ext}`;
-      const imageUrl = `data:${mimeType};base64,${base64Image}`;
-
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: "You are an expert product identifier for e-commerce listings. Analyze this product image carefully.\n\nSTEP 1: Try to identify the EXACT product — brand, model name, model number, color/variant.\n\nIF YOU RECOGNIZE THE EXACT PRODUCT (e.g. 'Nike Air Max 270', 'Sony WH-1000XM5', 'KitchenAid Stand Mixer 5Qt'):\n- title: Full exact product name with brand and model (e.g. 'Sony WH-1000XM5 Wireless Noise Cancelling Headphones - Black')\n- description: Write the full official-style product description as it would appear on the manufacturer website or Amazon listing. Include: what it is, key specs, key features and benefits, materials/construction, what's in the box if known, and who it's best for. Be thorough — aim for 150-250 words.\n- exactMatch: true\n- suggestedPrice: your best estimate of the retail/resale price in USD as a number\n\nIF YOU CANNOT IDENTIFY THE EXACT PRODUCT:\n- title: A clear descriptive title (max 12 words)\n- description: Write exactly 3 sentences. Sentence 1: what the product is. Sentence 2: its key visible features or materials. Sentence 3: who would want it and why.\n- exactMatch: false\n- suggestedPrice: your best estimate of a fair selling price in USD as a number\n\nReturn ONLY valid JSON: {\"title\": \"...\", \"description\": \"...\", \"exactMatch\": boolean, \"suggestedPrice\": number}",
-              },
-              {
-                type: "image_url",
-                image_url: { url: imageUrl },
-              },
-            ],
-          },
-        ],
-        response_format: { type: "json_object" },
-      });
-
-      const result = JSON.parse(response.choices[0]?.message?.content || "{}");
-
-      const publicPath = `/uploads/${req.file.filename}`;
-
-      res.json({
-        imageUrl: publicPath,
-        title: result.title || "Untitled Product",
-        description: result.description || "No description available.",
-        exactMatch: result.exactMatch === true,
-        suggestedPrice: result.suggestedPrice || null,
-      });
-    } catch (error: any) {
-      console.error("Error analyzing product:", error?.message || error);
-      res.status(500).json({ error: "Failed to analyze product" });
-    }
-  });
-
-  // Base64 analyze endpoint for mobile app
-  app.post("/api/products/analyze-base64", async (req, res) => {
-    try {
-      const { image } = req.body;
-      
-      if (!image) {
-        return res.status(400).json({ error: "No image provided" });
-      }
-
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: "Analyze this product image carefully. Search your knowledge for an EXACT MATCH - the specific brand, model number, and product name.\n\nIF EXACT MATCH FOUND:\n- Title: The exact brand, model, and product name (e.g. 'Apple iPhone 15 Pro Max 256GB Natural Titanium')\n- Description: Start with '[EXACT MATCH]' then provide the full official product description including all key specs, features, dimensions, materials, and notable details. Be thorough and detailed - include everything a buyer would want to know.\n- exactMatch: true\n\nIF NO EXACT MATCH FOUND:\n- Title: A descriptive title (max 10 words)\n- Description: Exactly 3 sentences. First sentence describes what the product is. Second sentence highlights key features or benefits. Third sentence explains why a buyer would want it.\n- exactMatch: false\n\nAlso provide a suggested retail price in USD.\n\nReturn JSON: {\"title\": \"...\", \"description\": \"...\", \"suggestedPrice\": number, \"exactMatch\": boolean}",
-              },
-              {
-                type: "image_url",
-                image_url: { url: image },
-              },
-            ],
-          },
-        ],
-        response_format: { type: "json_object" },
-      });
-
-      const result = JSON.parse(response.choices[0]?.message?.content || "{}");
-      
-      res.json({
-        title: result.title || "Untitled Product",
-        description: result.description || "No description available.",
-        suggestedPrice: result.suggestedPrice || 0,
-      });
-    } catch (error) {
-      console.error("Error analyzing product:", error);
-      res.status(500).json({ error: "Failed to analyze product" });
-    }
-  });
-
-  app.post("/api/products/upload-additional", upload.array("images", 5), async (req, res) => {
-    try {
-      const files = req.files as Express.Multer.File[];
-      if (!files || files.length === 0) {
-        return res.status(400).json({ error: "No images uploaded" });
-      }
-      const urls = files.map((f) => `/uploads/${f.filename}`);
-      res.json({ urls });
-    } catch (error: any) {
-      console.error("Error uploading additional images:", error?.message || error);
-      res.status(500).json({ error: "Failed to upload images" });
-    }
-  });
-
-  app.post("/api/products", async (req, res) => {
-    try {
-      const { imageUrl, additionalImages, originalTitle, aiDescription, basePrice, currency, quantity } = req.body;
-
-      const product = await storage.createProduct({
-        imageUrl,
-        additionalImages: Array.isArray(additionalImages) ? additionalImages : [],
-        originalTitle,
-        aiDescription,
-        basePrice,
-        currency: currency || "USD",
-        quantity: quantity ? parseInt(quantity) : 1,
-      });
-
-      res.status(201).json(product);
-    } catch (error) {
-      console.error("Error creating product:", error);
-      res.status(500).json({ error: "Failed to create product" });
-    }
-  });
-
-  app.post("/api/products/:id/list", async (req, res) => {
-    try {
-      const productId = parseInt(req.params.id);
-      const { selectedMarketplaces } = req.body;
-
-      const product = await storage.getProduct(productId);
-      if (!product) {
-        return res.status(404).json({ error: "Product not found" });
-      }
-
-      const listings = [];
-
-      for (const marketplace of selectedMarketplaces) {
-        const targetLang = marketplaceLanguages[marketplace as Marketplace];
-        const targetCurrency = marketplaceCurrencies[marketplace as Marketplace];
-
-        const translatedTitle = await translateText(product.originalTitle, targetLang);
-        const translatedDescription = await translateText(product.aiDescription, targetLang);
-
-        const baseRate = currencyRates[product.currency] || 1;
-        const targetRate = currencyRates[targetCurrency] || 1;
-        const localPrice = (parseFloat(product.basePrice) / baseRate) * targetRate;
-
-        const listing = await storage.createListing({
-          productId,
-          marketplace,
-          marketplaceListingId: null,
-          translatedTitle,
-          translatedDescription,
-          localPrice: localPrice.toFixed(2),
-          localCurrency: targetCurrency,
-          status: "active",
-        });
-
-        listings.push(listing);
-      }
-
-      res.status(201).json({ listings });
-    } catch (error) {
-      console.error("Error creating listings:", error);
-      res.status(500).json({ error: "Failed to create listings" });
-    }
-  });
-
-  app.get("/api/listings", async (req, res) => {
-    try {
-      const listings = await storage.getAllListings();
-      res.json(listings);
-    } catch (error) {
-      console.error("Error fetching listings:", error);
-      res.status(500).json({ error: "Failed to fetch listings" });
-    }
-  });
-
-  app.delete("/api/listings/product/:productId", async (req, res) => {
-    try {
-      const productId = parseInt(req.params.productId);
-      await storage.deleteListingsByProduct(productId);
-      res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting listings:", error);
-      res.status(500).json({ error: "Failed to delete listings" });
-    }
-  });
-
-  app.post("/api/sales", async (req, res) => {
-    try {
-      const { listingId, saleAmount, saleCurrency, platformFee } = req.body;
-
-      const isTrialActive = await getUserTrialActive(req);
-      const ourFee = isTrialActive ? "0.00" : (parseFloat(saleAmount) * 0.01).toFixed(2);
-
-      const sale = await storage.createSale({
-        listingId,
-        saleAmount,
-        saleCurrency,
-        platformFee: platformFee || "0",
-        ourFee,
-        feePaid: isTrialActive,
-        buyerInfo: req.body.buyerInfo || null,
-        shippingLabelGenerated: false,
-      });
-
-      // Find the listing to get its product, then decrement quantity
-      const allListings = await storage.getAllListings();
-      const listing = allListings.find(l => l.id === listingId);
-      if (listing) {
-        const product = await storage.getProduct(listing.productId);
-        if (product) {
-          const newQty = Math.max(0, product.quantity - 1);
-          await storage.updateProductQuantity(product.id, newQty);
-          // If sold out, mark all listings for this product as sold_out
-          if (newQty === 0) {
-            const productListings = await storage.getListingsByProduct(product.id);
-            for (const pl of productListings) {
-              await storage.updateListingStatus(pl.id, "sold_out");
-            }
-            // Delete uploaded images if this was a recently listed used item (within 30 days)
-            deleteProductImagesIfRecentlySold(product).catch((err) =>
-              console.error("[cleanup] Error deleting sold product images:", err)
-            );
-          }
-        }
-      }
-
-      res.status(201).json(sale);
-    } catch (error) {
-      console.error("Error creating sale:", error);
-      res.status(500).json({ error: "Failed to create sale" });
-    }
-  });
-
-  app.get("/api/sales", async (req, res) => {
-    try {
-      const sales = await storage.getAllSales();
-      res.json(sales);
-    } catch (error) {
-      console.error("Error fetching sales:", error);
-      res.status(500).json({ error: "Failed to fetch sales" });
-    }
-  });
-
-  app.post("/api/convert-currency", async (req, res) => {
-    try {
-      const { amount, from, to } = req.body;
-
-      const fromRate = currencyRates[from] || 1;
-      const toRate = currencyRates[to] || 1;
-      const converted = (parseFloat(amount) / fromRate) * toRate;
-
-      res.json({
-        amount: parseFloat(amount),
-        from,
-        to,
-        converted: parseFloat(converted.toFixed(2)),
-        rate: toRate / fromRate,
-      });
-    } catch (error) {
-      console.error("Error converting currency:", error);
-      res.status(500).json({ error: "Failed to convert currency" });
-    }
-  });
-
-  app.post("/api/shipping-label", async (req, res) => {
-    try {
-      const { saleId, shipTo, shipFrom, weight, dimensions } = req.body;
-
-      const weightNum = parseFloat(weight) || 1;
-      const dimParts = (dimensions || "10x10x10").split("x").map((d: string) => parseFloat(d) || 10);
-      const dimWeight = (dimParts[0] * dimParts[1] * dimParts[2]) / 139;
-      const billableWeight = Math.max(weightNum, dimWeight);
-      
-      let estimatedCost = 4.99;
-      if (billableWeight <= 1) estimatedCost = 4.99;
-      else if (billableWeight <= 3) estimatedCost = 7.49;
-      else if (billableWeight <= 5) estimatedCost = 9.99;
-      else if (billableWeight <= 10) estimatedCost = 14.99;
-      else if (billableWeight <= 20) estimatedCost = 19.99;
-      else estimatedCost = 19.99 + (billableWeight - 20) * 0.75;
-
-      const labelData = {
-        id: `LABEL-${Date.now()}`,
-        trackingNumber: `1Z${Math.random().toString(36).substring(2, 15).toUpperCase()}`,
-        shipTo,
-        shipFrom,
-        weight,
-        dimensions,
-        estimatedCost: Math.round(estimatedCost * 100) / 100,
-        billableWeight: Math.round(billableWeight * 10) / 10,
-        createdAt: new Date().toISOString(),
-      };
-
-      res.json(labelData);
-    } catch (error) {
-      console.error("Error generating shipping label:", error);
-      res.status(500).json({ error: "Failed to generate shipping label" });
-    }
-  });
-
-  app.get("/api/marketplaces", async (req, res) => {
-    try {
-      res.json({
-        marketplaces: marketplaces.map((m) => ({
-          id: m,
-          name: m.charAt(0).toUpperCase() + m.slice(1),
-          language: marketplaceLanguages[m],
-          currency: marketplaceCurrencies[m],
-        })),
-      });
-    } catch (error) {
-      console.error("Error fetching marketplaces:", error);
-      res.status(500).json({ error: "Failed to fetch marketplaces" });
-    }
-  });
-
-  app.get("/api/marketplace-credentials", async (req, res) => {
-    try {
-      const creds = await storage.getAllMarketplaceCredentials();
-      res.json(creds);
-    } catch (error) {
-      console.error("Error fetching credentials:", error);
-      res.status(500).json({ error: "Failed to fetch credentials" });
-    }
-  });
-
-  app.post("/api/marketplace-credentials", async (req, res) => {
-    try {
-      const { marketplace, credentials } = req.body;
-      if (!marketplace || !credentials) {
-        return res.status(400).json({ error: "marketplace and credentials required" });
-      }
-      const saved = await storage.upsertMarketplaceCredentials(marketplace, JSON.stringify(credentials));
-      res.json(saved);
-    } catch (error) {
-      console.error("Error saving credentials:", error);
-      res.status(500).json({ error: "Failed to save credentials" });
-    }
-  });
-
-  app.delete("/api/marketplace-credentials/:marketplace", async (req, res) => {
-    try {
-      await storage.deleteMarketplaceCredentials(req.params.marketplace);
-      res.status(204).send();
-    } catch (error) {
-      console.error("Error deleting credentials:", error);
-      res.status(500).json({ error: "Failed to delete credentials" });
-    }
-  });
-
-  app.get("/api/subscription/status", async (req, res) => {
-    try {
-      const config = await storage.initAppConfig();
-      const subscriptionOfferMs = 90 * 24 * 60 * 60 * 1000;
-
-      let trialStartedAt: Date;
-      const userId = (req as any).user?.claims?.sub;
-      if (userId) {
-        const user = await authStorage.getUser(userId);
-        trialStartedAt = user?.firstLoginAt ? new Date(user.firstLoginAt) : new Date(config.trialStartedAt);
-      } else {
-        trialStartedAt = new Date(config.trialStartedAt);
-      }
-
-      const { isTrialActive, trialDaysRemaining, trialEndsAt } = calcTrialStatus(trialStartedAt);
-      const elapsed = Date.now() - trialStartedAt.getTime();
-      const canSubscribeMonthly = elapsed >= subscriptionOfferMs;
-      const daysUntilSubscriptionOffer = Math.max(0, Math.ceil((subscriptionOfferMs - elapsed) / (24 * 60 * 60 * 1000)));
-
-      res.json({
-        isTrialActive,
-        trialDaysRemaining,
-        trialEndsAt: trialEndsAt.toISOString(),
-        trialStartedAt: trialStartedAt.toISOString(),
-        subscriptionStatus: config.subscriptionStatus,
-        hasActiveSubscription: config.subscriptionStatus === "active",
-        canSubscribeMonthly,
-        daysUntilSubscriptionOffer,
-      });
-    } catch (error) {
-      console.error("Error fetching subscription status:", error);
-      res.status(500).json({ error: "Failed to fetch subscription status" });
-    }
-  });
-
-  app.post("/api/subscription/checkout", async (req, res) => {
-    try {
-      const stripe = await getUncachableStripeClient();
-
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ['card'],
-        line_items: [{
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name: 'Global Lister — Pro Plan',
-              description: '1% fee on all marketplace transactions. Keep listing across all platforms.',
-            },
-            unit_amount: 999,
-            recurring: { interval: 'month' },
-          },
-          quantity: 1,
-        }],
-        mode: 'subscription',
-        success_url: `${req.protocol}://${req.get('host')}/?subscribed=true`,
-        cancel_url: `${req.protocol}://${req.get('host')}/?subscribed=false`,
-      });
-
-      res.json({ url: session.url });
-    } catch (error) {
-      console.error("Error creating subscription checkout:", error);
-      res.status(500).json({ error: "Failed to create subscription session" });
-    }
-  });
-
-  app.post("/api/sales/:saleId/pay-fee", async (req, res) => {
-    try {
-      const saleId = parseInt(req.params.saleId);
-      const sales = await storage.getAllSales();
-      const sale = sales.find(s => s.id === saleId);
-      
-      if (!sale) {
-        return res.status(404).json({ error: "Sale not found" });
-      }
-
-      if (sale.feePaid) {
-        return res.status(400).json({ error: "Fee already paid" });
-      }
-
-      const stripe = await getUncachableStripeClient();
-      const feeInCents = Math.round(parseFloat(sale.ourFee) * 100);
-
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ['card'],
-        line_items: [{
-          price_data: {
-            currency: 'usd',
-            product_data: {
-              name: `Service Fee - Sale #${saleId}`,
-              description: `1% service fee for your marketplace sale`,
-            },
-            unit_amount: feeInCents,
-          },
-          quantity: 1,
-        }],
-        mode: 'payment',
-        success_url: `${req.protocol}://${req.get('host')}/sales?fee_paid=true`,
-        cancel_url: `${req.protocol}://${req.get('host')}/sales`,
-        metadata: { saleId: saleId.toString() },
-      });
-
-      res.json({ url: session.url });
-    } catch (error) {
-      console.error("Error creating fee payment session:", error);
-      res.status(500).json({ error: "Failed to create payment session" });
-    }
-  });
-
-  app.get("/api/dashboard/layout", async (req, res) => {
-    try {
-      const userId = (req as any).user?.claims?.sub || null;
-      const layout = await storage.getDashboardLayout(userId || undefined);
-      res.json(layout || null);
-    } catch (error) {
-      console.error("Error fetching dashboard layout:", error);
-      res.status(500).json({ error: "Failed to fetch dashboard layout" });
-    }
-  });
-
-  app.post("/api/dashboard/layout", async (req, res) => {
-    try {
-      const userId = (req as any).user?.claims?.sub || null;
-      const { layout } = req.body;
-      const saved = await storage.saveDashboardLayout(userId, JSON.stringify(layout));
-      res.json(saved);
-    } catch (error) {
-      console.error("Error saving dashboard layout:", error);
-      res.status(500).json({ error: "Failed to save dashboard layout" });
-    }
-  });
-
-  app.delete("/api/account", async (req, res) => {
-    try {
-      const userId = (req as any).user?.claims?.sub;
-      if (!userId) {
-        return res.status(401).json({ error: "Not authenticated" });
-      }
-      await storage.deleteAllData(userId);
-      req.logout(() => {
-        res.status(204).send();
-      });
-    } catch (error) {
-      console.error("Error deleting account:", error);
-      res.status(500).json({ error: "Failed to delete account" });
-    }
-  });
-
-  app.post("/api/admin/cleanup-images", async (req, res) => {
-    try {
-      const { cleanupOldImages } = await import("./cleanup");
-      const dryRun = req.query.dryRun === "true";
-      const result = await cleanupOldImages(dryRun);
-      res.json({ success: true, dryRun, ...result });
-    } catch (error) {
-      console.error("Error running cleanup:", error);
-      res.status(500).json({ error: "Cleanup failed" });
-    }
-  });
-
-  return httpServer;
-}
+// Full file handles:
+//   GET  /api/products              — list all products
+//   GET  /api/products/:id          — single product + listings
+//   POST /api/products/analyze      — upload image → GPT-4o analysis
+//   POST /api/products/analyze-base64 — mobile base64 image analysis
+//   POST /api/products/upload-additional — extra images
+//   POST /api/products              — create product record
+//   POST /api/products/:id/list     — generate listings for selected marketplaces
+//   GET  /api/listings              — all listings
+//   DELETE /api/listings/product/:id — delete listings for a product
+//   POST /api/sales                 — record sale, decrement qty, trigger cleanup
+//   GET  /api/sales                 — all sales
+//   POST /api/convert-currency      — currency conversion
+//   POST /api/shipping-label        — generate shipping label
+//   GET  /api/marketplaces          — list all 14 supported marketplaces
+//   GET/POST /api/marketplace-credentials — manage marketplace API keys
+//   DELETE /api/marketplace-credentials/:marketplace
+//   GET  /api/subscription/status   — trial/subscription state
+//   POST /api/subscription/checkout — Stripe subscription checkout
+//   POST /api/sales/:id/pay-fee     — Stripe one-time fee payment
+//   GET/POST /api/dashboard/layout  — save/load dashboard grid layout
+//   DELETE /api/account             — delete all user data + logout
+//   POST /api/admin/cleanup-images  — manual image cleanup trigger
 
 
 ================================================================================
-FILE: server/index.ts
+FILE 12: server/index.ts
 ================================================================================
-import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
-import { serveStatic } from "./static";
-import { createServer } from "http";
-import { runMigrations } from 'stripe-replit-sync';
-import { getStripeSync } from "./stripeClient";
-import { WebhookHandlers } from "./webhookHandlers";
-import { setupAuth } from "./replit_integrations/auth";
-import { scheduleImageCleanup } from "./cleanup";
-import pg from "pg";
-
-async function runSchemaMigrations() {
-  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-  try {
-    await pool.query(`
-      ALTER TABLE users
-        ADD COLUMN IF NOT EXISTS email VARCHAR UNIQUE,
-        ADD COLUMN IF NOT EXISTS first_name VARCHAR,
-        ADD COLUMN IF NOT EXISTS last_name VARCHAR,
-        ADD COLUMN IF NOT EXISTS profile_image_url VARCHAR,
-        ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW(),
-        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
-    `);
-    await pool.query(`
-      ALTER TABLE users
-        ALTER COLUMN username DROP NOT NULL,
-        ALTER COLUMN password DROP NOT NULL;
-    `);
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS sessions (
-        sid VARCHAR PRIMARY KEY,
-        sess JSONB NOT NULL,
-        expire TIMESTAMP NOT NULL
-      );
-      CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON sessions(expire);
-    `);
-    console.log("Schema migrations applied");
-  } catch (err: any) {
-    console.log("Migration note:", err.message);
-  } finally {
-    await pool.end();
-  }
-}
-
-const app = express();
-const httpServer = createServer(app);
-
-declare module "http" {
-  interface IncomingMessage {
-    rawBody: unknown;
-  }
-}
-
-async function initStripe() {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    console.log('DATABASE_URL not set, skipping Stripe init');
-    return;
-  }
-
-  try {
-    console.log('Initializing Stripe schema...');
-    await runMigrations({ databaseUrl, schema: 'stripe' });
-    console.log('Stripe schema ready');
-
-    const stripeSync = await getStripeSync();
-
-    const replitDomains = process.env.REPLIT_DOMAINS;
-    if (replitDomains) {
-      console.log('Setting up managed webhook...');
-      const webhookBaseUrl = `https://${replitDomains.split(',')[0]}`;
-      try {
-        const result = await stripeSync.findOrCreateManagedWebhook(
-          `${webhookBaseUrl}/api/stripe/webhook`
-        );
-        if (result?.webhook?.url) {
-          console.log(`Webhook configured: ${result.webhook.url}`);
-        }
-      } catch (webhookError) {
-        console.log('Webhook setup skipped (may work in production)');
-      }
-    }
-
-    stripeSync.syncBackfill()
-      .then(() => console.log('Stripe data synced'))
-      .catch((err: any) => console.error('Error syncing Stripe data:', err));
-  } catch (error) {
-    console.error('Failed to initialize Stripe:', error);
-  }
-}
-
-initStripe().catch(console.error);
-
-app.post(
-  '/api/stripe/webhook',
-  express.raw({ type: 'application/json' }),
-  async (req, res) => {
-    const signature = req.headers['stripe-signature'];
-    if (!signature) {
-      return res.status(400).json({ error: 'Missing stripe-signature' });
-    }
-
-    try {
-      const sig = Array.isArray(signature) ? signature[0] : signature;
-      if (!Buffer.isBuffer(req.body)) {
-        console.error('STRIPE WEBHOOK ERROR: req.body is not a Buffer');
-        return res.status(500).json({ error: 'Webhook processing error' });
-      }
-
-      await WebhookHandlers.processWebhook(req.body as Buffer, sig);
-      res.status(200).json({ received: true });
-    } catch (error: any) {
-      console.error('Webhook error:', error.message);
-      res.status(400).json({ error: 'Webhook processing error' });
-    }
-  }
-);
-
-app.use(
-  express.json({
-    verify: (req, _res, buf) => {
-      req.rawBody = buf;
-    },
-  }),
-);
-
-app.use(express.urlencoded({ extended: false }));
-
-export function log(message: string, source = "express") {
-  const formattedTime = new Date().toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
-
-  console.log(`${formattedTime} [${source}] ${message}`);
-}
-
-app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
-
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      log(logLine);
-    }
-  });
-
-  next();
-});
-
-(async () => {
-  try {
-    console.log("Starting server initialization...");
-
-    await runSchemaMigrations();
-    await setupAuth(app);
-
-    await registerRoutes(httpServer, app);
-    console.log("Routes registered successfully");
-
-    scheduleImageCleanup();
-
-    app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
-      const status = err.status || err.statusCode || 500;
-      const message = err.message || "Internal Server Error";
-
-      console.error("Internal Server Error:", err);
-
-      if (res.headersSent) {
-        return next(err);
-      }
-
-      return res.status(status).json({ message });
-    });
-
-    if (process.env.NODE_ENV === "production") {
-      console.log("Setting up static file serving for production...");
-      serveStatic(app);
-    } else {
-      const { setupVite } = await import("./vite");
-      await setupVite(httpServer, app);
-    }
-
-    const port = parseInt(process.env.PORT || "5000", 10);
-    httpServer.listen(
-      {
-        port,
-        host: "0.0.0.0",
-        reusePort: true,
-      },
-      () => {
-        log(`serving on port ${port}`);
-        console.log(`Server started successfully on port ${port}`);
-      },
-    );
-  } catch (error) {
-    console.error("Failed to start server:", error);
-    process.exit(1);
-  }
-})();
+// Entry point. Bootstraps in this order:
+//   1. Stripe schema migration (stripe-replit-sync)
+//   2. Custom schema migrations (users table columns, sessions table)
+//   3. setupAuth(app)  — Google + Apple passport strategies + session
+//   4. registerRoutes(httpServer, app)
+//   5. scheduleImageCleanup()
+//   6. Vite dev server (dev) or static file serving (prod)
+//   7. httpServer.listen(5000)
 
 
 ================================================================================
-FILE: client/index.html
+FILE 13: client/index.html
 ================================================================================
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
-
     <meta property="og:title" content="Global Marketplace Lister" />
     <meta property="og:description" content="AI-powered multi-marketplace product listing platform. Upload photos, generate descriptions, and list on eBay, Amazon, Etsy, Shopify, and more with automatic translation." />
     <meta property="og:type" content="website" />
@@ -1838,9 +813,8 @@ FILE: client/index.html
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@replit" />
     <meta name="twitter:title" content="Global Marketplace Lister" />
-    <meta name="twitter:description" content="AI-powered multi-marketplace product listing platform. Upload photos, generate descriptions, and list on eBay, Amazon, Etsy, Shopify, and more with automatic translation." />
+    <meta name="twitter:description" content="AI-powered multi-marketplace product listing platform." />
     <meta name="twitter:image" content="https://replit.com/public/images/opengraph.png" />
-
     <link rel="icon" type="image/png" href="/favicon.png" />
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.jpeg" />
@@ -1848,9 +822,6 @@ FILE: client/index.html
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Global Lister" />
     <meta name="theme-color" content="#3b82f6" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <title>Global Marketplace Lister</title>
   </head>
   <body>
@@ -1861,7 +832,7 @@ FILE: client/index.html
 
 
 ================================================================================
-FILE: client/public/manifest.json
+FILE 14: client/public/manifest.json
 ================================================================================
 {
   "name": "Global Marketplace Lister",
@@ -1873,59 +844,293 @@ FILE: client/public/manifest.json
   "theme_color": "#3b82f6",
   "orientation": "portrait-primary",
   "icons": [
-    {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/app-icon.jpeg",
-      "sizes": "512x512",
-      "type": "image/jpeg",
-      "purpose": "maskable"
-    }
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/app-icon.jpeg", "sizes": "512x512", "type": "image/jpeg", "purpose": "maskable" }
   ]
 }
 
 
 ================================================================================
-FILE: client/src/App.tsx
+FILE 15: client/src/App.tsx  (structure summary)
 ================================================================================
-[See full content above — App.tsx with Navigation, MoreDrawer, TrialBanner, ProtectedRouter, Router, App]
+// Exports: App (default)
+// Components defined in this file:
+//   TrialBanner     — shows trial days remaining or trial-ended warning
+//   MoreDrawer      — mobile slide-up drawer with Tools, Connections, legal links, logout
+//   Navigation      — desktop top nav + mobile top header + mobile bottom tab bar
+//   ProtectedRouter — checks auth, shows onboarding, wraps all protected pages
+//   Router          — top-level route table (login, terms, privacy, submit, screenshots, *)
+//   App             — QueryClientProvider + TooltipProvider + Toaster + Router + GdprBanner
+//
+// Routes:
+//   /login        LoginPage (public)
+//   /terms        Terms (public)
+//   /privacy      Privacy (public)
+//   /submit       Submit (public)
+//   /screenshots  Screenshots (public)
+//   /             Home (protected)
+//   /dashboard    Dashboard (protected)
+//   /listings     Listings (protected)
+//   /sales        Sales (protected)
+//   /tools        Tools (protected)
+//   /create       Create (protected)
+//   /settings     SettingsPage (protected)
 
 
 ================================================================================
-FILE: client/src/components/onboarding.tsx
+FILE 16: client/src/hooks/use-auth.ts
 ================================================================================
-[See full content above — 3-step onboarding overlay with useOnboarding hook]
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { User } from "@shared/models/auth";
+
+async function fetchUser(): Promise<User | null> {
+  const response = await fetch("/api/auth/user", { credentials: "include" });
+  if (response.status === 401) return null;
+  if (!response.ok) throw new Error(`${response.status}: ${response.statusText}`);
+  return response.json();
+}
+
+async function logout(): Promise<void> {
+  window.location.href = "/api/logout";
+}
+
+export function useAuth() {
+  const queryClient = useQueryClient();
+  const { data: user, isLoading } = useQuery<User | null>({
+    queryKey: ["/api/auth/user"],
+    queryFn: fetchUser,
+    retry: false,
+    staleTime: 1000 * 60 * 5,
+  });
+  const logoutMutation = useMutation({
+    mutationFn: logout,
+    onSuccess: () => { queryClient.setQueryData(["/api/auth/user"], null); },
+  });
+  return {
+    user,
+    isLoading,
+    isAuthenticated: !!user,
+    logout: logoutMutation.mutate,
+    isLoggingOut: logoutMutation.isPending,
+  };
+}
 
 
 ================================================================================
-FILE: client/src/pages/home.tsx           — Camera / Upload page
-FILE: client/src/pages/create.tsx         — Product creation & marketplace selection
-FILE: client/src/pages/listings.tsx       — All product listings view
-FILE: client/src/pages/sales.tsx          — Sales tracker & fee payment
-FILE: client/src/pages/dashboard.tsx      — Drag-and-drop analytics dashboard
-FILE: client/src/pages/settings.tsx       — Marketplace credentials + Delete Account
-FILE: client/src/pages/tools.tsx          — Currency converter & shipping label generator
-FILE: client/src/pages/login.tsx          — Login / sign-in page
-FILE: client/src/pages/privacy.tsx        — Privacy Policy (kaufit@yahoo.com / kauf26.com)
-FILE: client/src/pages/terms.tsx          — Terms of Service & Legal Disclaimer
-FILE: client/src/pages/submit.tsx         — App Store submission guide
-FILE: client/src/pages/screenshots.tsx    — Mock UI slides for App Store screenshots
+FILE 17: client/src/pages/login.tsx  ← SIGN IN WITH APPLE + GOOGLE
 ================================================================================
-[All page files are printed in full above in the order they were read]
+import { useEffect } from "react";
+import { useLocation } from "wouter";
+import { ShoppingBag } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+
+function GoogleIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+    </svg>
+  );
+}
+
+function AppleIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+      <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98l-.09.06c-.22.14-2.18 1.28-2.16 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.77M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+    </svg>
+  );
+}
+
+export default function LoginPage() {
+  const { isAuthenticated, isLoading } = useAuth();
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) setLocation("/");
+  }, [isAuthenticated, isLoading, setLocation]);
+
+  const error = new URLSearchParams(window.location.search).get("error");
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background px-4">
+      <div className="w-full max-w-sm space-y-8 text-center">
+        <div className="space-y-3">
+          <div className="flex justify-center">
+            <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+              <ShoppingBag className="w-8 h-8 text-primary" />
+            </div>
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight">Global Lister</h1>
+          <p className="text-muted-foreground text-sm">
+            Sign in to list your products across every marketplace — instantly.
+          </p>
+        </div>
+
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400">
+            Sign-in failed. Please try again.
+          </div>
+        )}
+
+        <div className="space-y-3">
+          {/* Apple — white button per Apple HIG */}
+          <a href="/api/auth/apple" data-testid="button-login-apple"
+            className="flex w-full items-center justify-center gap-3 rounded-xl bg-white text-black px-5 py-3.5 text-sm font-semibold shadow-sm hover:bg-gray-100 transition-colors">
+            <AppleIcon />
+            Sign in with Apple
+          </a>
+          {/* Google */}
+          <a href="/api/auth/google" data-testid="button-login-google"
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-card px-5 py-3.5 text-sm font-semibold text-foreground shadow-sm hover:bg-muted/50 transition-colors">
+            <GoogleIcon />
+            Sign in with Google
+          </a>
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          By signing in you agree to our{" "}
+          <a href="/terms" className="underline hover:text-foreground">Terms of Service</a>
+          {" "}and{" "}
+          <a href="/privacy" className="underline hover:text-foreground">Privacy Policy</a>.
+        </p>
+
+        <div className="border-t pt-6 space-y-2">
+          <p className="text-sm text-muted-foreground">
+            List on eBay, Amazon, Etsy, Shopify, Reverb and 10 more marketplaces.
+          </p>
+          <p className="text-xs text-muted-foreground">30-day free trial · No credit card required</p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 
 ================================================================================
-FILE: scripts/take-screenshots.mjs
+FILE 18: client/src/pages/privacy.tsx  ← FULL GDPR/LGPD/PIPEDA/COPPA VERSION
+================================================================================
+// 14 sections covering:
+//   1.  Information We Collect
+//   2.  Legal Basis for Processing (GDPR Article 6)
+//   3.  How We Use Your Information
+//   4.  AI-Powered Image Processing (OpenAI disclosure)
+//   5.  Payment Processing (Stripe)
+//   6.  Data Storage and Security (HTTPS/TLS)
+//   7.  Data Retention + account deletion timeline
+//   8.  Your Rights (access, correction, deletion, portability, objection)
+//   9.  International Users — GDPR (EU), LGPD (Brazil), PIPEDA (Canada)
+//   10. Third-Party Services (OpenAI, Stripe, Replit)
+//   11. Children's Privacy (COPPA — under 13 prohibited)
+//   12. Cookies and Local Storage
+//   13. Changes to This Policy
+//   14. Contact Us — kaufit@yahoo.com / kauf26.com
+// Language selector (TranslateWidget) in page header — 100+ languages
+
+
+================================================================================
+FILE 19: client/src/pages/terms.tsx  ← FULL LEGAL VERSION
+================================================================================
+// 15 sections covering:
+//   1.  Eligibility and Age Requirement (must be 13+)
+//   2.  Service Description
+//   3.  AI-Generated Content (names OpenAI GPT-4o, consent to image transmission)
+//   4.  No Guarantee of Sales or Marketplace Acceptance
+//   5.  Service Fee Disclosure (30-day free trial, then 1% per self-reported sale)
+//         Example: $100 sale = $1.00 fee
+//   6.  Currency Conversion Disclaimer
+//   7.  User Responsibilities (tax, compliance, fulfillment)
+//   8.  Acceptable Use (prohibited items, fraud, counterfeits)
+//   9.  Account Deletion
+//   10. Limitation of Liability
+//   11. Disclaimer of Warranties
+//   12. Indemnification
+//   13. Governing Law (US, with EU consumer rights carve-out)
+//   14. Changes to Terms
+//   15. Contact — kaufit@yahoo.com / kauf26.com
+// Language selector (TranslateWidget) in page header — 100+ languages
+
+
+================================================================================
+FILE 20: client/src/components/gdpr-banner.tsx
+================================================================================
+import { useState, useEffect } from "react";
+import { Link } from "wouter";
+import { Button } from "@/components/ui/button";
+import { X } from "lucide-react";
+
+const STORAGE_KEY = "global_lister_gdpr_consent";
+
+export default function GdprBanner() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const consented = localStorage.getItem(STORAGE_KEY);
+    if (!consented) setVisible(true);
+  }, []);
+
+  const accept = () => {
+    localStorage.setItem(STORAGE_KEY, "accepted");
+    setVisible(false);
+  };
+
+  if (!visible) return null;
+
+  return (
+    <div className="fixed bottom-0 left-0 right-0 z-50 md:bottom-4 md:left-4 md:right-auto md:max-w-sm bg-card border border-white/10 shadow-xl rounded-t-2xl md:rounded-2xl p-5"
+      role="dialog" aria-label="Privacy consent notice" data-testid="gdpr-banner">
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <p className="text-sm font-semibold text-foreground">Your Privacy</p>
+        <button onClick={accept} className="text-muted-foreground hover:text-foreground" aria-label="Dismiss">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      <p className="text-xs text-muted-foreground leading-relaxed mb-4">
+        We use session cookies to keep you logged in and store your preferences locally on your device.
+        Your product photos are processed by OpenAI to generate listing descriptions.
+        We do not sell your data or use advertising trackers.
+      </p>
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button size="sm" onClick={accept} className="flex-1 min-w-fit" data-testid="gdpr-banner-accept">
+          Got it
+        </Button>
+        <Link href="/privacy">
+          <Button variant="ghost" size="sm" onClick={accept} className="text-xs text-muted-foreground">
+            Privacy Policy
+          </Button>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+
+================================================================================
+FILE 21: client/src/components/translate-widget.tsx
+================================================================================
+// Globe icon button in top-right of Privacy and Terms pages.
+// On mount: detects navigator.language, auto-applies translation if non-English.
+// On click: opens scrollable dropdown of 100+ languages.
+// Uses Google Translate (googtrans cookie + dynamic script load).
+// Resets to English by clearing cookie and reloading.
+// Language map covers: Afrikaans, Arabic, Chinese (Simplified + Traditional),
+//   French, German, Hindi, Japanese, Korean, Portuguese, Russian, Spanish,
+//   and 90+ more ISO language codes.
+
+
+================================================================================
+FILE 22: client/src/components/onboarding.tsx
+================================================================================
+// 3-step first-launch overlay shown once per device (localStorage flag).
+// Steps: 1) Photo → AI analysis  2) Generate listings  3) Track sales
+// useOnboarding() hook: { show: boolean, dismiss: () => void }
+// To preview again: localStorage.removeItem('global_lister_onboarded') + refresh
+
+
+================================================================================
+FILE 23: scripts/take-screenshots.mjs
 ================================================================================
 import puppeteer from "puppeteer";
 import { mkdirSync } from "fs";
@@ -1937,120 +1142,110 @@ const OUT = join(__dirname, "..", "screenshots");
 mkdirSync(OUT, { recursive: true });
 
 const SLIDES = ["upload", "analyze", "listings", "sales", "dashboard"];
-
-// Apple App Store: iPhone 15 Pro Max — 1290×2796 (430×932 viewport at 3x)
-// Google Play: same images are accepted (1080×1920 range)
 const CONFIGS = [
-  { name: "iphone", width: 430, height: 932, dpr: 3 },
+  { name: "iphone", width: 430, height: 932, dpr: 3 },  // iPhone 15 Pro Max
   { name: "ipad", width: 768, height: 1024, dpr: 2 },
 ];
 
 async function main() {
-  console.log("Launching browser...");
   const browser = await puppeteer.launch({
     headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-    ],
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-gpu"],
   });
-
   for (const cfg of CONFIGS) {
-    console.log(`\n--- Capturing ${cfg.name} screenshots (${cfg.width}x${cfg.height} @${cfg.dpr}x) ---`);
     const page = await browser.newPage();
     await page.setViewport({ width: cfg.width, height: cfg.height, deviceScaleFactor: cfg.dpr });
-
     for (const slide of SLIDES) {
-      const url = `http://localhost:5000/screenshots?slide=${slide}`;
-      console.log(`  Capturing: ${slide}...`);
-      await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
+      await page.goto(`http://localhost:5000/screenshots?slide=${slide}`, { waitUntil: "networkidle2", timeout: 30000 });
       await new Promise(r => setTimeout(r, 800));
-
-      const outFile = join(OUT, `${cfg.name}-${slide}.png`);
-      await page.screenshot({ path: outFile, fullPage: false });
-      console.log(`  Saved: ${outFile}`);
+      await page.screenshot({ path: join(OUT, `${cfg.name}-${slide}.png`), fullPage: false });
     }
-
     await page.close();
   }
-
   await browser.close();
-  console.log("\nAll screenshots captured!");
 }
 
-main().catch(err => {
-  console.error("Error:", err.message);
-  process.exit(1);
-});
+main().catch(err => { console.error(err.message); process.exit(1); });
 
 
 ================================================================================
-FILE: package.json  (key dependencies)
+FILE 24: docs/apple-signin-setup.txt  ← FULL GUIDE (see separate file)
 ================================================================================
-{
-  "scripts": {
-    "dev": "NODE_ENV=development tsx server/index.ts",
-    "build": "tsx script/build.ts",
-    "start": "NODE_ENV=production node dist/index.cjs"
-  },
-  "dependencies": {
-    "openai": "^6.33.0",
-    "express": "^5.0.1",
-    "drizzle-orm": "^0.39.3",
-    "drizzle-zod": "^0.7.1",
-    "pg": "^8.16.3",
-    "multer": "^2.1.1",
-    "passport": "^0.7.0",
-    "openid-client": "^6.8.2",
-    "connect-pg-simple": "^10.0.0",
-    "express-session": "^1.19.0",
-    "memoizee": "^0.4.17",
-    "stripe": "^20.0.0",
-    "stripe-replit-sync": "^1.0.0",
-    "puppeteer": "^24.40.0",
-    "react": "^19.2.0",
-    "react-dom": "^19.2.0",
-    "wouter": "^3.3.5",
-    "@tanstack/react-query": "^5.60.5",
-    "react-grid-layout": "^2.2.2",
-    "lucide-react": "^0.545.0",
-    "zod": "^3.25.76"
-  }
-}
+SUMMARY OF 4 SECRETS YOU WILL COLLECT:
+  APPLE_CLIENT_ID    — Service ID you create (e.g. com.kauf26.app.service)
+  APPLE_TEAM_ID      — 10-char Team ID (top-right of developer.apple.com)
+  APPLE_KEY_ID       — Key ID when you create a Sign In with Apple key
+  APPLE_PRIVATE_KEY  — Contents of .p8 file, each newline replaced with \n
+
+CALLBACK URL TO REGISTER IN APPLE DEVELOPER PORTAL:
+  https://kauf26.com/api/auth/apple/callback
+
+STEPS (full detail in docs/apple-signin-setup.txt):
+  1. Find Team ID
+  2. Create App ID → enable Sign In with Apple
+  3. Create Service ID → configure domain + callback URL
+  4. Create private key → download .p8
+  5. Convert .p8 to single-line string
+  6. Add 4 secrets to Replit
 
 
 ================================================================================
-  KEY NOTES FOR FUTURE REFERENCE
+FILE 25: docs/google-signin-setup.txt  ← FULL GUIDE (see separate file)
+================================================================================
+SUMMARY OF 2 SECRETS YOU WILL COLLECT:
+  GOOGLE_CLIENT_ID     — looks like 123456789-abc.apps.googleusercontent.com
+  GOOGLE_CLIENT_SECRET — looks like GOCSPX-xxxxxxxxxxxxxxxxxx
+
+CALLBACK URL TO REGISTER IN GOOGLE CLOUD CONSOLE:
+  https://kauf26.com/api/auth/google/callback
+
+STEPS (full detail in docs/google-signin-setup.txt):
+  1. Create Google Cloud project (free)
+  2. Enable Google People API
+  3. Configure OAuth consent screen (add kauf26.com, privacy/terms URLs)
+  4. Create OAuth 2.0 Client ID (Web application)
+  5. Add redirect URI + authorized origin
+  6. Add 2 secrets to Replit
+  7. Publish consent screen (allows any Google user to sign in)
+
+
+================================================================================
+  KEY ARCHITECTURE NOTES
 ================================================================================
 
-STORAGE MANAGEMENT (two layers):
-  • On sale recorded + quantity hits 0 + product listed within 30 days
-    → images deleted immediately from disk (server/cleanup.ts: deleteProductImagesIfRecentlySold)
-  • Daily sweep (every 24h, first run 5 min after startup)
-    → deletes any upload >90 days old that is NOT referenced by any product
-    → manual trigger: POST /api/admin/cleanup-images?dryRun=true
+AUTHENTICATION FLOW
+  • User clicks "Sign in with Apple" → GET /api/auth/apple → Apple OAuth → POST /api/auth/apple/callback → session created → redirect to /
+  • User clicks "Sign in with Google" → GET /api/auth/google → Google OAuth → GET /api/auth/google/callback → session created → redirect to /
+  • User IDs are prefixed: google_XXXXX or apple_XXXXX (no collision)
+  • Sessions stored in PostgreSQL sessions table (7-day TTL)
+  • Apple sends name/email ONLY on first ever sign-in — stored immediately
+  • Logout: GET /api/logout → session destroyed → redirect to /login
 
-TRIAL / BILLING:
-  • 30-day free trial per user (based on firstLoginAt — never reset on re-login)
-  • After trial: 1% fee per self-reported sale amount (ourFee = saleAmount * 0.01)
-  • Fee paid via Stripe Checkout → /api/sales/:saleId/pay-fee
+TRIAL + BILLING
+  • 30-day free trial per user based on firstLoginAt (never reset on re-login)
+  • After trial: 1% fee per self-reported sale (ourFee = saleAmount * 0.01)
+  • Fee paid via Stripe Checkout → POST /api/sales/:id/pay-fee
   • feePaid = true automatically during trial (ourFee = "0.00")
 
-AUTH:
-  • Replit OpenID Connect (Google, Apple, GitHub, email/password)
-  • Custom domain: kauf26.com (set in CUSTOM_DOMAIN constant in replitAuth.ts)
-  • Sessions stored in PostgreSQL sessions table (7-day TTL)
+IMAGE CLEANUP (2-layer)
+  • Sold within 30 days + qty hits 0 → images deleted immediately
+  • Daily sweep at startup + every 24h → deletes unreferenced uploads >90 days old
+  • Manual trigger: POST /api/admin/cleanup-images?dryRun=true
 
-ACCOUNT DELETION (Apple/Google requirement):
-  • DELETE /api/account wipes all rows for the user then calls req.logout()
-  • UI: Settings page → DeleteAccountSection → must type "DELETE" to confirm
+ACCOUNT DELETION (Apple/Google requirement)
+  • DELETE /api/account → deletes all rows for user → req.logout()
+  • UI: Settings → Delete Account → must type "DELETE" to confirm
 
-CONTACT:
-  • Email: kaufit@yahoo.com
+LEGAL COMPLIANCE
+  • GDPR consent banner (gdpr-banner.tsx) — shown once, dismissed to localStorage
+  • Privacy Policy: 14 sections, GDPR legal basis, LGPD, PIPEDA, COPPA, AI disclosure
+  • Terms of Service: 15 sections, 13+ age requirement, fee example, AI disclosure
+  • Legal pages auto-translate to 100+ languages via TranslateWidget
+
+CONTACT
+  • Email:   kaufit@yahoo.com
   • Website: kauf26.com
 
 ================================================================================
-  END OF FILE
+  END OF COMPLETE SOURCE CODE
 ================================================================================
