@@ -3,11 +3,34 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { marketplaces, type Marketplace } from "@shared/schema";
 import { registerAuthRoutes } from "./replit_integrations/auth";
+import { authStorage } from "./replit_integrations/auth/storage";
 import OpenAI from "openai";
 import multer from "multer";
 import path from "path";
 import fs from "fs/promises";
 import { getUncachableStripeClient } from "./stripeClient";
+
+const TRIAL_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
+
+function calcTrialStatus(firstLoginAt: Date) {
+  const elapsed = Date.now() - firstLoginAt.getTime();
+  const isTrialActive = elapsed < TRIAL_DURATION_MS;
+  const trialDaysRemaining = Math.max(0, Math.ceil((TRIAL_DURATION_MS - elapsed) / (24 * 60 * 60 * 1000)));
+  const trialEndsAt = new Date(firstLoginAt.getTime() + TRIAL_DURATION_MS);
+  return { isTrialActive, trialDaysRemaining, trialEndsAt };
+}
+
+async function getUserTrialActive(req: any): Promise<boolean> {
+  try {
+    if (req.user?.claims?.sub) {
+      const user = await authStorage.getUser(req.user.claims.sub);
+      if (user?.firstLoginAt) {
+        return calcTrialStatus(new Date(user.firstLoginAt)).isTrialActive;
+      }
+    }
+  } catch {}
+  return false;
+}
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -328,8 +351,7 @@ export async function registerRoutes(
     try {
       const { listingId, saleAmount, saleCurrency, platformFee } = req.body;
 
-      const config = await storage.getAppConfig();
-      const isTrialActive = config ? (Date.now() - new Date(config.trialStartedAt).getTime()) < 30 * 24 * 60 * 60 * 1000 : true;
+      const isTrialActive = await getUserTrialActive(req);
       const ourFee = isTrialActive ? "0.00" : (parseFloat(saleAmount) * 0.01).toFixed(2);
 
       const sale = await storage.createSale({
@@ -492,13 +514,20 @@ export async function registerRoutes(
   app.get("/api/subscription/status", async (req, res) => {
     try {
       const config = await storage.initAppConfig();
-      const trialStartedAt = new Date(config.trialStartedAt);
-      const trialDurationMs = 30 * 24 * 60 * 60 * 1000;
       const subscriptionOfferMs = 90 * 24 * 60 * 60 * 1000;
+
+      // Use per-user firstLoginAt when authenticated, fall back to global config
+      let trialStartedAt: Date;
+      const userId = (req as any).user?.claims?.sub;
+      if (userId) {
+        const user = await authStorage.getUser(userId);
+        trialStartedAt = user?.firstLoginAt ? new Date(user.firstLoginAt) : new Date(config.trialStartedAt);
+      } else {
+        trialStartedAt = new Date(config.trialStartedAt);
+      }
+
+      const { isTrialActive, trialDaysRemaining, trialEndsAt } = calcTrialStatus(trialStartedAt);
       const elapsed = Date.now() - trialStartedAt.getTime();
-      const isTrialActive = elapsed < trialDurationMs;
-      const trialDaysRemaining = Math.max(0, Math.ceil((trialDurationMs - elapsed) / (24 * 60 * 60 * 1000)));
-      const trialEndsAt = new Date(trialStartedAt.getTime() + trialDurationMs);
       const canSubscribeMonthly = elapsed >= subscriptionOfferMs;
       const daysUntilSubscriptionOffer = Math.max(0, Math.ceil((subscriptionOfferMs - elapsed) / (24 * 60 * 60 * 1000)));
 
