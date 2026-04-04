@@ -24,6 +24,7 @@ const localMarketplaces = [
   { id: "walmart", name: "Walmart", currency: "USD" },
   { id: "wish", name: "Wish", currency: "USD" },
   { id: "reverb", name: "Reverb", currency: "USD" },
+  { id: "offerup", name: "OfferUp", currency: "USD" },
 ];
 
 const globalMarketplaces = [

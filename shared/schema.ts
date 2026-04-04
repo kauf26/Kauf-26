@@ -47,7 +47,7 @@ export const insertProductSchema = createInsertSchema(products).omit({
 export type Product = typeof products.$inferSelect;
 export type InsertProduct = z.infer<typeof insertProductSchema>;
 
-export const marketplaces = ["ebay", "amazon", "walmart", "wish", "reverb", "etsy", "shopify", "woocommerce", "aliexpress", "mercadolibre", "rakuten", "bigcommerce", "prestashop"] as const;
+export const marketplaces = ["ebay", "amazon", "walmart", "wish", "reverb", "offerup", "etsy", "shopify", "woocommerce", "aliexpress", "mercadolibre", "rakuten", "bigcommerce", "prestashop"] as const;
 export type Marketplace = typeof marketplaces[number];
 
 export const listings = pgTable("listings", {
