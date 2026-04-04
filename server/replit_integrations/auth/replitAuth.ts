@@ -60,13 +60,23 @@ async function upsertUser(claims: any) {
   });
 }
 
-// Resolve the canonical app domain — use REPLIT_DOMAINS in production/dev, fallback to localhost
-function getAppDomain(): string {
-  const replitDomains = process.env.REPLIT_DOMAINS;
-  if (replitDomains) {
-    return replitDomains.split(",")[0].trim();
+const CUSTOM_DOMAIN = "kauf26.com";
+
+// Resolve the best domain for auth callbacks
+// Custom domain takes priority, then REPLIT_DOMAINS, then dev fallback
+function resolveCallbackDomain(reqHostname: string): string {
+  // If request came in through the custom domain, use it
+  if (reqHostname === CUSTOM_DOMAIN || reqHostname === `www.${CUSTOM_DOMAIN}`) {
+    return CUSTOM_DOMAIN;
   }
-  return "localhost:5000";
+  // If it's a real replit domain (not localhost), use it directly
+  if (reqHostname !== "localhost" && !reqHostname.startsWith("0.0.0.0")) {
+    return reqHostname;
+  }
+  // Fallback: use REPLIT_DOMAINS or custom domain
+  const replitDomains = process.env.REPLIT_DOMAINS;
+  if (replitDomains) return replitDomains.split(",")[0].trim();
+  return CUSTOM_DOMAIN;
 }
 
 export async function setupAuth(app: Express) {
@@ -76,7 +86,6 @@ export async function setupAuth(app: Express) {
   app.use(passport.session());
 
   const config = await getOidcConfig();
-  const appDomain = getAppDomain();
 
   const verify: VerifyFunction = async (
     tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers,
@@ -88,41 +97,48 @@ export async function setupAuth(app: Express) {
     verified(null, user);
   };
 
-  // Register single strategy using the resolved app domain
-  const strategy = new Strategy(
-    {
-      name: "replitauth",
-      config,
-      scope: "openid email profile offline_access",
-      callbackURL: `https://${appDomain}/api/callback`,
-    },
-    verify
-  );
-  passport.use(strategy);
+  const registeredStrategies = new Set<string>();
+
+  const ensureStrategy = (domain: string) => {
+    const name = `replitauth:${domain}`;
+    if (!registeredStrategies.has(name)) {
+      passport.use(new Strategy(
+        { name, config, scope: "openid email profile offline_access", callbackURL: `https://${domain}/api/callback` },
+        verify
+      ));
+      registeredStrategies.add(name);
+    }
+    return name;
+  };
 
   passport.serializeUser((user: Express.User, cb) => cb(null, user));
   passport.deserializeUser((user: Express.User, cb) => cb(null, user));
 
   app.get("/api/login", (req, res, next) => {
-    passport.authenticate("replitauth", {
+    const domain = resolveCallbackDomain(req.hostname);
+    const strategyName = ensureStrategy(domain);
+    passport.authenticate(strategyName, {
       prompt: "login consent",
       scope: ["openid", "email", "profile", "offline_access"],
     })(req, res, next);
   });
 
   app.get("/api/callback", (req, res, next) => {
-    passport.authenticate("replitauth", {
+    const domain = resolveCallbackDomain(req.hostname);
+    const strategyName = ensureStrategy(domain);
+    passport.authenticate(strategyName, {
       successReturnToOrRedirect: "/",
       failureRedirect: "/api/login",
     })(req, res, next);
   });
 
   app.get("/api/logout", (req, res) => {
+    const domain = resolveCallbackDomain(req.hostname);
     req.logout(() => {
       res.redirect(
         client.buildEndSessionUrl(config, {
           client_id: process.env.REPL_ID!,
-          post_logout_redirect_uri: `https://${appDomain}`,
+          post_logout_redirect_uri: `https://${domain}`,
         }).href
       );
     });
