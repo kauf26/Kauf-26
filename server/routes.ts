@@ -177,10 +177,6 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Error analyzing product:", error?.message || error);
       res.status(500).json({ error: "Failed to analyze product" });
-    } finally {
-      if (req.file?.path) {
-        fs.unlink(req.file.path).catch(() => {});
-      }
     }
   });
 
