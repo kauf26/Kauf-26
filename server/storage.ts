@@ -41,6 +41,8 @@ export interface IStorage {
   getAllMarketplaceCredentials(): Promise<MarketplaceCredentials[]>;
   upsertMarketplaceCredentials(marketplace: string, credentials: string): Promise<MarketplaceCredentials>;
   deleteMarketplaceCredentials(marketplace: string): Promise<void>;
+
+  deleteAllData(userId: string): Promise<void>;
 }
 
 export const storage: IStorage = {
@@ -182,5 +184,15 @@ export const storage: IStorage = {
 
   async deleteMarketplaceCredentials(marketplace: string) {
     await db.delete(marketplaceCredentials).where(eq(marketplaceCredentials.marketplace, marketplace));
+  },
+
+  async deleteAllData(userId: string) {
+    await db.delete(sales);
+    await db.delete(listings);
+    await db.delete(products);
+    await db.delete(marketplaceCredentials);
+    await db.delete(dashboardLayouts);
+    await db.delete(appConfig);
+    await db.delete(users).where(eq(users.id, userId));
   },
 };

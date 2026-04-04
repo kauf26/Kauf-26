@@ -1,11 +1,23 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Settings, ChevronDown, ChevronRight, CheckCircle2, Circle, ExternalLink, Save, Loader2, AlertCircle } from "lucide-react";
+import { Settings, ChevronDown, ChevronRight, CheckCircle2, Circle, ExternalLink, Save, Loader2, AlertCircle, Trash2 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { useAuth } from "@/hooks/use-auth";
 
 interface MarketplaceField {
   key: string;
@@ -272,6 +284,101 @@ function MarketplaceCard({ def, savedCreds }: { def: MarketplaceDef; savedCreds:
   );
 }
 
+function DeleteAccountSection() {
+  const [confirmText, setConfirmText] = useState("");
+  const [open, setOpen] = useState(false);
+  const { toast } = useToast();
+  const { logout } = useAuth();
+
+  const deleteMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/account", { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete account");
+    },
+    onSuccess: () => {
+      toast({ title: "Account deleted", description: "All your data has been permanently removed." });
+      setTimeout(() => logout(), 1500);
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Could not delete your account. Please try again.", variant: "destructive" });
+    },
+  });
+
+  const canDelete = confirmText === "DELETE";
+
+  return (
+    <div className="mt-12 pt-8 border-t border-destructive/20">
+      <div className="mb-4">
+        <h2 className="text-lg font-semibold text-destructive flex items-center gap-2">
+          <Trash2 className="w-5 h-5" />
+          Delete Account
+        </h2>
+        <p className="text-sm text-muted-foreground mt-1">
+          Permanently delete your account and all associated data — listings, sales, credentials, and settings. This cannot be undone.
+        </p>
+      </div>
+
+      <AlertDialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setConfirmText(""); }}>
+        <AlertDialogTrigger asChild>
+          <Button
+            variant="destructive"
+            className="gap-2"
+            data-testid="button-delete-account-open"
+          >
+            <Trash2 className="w-4 h-4" />
+            Delete My Account
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Account Permanently?</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-3">
+              <span className="block">
+                This will permanently delete <strong>all</strong> of your data, including:
+              </span>
+              <ul className="list-disc pl-5 space-y-1 text-sm">
+                <li>All product listings and photos</li>
+                <li>All sales records and fee history</li>
+                <li>All marketplace credentials</li>
+                <li>Your account and trial status</li>
+              </ul>
+              <span className="block font-medium text-foreground">
+                To confirm, type DELETE in the box below:
+              </span>
+              <Input
+                placeholder="Type DELETE to confirm"
+                value={confirmText}
+                onChange={(e) => setConfirmText(e.target.value.toUpperCase())}
+                className="mt-1 font-mono"
+                data-testid="input-delete-confirm"
+                autoCapitalize="characters"
+              />
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-delete-cancel">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                if (canDelete) deleteMutation.mutate();
+              }}
+              disabled={!canDelete || deleteMutation.isPending}
+              className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+              data-testid="button-delete-confirm"
+            >
+              {deleteMutation.isPending ? (
+                <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Deleting…</>
+              ) : (
+                "Delete Everything"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { data: allCreds = [] } = useQuery<{ marketplace: string; credentials: string }[]>({
     queryKey: ["/api/marketplace-credentials"],
@@ -337,6 +444,8 @@ export default function SettingsPage() {
             />
           ))}
         </div>
+
+        <DeleteAccountSection />
       </div>
     </div>
   );

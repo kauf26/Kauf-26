@@ -636,6 +636,20 @@ export async function registerRoutes(
     }
   });
 
+  // Delete account — wipes all user data and ends the session (Apple required)
+  app.delete("/api/account", async (req, res) => {
+    try {
+      const user = (req as any).user;
+      if (!user?.id) return res.status(401).json({ error: "Not authenticated" });
+      await storage.deleteAllData(user.id);
+      (req as any).session?.destroy?.(() => {});
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting account:", error);
+      res.status(500).json({ error: "Failed to delete account" });
+    }
+  });
+
   // Dashboard layout routes
   app.get("/api/dashboard/layout", async (req, res) => {
     try {
