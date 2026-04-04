@@ -38,6 +38,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import Onboarding, { useOnboarding } from "@/components/onboarding";
 import { useState } from "react";
+import GdprBanner from "@/components/gdpr-banner";
 
 interface SubscriptionStatus {
   isTrialActive: boolean;
@@ -412,6 +413,7 @@ function App() {
       <TooltipProvider>
         <Toaster />
         <Router />
+        <GdprBanner />
       </TooltipProvider>
     </QueryClientProvider>
   );
