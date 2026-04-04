@@ -3,12 +3,7 @@ import passport from "passport";
 import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import connectPg from "connect-pg-simple";
-import { createRequire } from "module";
 import { authStorage } from "./storage";
-
-// passport-apple has no @types and needs CJS require in an ESM project
-const require = createRequire(import.meta.url);
-const AppleStrategy = require("passport-apple");
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -46,6 +41,11 @@ export async function setupAuth(app: Express) {
 
   passport.serializeUser((user, cb) => cb(null, user));
   passport.deserializeUser((user, cb) => cb(null, user as Express.User));
+
+  // ── passport-apple: dynamic import works in both ESM dev and CJS prod bundle
+  // (createRequire(import.meta.url) breaks when bundled — import.meta.url is undefined in CJS)
+  const appleModule = await import("passport-apple");
+  const AppleStrategy = (appleModule as any).default ?? appleModule;
 
   // ── Google OAuth 2.0 ──────────────────────────────────────────────────────
   const googleClientId = process.env.GOOGLE_CLIENT_ID;
