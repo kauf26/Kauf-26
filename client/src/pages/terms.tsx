@@ -143,6 +143,18 @@ export default function Terms() {
             </CardContent>
           </Card>
 
+          <Card>
+            <CardContent className="pt-6 space-y-3">
+              <h2 className="text-lg font-semibold text-foreground">12. Contact</h2>
+              <p>
+                For questions about these Terms or the Service, please contact us at{" "}
+                <a href="mailto:kaufit@yahoo.com" className="underline hover:text-foreground">kaufit@yahoo.com</a>{" "}
+                or visit{" "}
+                <a href="https://kauf26.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">kauf26.com</a>.
+              </p>
+            </CardContent>
+          </Card>
+
           <div className="pt-4 pb-8 text-xs text-muted-foreground border-t">
             <p>
               <strong>Note:</strong> These Terms of Service are provided for informational purposes. They do not constitute legal advice. If you have specific legal concerns about your business activities, consult a qualified attorney in your jurisdiction.

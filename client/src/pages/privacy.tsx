@@ -77,7 +77,7 @@ export default function Privacy() {
             <CardContent className="pt-6 space-y-3">
               <h2 className="text-lg font-semibold text-foreground">6. Data Retention</h2>
               <p>
-                We retain your data for as long as you use the app. If you wish to have your data deleted, contact us and we will remove your records within 30 days.
+                We retain your data for as long as you use the app. If you wish to have your data deleted, you may also use the in-app account deletion feature in Settings, or contact us at <a href="mailto:kaufit@yahoo.com" className="underline hover:text-foreground">kaufit@yahoo.com</a> and we will remove your records within 30 days.
               </p>
             </CardContent>
           </Card>
@@ -98,7 +98,7 @@ export default function Privacy() {
             <CardContent className="pt-6 space-y-3">
               <h2 className="text-lg font-semibold text-foreground">8. Children's Privacy</h2>
               <p>
-                This app is not directed to children under the age of 13. We do not knowingly collect personal information from children under 13. If you believe we have inadvertently collected such information, please contact us immediately.
+                This app is not directed to children under the age of 13. We do not knowingly collect personal information from children under 13. If you believe we have inadvertently collected such information, please contact us immediately at <a href="mailto:kaufit@yahoo.com" className="underline hover:text-foreground">kaufit@yahoo.com</a>.
               </p>
             </CardContent>
           </Card>
@@ -113,7 +113,7 @@ export default function Privacy() {
                 <li>Request deletion of your data</li>
                 <li>Object to or restrict our processing of your data</li>
               </ul>
-              <p>To exercise any of these rights, please contact us using the information below.</p>
+              <p>To exercise any of these rights, please contact us at <a href="mailto:kaufit@yahoo.com" className="underline hover:text-foreground">kaufit@yahoo.com</a>.</p>
             </CardContent>
           </Card>
 
@@ -130,7 +130,7 @@ export default function Privacy() {
             <CardContent className="pt-6 space-y-3">
               <h2 className="text-lg font-semibold text-foreground">11. Contact Us</h2>
               <p>
-                If you have any questions about this Privacy Policy or how we handle your data, please contact us through the app or at the email address associated with your account.
+                If you have any questions about this Privacy Policy or how we handle your data, please contact us at <a href="mailto:kaufit@yahoo.com" className="underline hover:text-foreground">kaufit@yahoo.com</a> or visit <a href="https://kauf26.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">kauf26.com</a>.
               </p>
             </CardContent>
           </Card>
