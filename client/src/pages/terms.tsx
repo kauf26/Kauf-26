@@ -1,5 +1,6 @@
 import { ScrollText } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import TranslateWidget from "@/components/translate-widget";
 
 export default function Terms() {
   const lastUpdated = "April 4, 2026";
@@ -8,9 +9,12 @@ export default function Terms() {
     <div className="min-h-screen bg-background">
       <div className="container max-w-4xl mx-auto py-10 px-4">
         <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <ScrollText className="w-8 h-8 text-primary" />
-            <h1 className="text-4xl font-bold tracking-tight">Terms of Service & Legal Disclaimer</h1>
+          <div className="flex items-start justify-between gap-4 mb-2">
+            <div className="flex items-center gap-3">
+              <ScrollText className="w-8 h-8 text-primary" />
+              <h1 className="text-4xl font-bold tracking-tight">Terms of Service & Legal Disclaimer</h1>
+            </div>
+            <TranslateWidget />
           </div>
           <p className="text-muted-foreground">Last updated: {lastUpdated}</p>
         </div>
