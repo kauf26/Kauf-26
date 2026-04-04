@@ -9,6 +9,7 @@ import multer from "multer";
 import path from "path";
 import fs from "fs/promises";
 import { getUncachableStripeClient } from "./stripeClient";
+import { deleteProductImagesIfRecentlySold } from "./cleanup";
 
 const TRIAL_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -379,6 +380,10 @@ export async function registerRoutes(
             for (const pl of productListings) {
               await storage.updateListingStatus(pl.id, "sold_out");
             }
+            // Delete uploaded images if this was a recently listed used item (within 30 days)
+            deleteProductImagesIfRecentlySold(product).catch((err) =>
+              console.error("[cleanup] Error deleting sold product images:", err)
+            );
           }
         }
       }

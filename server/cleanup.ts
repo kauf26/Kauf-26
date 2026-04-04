@@ -118,6 +118,46 @@ export async function cleanupOldImages(dryRun = false): Promise<CleanupResult> {
   return result;
 }
 
+const SOLD_WITHIN_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+/**
+ * Delete the physical image files for a product that just sold out.
+ * Only runs if the product was listed within the last 30 days (used/one-off items).
+ * The product record and listings remain in the DB — just the disk files are removed.
+ */
+export async function deleteProductImagesIfRecentlySold(product: {
+  id: number;
+  imageUrl: string;
+  additionalImages: string[];
+  createdAt: Date | null;
+}): Promise<void> {
+  // Only delete if the product was listed within the last 30 days
+  const age = Date.now() - (product.createdAt?.getTime() ?? 0);
+  if (age > SOLD_WITHIN_MS) {
+    console.log(`[cleanup] Product ${product.id} listed >30 days ago — keeping images`);
+    return;
+  }
+
+  const pathsToDelete = [
+    product.imageUrl,
+    ...(product.additionalImages ?? []),
+  ].filter(Boolean);
+
+  for (const urlPath of pathsToDelete) {
+    const filename = path.basename(urlPath);
+    const filePath = path.join(UPLOADS_DIR, filename);
+    try {
+      await fs.unlink(filePath);
+      console.log(`[cleanup] Deleted sold-out image: ${filename} (product ${product.id})`);
+    } catch (err: any) {
+      // File may already be gone — not an error worth surfacing
+      if (err.code !== "ENOENT") {
+        console.error(`[cleanup] Could not delete ${filename}:`, err.message);
+      }
+    }
+  }
+}
+
 export function scheduleImageCleanup() {
   const INTERVAL_MS = 24 * 60 * 60 * 1000; // every 24 hours
 
