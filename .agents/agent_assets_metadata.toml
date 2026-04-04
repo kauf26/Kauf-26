@@ -60,3 +60,9 @@ id = "ChFqAszOeEeV1CUjzue1n"
 uri = "file://screenshots/ipad-dashboard.png"
 type = "image"
 title = "iPad — Dashboard"
+
+[[outputs]]
+id = "OcdW87icFdCk1au19B72B"
+uri = "file://global-marketplace-lister-source-code.txt"
+type = "text"
+title = "Global Marketplace Lister — Complete Source Code"
