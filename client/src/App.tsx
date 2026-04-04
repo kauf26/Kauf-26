@@ -19,6 +19,7 @@ import Screenshots from "@/pages/screenshots";
 import { Home as HomeIcon, ShoppingBag, DollarSign, Wrench, LayoutDashboard, Clock, Zap, AlertTriangle, Settings, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import Onboarding, { useOnboarding } from "@/components/onboarding";
 
 interface SubscriptionStatus {
   isTrialActive: boolean;
@@ -145,6 +146,7 @@ function Navigation() {
 
 function ProtectedRouter() {
   const { isAuthenticated, isLoading } = useAuth();
+  const { show: showOnboarding, dismiss: dismissOnboarding } = useOnboarding();
   const { data: subscriptionStatus } = useQuery<SubscriptionStatus>({
     queryKey: ["subscription-status"],
     queryFn: async () => {
@@ -170,6 +172,7 @@ function ProtectedRouter() {
 
   return (
     <>
+      {showOnboarding && <Onboarding onDismiss={dismissOnboarding} />}
       <Navigation />
       {subscriptionStatus && <TrialBanner status={subscriptionStatus} />}
       <Switch>
