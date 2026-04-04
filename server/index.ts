@@ -6,6 +6,40 @@ import { runMigrations } from 'stripe-replit-sync';
 import { getStripeSync } from "./stripeClient";
 import { WebhookHandlers } from "./webhookHandlers";
 import { setupAuth } from "./replit_integrations/auth";
+import pg from "pg";
+
+async function runSchemaMigrations() {
+  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    await pool.query(`
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS email VARCHAR UNIQUE,
+        ADD COLUMN IF NOT EXISTS first_name VARCHAR,
+        ADD COLUMN IF NOT EXISTS last_name VARCHAR,
+        ADD COLUMN IF NOT EXISTS profile_image_url VARCHAR,
+        ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW(),
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+    `);
+    await pool.query(`
+      ALTER TABLE users
+        ALTER COLUMN username DROP NOT NULL,
+        ALTER COLUMN password DROP NOT NULL;
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        sid VARCHAR PRIMARY KEY,
+        sess JSONB NOT NULL,
+        expire TIMESTAMP NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON sessions(expire);
+    `);
+    console.log("Schema migrations applied");
+  } catch (err: any) {
+    console.log("Migration note:", err.message);
+  } finally {
+    await pool.end();
+  }
+}
 
 const app = express();
 const httpServer = createServer(app);
@@ -132,6 +166,7 @@ app.use((req, res, next) => {
   try {
     console.log("Starting server initialization...");
 
+    await runSchemaMigrations();
     await setupAuth(app);
 
     await registerRoutes(httpServer, app);
