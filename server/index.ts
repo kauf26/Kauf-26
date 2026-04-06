@@ -1,3 +1,4 @@
+import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
@@ -60,7 +61,7 @@ async function initStripe() {
 
   try {
     console.log('Initializing Stripe schema...');
-    await runMigrations({ databaseUrl, schema: 'stripe' });
+    await runMigrations({ databaseUrl });
     console.log('Stripe schema ready');
 
     const stripeSync = await getStripeSync();
@@ -197,18 +198,16 @@ app.use((req, res, next) => {
     }
 
     const port = parseInt(process.env.PORT || "5000", 10);
-    httpServer.listen(
-      {
-        port,
-        host: "127.0.0.1",
-      },
-      () => {
-        log(`serving on port ${port}`);
-        console.log(`Server started successfully on port ${port}`);
-      },
-    );
-  } catch (error) {
+    httpServer.listen({
+      port,
+      host: "0.0.0.0",
+    }, () => {
+      log(`serving on port ${port}`);
+      console.log(`✅ Success! Server is live.`);
+      console.log(`📱 On your phone, open: http://192.168.1.186:${port}`);
+    });
+   } catch (error) {
     console.error("Failed to start server:", error);
     process.exit(1);
-  }
-})();
+   }
+   })();
