@@ -1,4 +1,5 @@
 import "dotenv/config";
+import os from "node:os";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
@@ -9,6 +10,20 @@ import { WebhookHandlers } from "./webhookHandlers";
 import { setupAuth } from "./replit_integrations/auth";
 import { scheduleImageCleanup } from "./cleanup";
 import pg from "pg";
+
+/** First non-internal IPv4 on this machine (for dev LAN URLs). */
+function getFirstLanIPv4(): string | null {
+  const nets = os.networkInterfaces();
+  for (const addrs of Object.values(nets)) {
+    if (!addrs) continue;
+    for (const addr of addrs) {
+      const v4 =
+        addr.family === "IPv4" || (addr as { family?: string | number }).family === 4;
+      if (v4 && !addr.internal) return addr.address;
+    }
+  }
+  return null;
+}
 
 async function runSchemaMigrations() {
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
@@ -198,16 +213,23 @@ app.use((req, res, next) => {
     }
 
     const port = parseInt(process.env.PORT || "5000", 10);
-    httpServer.listen({
-      port,
-      host: "0.0.0.0",
-    }, () => {
-      log(`serving on port ${port}`);
-      console.log(`✅ Success! Server is live.`);
-      console.log(`📱 On your phone, open: http://192.168.1.186:${port}`);
-    });
-   } catch (error) {
+    httpServer.listen(
+      {
+        port,
+        host: "0.0.0.0",
+      },
+      () => {
+        log(`serving on port ${port}`);
+        if (process.env.NODE_ENV !== "production") {
+          const lan = getFirstLanIPv4();
+          if (lan) {
+            console.log(`Dev: other devices on your LAN can use http://${lan}:${port}`);
+          }
+        }
+      },
+    );
+  } catch (error) {
     console.error("Failed to start server:", error);
     process.exit(1);
-   }
-   })();
+  }
+})();
