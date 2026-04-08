@@ -266,6 +266,23 @@ export async function registerRoutes(
     try {
       const { imageUrl, additionalImages, originalTitle, aiDescription, basePrice, currency, quantity } = req.body;
 
+      const config = await storage.initAppConfig();
+      const hasActiveSubscription = config.subscriptionStatus === "active" || config.subscriptionStatus === "active_max";
+      const isProMax = config.subscriptionStatus === "active_max";
+      const isTrialActive = await getUserTrialActive(req);
+
+      if (isTrialActive) {
+        // During trial: 1 listing per day
+        const todayCount = await storage.countProductsCreatedToday();
+        if (todayCount >= 1) {
+          return res.status(429).json({
+            error: "Daily post limit reached",
+            message: "During your free trial you can post 1 item per day. Your trial gives you 30 days to explore — come back tomorrow or keep listing after your trial ends.",
+          });
+        }
+      }
+      // Post-trial: unlimited listings. Fees are transaction-based (2% per sale + monthly tier surcharge).
+
       const product = await storage.createProduct({
         imageUrl,
         additionalImages: Array.isArray(additionalImages) ? additionalImages : [],
@@ -300,7 +317,8 @@ export async function registerRoutes(
         const targetCurrency = marketplaceCurrencies[marketplace as Marketplace];
 
         const translatedTitle = await translateText(product.originalTitle, targetLang);
-        const translatedDescription = await translateText(product.aiDescription, targetLang);
+        const baseTranslatedDescription = await translateText(product.aiDescription, targetLang);
+        const translatedDescription = `${baseTranslatedDescription}\n\n— Sold with KAUF`;
 
         const baseRate = currencyRates[product.currency] || 1;
         const targetRate = currencyRates[targetCurrency] || 1;
@@ -353,7 +371,7 @@ export async function registerRoutes(
       const { listingId, saleAmount, saleCurrency, platformFee } = req.body;
 
       const isTrialActive = await getUserTrialActive(req);
-      const ourFee = isTrialActive ? "0.00" : (parseFloat(saleAmount) * 0.01).toFixed(2);
+      const ourFee = isTrialActive ? "0.00" : (parseFloat(saleAmount) * 0.02).toFixed(2);
 
       const sale = await storage.createSale({
         listingId,
@@ -515,13 +533,26 @@ export async function registerRoutes(
     }
   });
 
-  // Subscription status
+  // ── Tier definitions ────────────────────────────────────────────────────────
+  // Monthly surcharge is based on the number of sales recorded this calendar month.
+  // The 2% per-sale fee is always charged on top of the surcharge.
+  const TIERS = [
+    { name: "Starter",      min: 0,   max: 25,  surchargeCents: 0,    surcharge: 0     },
+    { name: "Basic",        min: 26,  max: 50,  surchargeCents: 499,  surcharge: 4.99  },
+    { name: "Standard",     min: 51,  max: 100, surchargeCents: 999,  surcharge: 9.99  },
+    { name: "Professional", min: 101, max: 250, surchargeCents: 1999, surcharge: 19.99 },
+    { name: "Business",     min: 251, max: 500, surchargeCents: 4999, surcharge: 49.99 },
+    { name: "Enterprise",   min: 501, max: Infinity, surchargeCents: -1, surcharge: -1 },
+  ];
+  function getTier(salesCount: number) {
+    return TIERS.find(t => salesCount >= t.min && salesCount <= t.max) ?? TIERS[TIERS.length - 1];
+  }
+
+  // Subscription status — now returns tier-based info
   app.get("/api/subscription/status", async (req, res) => {
     try {
       const config = await storage.initAppConfig();
-      const subscriptionOfferMs = 90 * 24 * 60 * 60 * 1000;
 
-      // Use per-user firstLoginAt when authenticated, fall back to global config
       let trialStartedAt: Date;
       const userId = (req as any).user?.claims?.sub;
       if (userId) {
@@ -532,19 +563,23 @@ export async function registerRoutes(
       }
 
       const { isTrialActive, trialDaysRemaining, trialEndsAt } = calcTrialStatus(trialStartedAt);
-      const elapsed = Date.now() - trialStartedAt.getTime();
-      const canSubscribeMonthly = elapsed >= subscriptionOfferMs;
-      const daysUntilSubscriptionOffer = Math.max(0, Math.ceil((subscriptionOfferMs - elapsed) / (24 * 60 * 60 * 1000)));
+      const monthlySaleCount = await storage.countSalesThisMonth();
+      const tier = getTier(monthlySaleCount);
 
       res.json({
         isTrialActive,
         trialDaysRemaining,
         trialEndsAt: trialEndsAt.toISOString(),
         trialStartedAt: trialStartedAt.toISOString(),
-        subscriptionStatus: config.subscriptionStatus,
-        hasActiveSubscription: config.subscriptionStatus === "active",
-        canSubscribeMonthly,
-        daysUntilSubscriptionOffer,
+        monthlySaleCount,
+        tier: {
+          name: tier.name,
+          min: tier.min,
+          max: tier.max,
+          surchargeCents: tier.surchargeCents,
+          surcharge: tier.surcharge,
+        },
+        allTiers: TIERS,
       });
     } catch (error) {
       console.error("Error fetching subscription status:", error);
@@ -552,34 +587,39 @@ export async function registerRoutes(
     }
   });
 
-  // Create subscription checkout session
-  app.post("/api/subscription/checkout", async (req, res) => {
+  // Pay monthly tier surcharge via Stripe
+  app.post("/api/subscription/pay-surcharge", async (req, res) => {
     try {
-      const stripe = await getUncachableStripeClient();
+      const monthlySaleCount = await storage.countSalesThisMonth();
+      const tier = getTier(monthlySaleCount);
 
+      if (tier.surchargeCents <= 0) {
+        return res.status(400).json({ error: "No surcharge applies at your current tier." });
+      }
+
+      const stripe = await getUncachableStripeClient();
       const session = await stripe.checkout.sessions.create({
-        payment_method_types: ['card'],
+        payment_method_types: ["card"],
         line_items: [{
           price_data: {
-            currency: 'usd',
+            currency: "usd",
             product_data: {
-              name: 'Global Lister — Pro Plan',
-              description: '1% fee on all marketplace transactions. Keep listing across all platforms.',
+              name: `KAUF — ${tier.name} Tier Monthly Surcharge`,
+              description: `Monthly platform surcharge for ${monthlySaleCount} sales this month (${tier.min}–${tier.max === Infinity ? "500+" : tier.max} sales/month tier). 2% per-sale fees are billed separately per transaction.`,
             },
-            unit_amount: 999,
-            recurring: { interval: 'month' },
+            unit_amount: tier.surchargeCents,
           },
           quantity: 1,
         }],
-        mode: 'subscription',
-        success_url: `${req.protocol}://${req.get('host')}/?subscribed=true`,
-        cancel_url: `${req.protocol}://${req.get('host')}/?subscribed=false`,
+        mode: "payment",
+        success_url: `${req.protocol}://${req.get("host")}/pricing?surcharge_paid=true`,
+        cancel_url: `${req.protocol}://${req.get("host")}/pricing`,
       });
 
       res.json({ url: session.url });
     } catch (error) {
-      console.error("Error creating subscription checkout:", error);
-      res.status(500).json({ error: "Failed to create subscription session" });
+      console.error("Error creating surcharge checkout:", error);
+      res.status(500).json({ error: "Failed to create surcharge payment session" });
     }
   });
 
@@ -608,7 +648,7 @@ export async function registerRoutes(
             currency: 'usd',
             product_data: {
               name: `Service Fee - Sale #${saleId}`,
-              description: `1% service fee for your marketplace sale`,
+              description: `2% service fee for your marketplace sale`,
             },
             unit_amount: feeInCents,
           },

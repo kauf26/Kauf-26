@@ -154,25 +154,75 @@ export async function setupAuth(app: Express) {
   }
 
   // ── Google routes ─────────────────────────────────────────────────────────
-  app.get(
-    "/api/auth/google",
-    passport.authenticate("google", { scope: ["profile", "email"] })
-  );
+  if (googleClientId && googleClientSecret) {
+    app.get(
+      "/api/auth/google",
+      passport.authenticate("google", { scope: ["profile", "email"] })
+    );
 
-  app.get(
-    "/api/auth/google/callback",
-    passport.authenticate("google", { failureRedirect: "/login?error=google" }),
-    (_req, res) => res.redirect("/")
-  );
+    app.get(
+      "/api/auth/google/callback",
+      passport.authenticate("google", { failureRedirect: "/login?error=google" }),
+      (_req, res) => res.redirect("/")
+    );
+  } else {
+    app.get("/api/auth/google", (_req, res) =>
+      res.status(503).json({ message: "Google sign-in is not configured." })
+    );
+    app.get("/api/auth/google/callback", (_req, res) =>
+      res.redirect("/login?error=google")
+    );
+  }
 
   // ── Apple routes — Apple uses POST for the callback, not GET ──────────────
-  app.get("/api/auth/apple", passport.authenticate("apple"));
+  if (appleClientId && appleTeamId && appleKeyId && applePrivateKey) {
+    app.get("/api/auth/apple", passport.authenticate("apple"));
+    app.post(
+      "/api/auth/apple/callback",
+      passport.authenticate("apple", { failureRedirect: "/login?error=apple" }),
+      (_req, res) => res.redirect("/")
+    );
+  } else {
+    app.get("/api/auth/apple", (_req, res) =>
+      res.status(503).json({ message: "Apple sign-in is not configured." })
+    );
+    app.post("/api/auth/apple/callback", (_req, res) =>
+      res.redirect("/login?error=apple")
+    );
+  }
 
-  app.post(
-    "/api/auth/apple/callback",
-    passport.authenticate("apple", { failureRedirect: "/login?error=apple" }),
-    (_req, res) => res.redirect("/")
-  );
+  // ── Login with Replit (Replit workspace proxy injects X-Replit-User-Id) ───
+  app.get("/api/auth/replit", async (req, res) => {
+    const replitUserId = req.headers["x-replit-user-id"] as string | undefined;
+    const replitUserName = req.headers["x-replit-user-name"] as string | undefined;
+
+    if (!replitUserId) {
+      // Not accessed via Replit proxy — redirect back with a clear error
+      return res.redirect("/login?error=replit-proxy");
+    }
+
+    try {
+      const userId = `replit_${replitUserId}`;
+      await authStorage.upsertUser({
+        id: userId,
+        email: undefined,
+        firstName: replitUserName ?? "Replit User",
+        lastName: undefined,
+        profileImageUrl: undefined,
+      });
+
+      req.login(
+        { claims: { sub: userId }, provider: "replit", firstName: replitUserName },
+        (err) => {
+          if (err) return res.redirect("/login?error=replit");
+          res.redirect("/");
+        }
+      );
+    } catch (err) {
+      console.error("[auth] Replit login error:", err);
+      res.redirect("/login?error=replit");
+    }
+  });
 
   // ── Backward compat: /api/login now just goes to the login page ───────────
   app.get("/api/login", (_req, res) => res.redirect("/login"));

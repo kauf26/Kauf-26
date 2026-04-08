@@ -137,6 +137,12 @@ export default function Listings() {
                               <Hash className="w-3 h-3" />
                               {product.quantity === 0 ? "Sold Out" : `${product.quantity} in stock`}
                             </Badge>
+                            {product.quantity === 0 && (
+                              <div className="flex items-center gap-1.5 bg-gradient-to-r from-purple-900/60 to-purple-700/40 border border-purple-500/40 rounded-full px-2.5 py-1" data-testid={`badge-sold-kauf-${product.id}`}>
+                                <img src="/kauf-logo.jpeg" alt="KAUF" className="w-4 h-4 rounded-sm object-cover" />
+                                <span className="text-xs font-semibold text-purple-200">Sold with KAUF</span>
+                              </div>
+                            )}
                             <Badge variant="secondary" data-testid={`badge-count-${product.id}`}>
                               {productListings.length} Listings
                             </Badge>
@@ -179,12 +185,19 @@ export default function Listings() {
                             <span className="text-sm font-medium">
                               {listing.localCurrency} {parseFloat(listing.localPrice).toFixed(2)}
                             </span>
-                            <Badge
-                              variant={listing.status === "active" ? "default" : listing.status === "sold_out" ? "destructive" : "secondary"}
-                              className="text-xs"
-                            >
-                              {listing.status === "sold_out" ? "Sold Out" : listing.status}
-                            </Badge>
+                            {listing.status === "sold_out" ? (
+                              <div className="flex items-center gap-1 bg-gradient-to-r from-purple-900/60 to-purple-700/40 border border-purple-500/40 rounded-full px-2 py-0.5">
+                                <img src="/kauf-logo.jpeg" alt="KAUF" className="w-3 h-3 rounded-sm object-cover" />
+                                <span className="text-xs font-semibold text-purple-200">Sold with KAUF</span>
+                              </div>
+                            ) : (
+                              <Badge
+                                variant={listing.status === "active" ? "default" : "secondary"}
+                                className="text-xs"
+                              >
+                                {listing.status}
+                              </Badge>
+                            )}
                           </div>
                         </div>
                       ))}

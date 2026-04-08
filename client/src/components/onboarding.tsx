@@ -24,9 +24,9 @@ const SLIDES = [
     gradientTo: "to-purple-900/5",
     accentColor: "text-purple-400",
     step: "Step 2",
-    title: "Share on 14+ Marketplaces",
+    title: "Share on 26 Marketplaces",
     description:
-      "One tap publishes your listing to eBay, Amazon, Etsy, Shopify, Walmart, OfferUp, Mercado Libre, and more — with automatic translation and currency conversion for every country.",
+      "One tap publishes your listing to eBay, Etsy, Shopify, WooCommerce, StockX, Mercari, Shopee, Vinted, Wallapop, Bol.com, and more — with automatic currency conversion for every platform.",
     detail: "Reach buyers worldwide in seconds.",
   },
   {
@@ -38,8 +38,8 @@ const SLIDES = [
     step: "Step 3",
     title: "Sell Your Products",
     description:
-      "Track every sale across all marketplaces in one place. Log what sold, where, and for how much. Your first 30 days are completely free — then just 1% per sale.",
-    detail: "No monthly subscription. Pay only when you sell.",
+      "Track every sale across all marketplaces in one place. Log what sold, where, and for how much. Your first 30 days are completely free — after that, pay only 2% on each sale that goes through.",
+    detail: "No subscription needed. You only pay when you sell.",
   },
 ];
 
@@ -141,7 +141,7 @@ export default function Onboarding({ onDismiss }: { onDismiss: () => void }) {
         {/* Marketplace logos for slide 2 */}
         {slide === 1 && (
           <div className="mt-8 flex flex-wrap justify-center gap-2 max-w-xs">
-            {["eBay", "Amazon", "Etsy", "Shopify", "Walmart", "OfferUp", "Mercado Libre", "Reverb", "+ 6 more"].map((m) => (
+            {["eBay", "Amazon", "Etsy", "Shopify", "Wix", "Squarespace", "StockX", "Mercari US", "Mercari Japan", "Mercado Libre", "Pinterest", "TikTok Shop", "Grailed", "Whatnot", "Poshmark", "TCGplayer", "Discogs", "Gumtree", "PrestaShop", "WooCommerce", "Wallapop", "Vinted", "Shopee", "OLX", "Falabella", "Bol.com"].map((m) => (
               <span
                 key={m}
                 className="text-xs bg-white/5 border border-white/10 text-muted-foreground px-3 py-1 rounded-full"
@@ -157,7 +157,7 @@ export default function Onboarding({ onDismiss }: { onDismiss: () => void }) {
           <div className="mt-8 bg-green-500/10 border border-green-500/20 rounded-2xl px-6 py-4 text-center max-w-xs">
             <p className="text-green-400 font-semibold text-sm">30-Day Free Trial</p>
             <p className="text-muted-foreground text-xs mt-1">
-              No credit card required. After trial, pay 1% only when you make a sale.
+              No credit card required. After trial, your account stays active — just 2% per sale.
             </p>
           </div>
         )}

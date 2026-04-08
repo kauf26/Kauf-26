@@ -9,7 +9,7 @@ import {
   marketplaceCredentials, type MarketplaceCredentials,
   type Marketplace
 } from "@shared/schema";
-import { eq, desc, isNull } from "drizzle-orm";
+import { eq, desc, isNull, gte } from "drizzle-orm";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -17,6 +17,9 @@ export interface IStorage {
   createProduct(product: InsertProduct): Promise<Product>;
   getProduct(id: number): Promise<Product | undefined>;
   getAllProducts(): Promise<Product[]>;
+  countProductsCreatedToday(): Promise<number>;
+  countProductsCreatedThisMonth(): Promise<number>;
+  countSalesThisMonth(): Promise<number>;
   deleteProduct(id: number): Promise<void>;
   updateProductQuantity(id: number, quantity: number): Promise<void>;
   
@@ -63,6 +66,27 @@ export const storage: IStorage = {
 
   async getAllProducts() {
     return db.select().from(products).orderBy(desc(products.createdAt));
+  },
+
+  async countProductsCreatedToday() {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const rows = await db.select().from(products).where(gte(products.createdAt, startOfDay));
+    return rows.length;
+  },
+
+  async countProductsCreatedThisMonth() {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const rows = await db.select().from(products).where(gte(products.createdAt, startOfMonth));
+    return rows.length;
+  },
+
+  async countSalesThisMonth() {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const rows = await db.select().from(sales).where(gte(sales.saleDate, startOfMonth));
+    return rows.length;
   },
 
   async deleteProduct(id: number) {

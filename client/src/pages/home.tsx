@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Camera, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -9,6 +9,32 @@ export default function Home() {
   const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const [previewing, setPreviewing] = useState(false);
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("subscribed") === "max") {
+      toast({
+        title: "Welcome to Pro Max!",
+        description: "Your subscription is active. You get up to 500 listings/month across all 26 marketplaces.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["subscription-status"] });
+      window.history.replaceState({}, "", "/");
+    } else if (params.get("subscribed") === "true") {
+      toast({
+        title: "Welcome to Pro!",
+        description: "Your subscription is active. You get up to 200 listings/month across all 26 marketplaces.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["subscription-status"] });
+      window.history.replaceState({}, "", "/");
+    } else if (params.get("subscribed") === "false") {
+      toast({
+        title: "Checkout cancelled",
+        description: "No charge was made. You can upgrade any time from the Pricing page.",
+      });
+      window.history.replaceState({}, "", "/");
+    }
+  }, []);
 
   const analyzeMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -87,6 +113,11 @@ export default function Home() {
           )}
         </div>
       </button>
+
+      <div className="mt-10 flex items-center gap-2.5 bg-gradient-to-r from-purple-900/60 to-purple-700/40 border border-purple-500/40 rounded-full px-4 py-2" data-testid="badge-sold-kauf-home">
+        <img src="/kauf-logo.jpeg" alt="KAUF" className="w-6 h-6 rounded-md object-cover" />
+        <span className="text-sm font-semibold text-purple-200">Sold with KAUF</span>
+      </div>
     </div>
   );
 }

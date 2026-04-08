@@ -34,6 +34,14 @@ function AppleIcon() {
   );
 }
 
+function ReplitIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+      <path d="M4 4h7v4H8v4H4V4zm7 8h4v4h-4v4H4v-4h7v-4zm4-8h5v16h-5v-4h4V8h-4V4z"/>
+    </svg>
+  );
+}
+
 export default function LoginPage() {
   const { isAuthenticated, isLoading } = useAuth();
   const [, setLocation] = useLocation();
@@ -46,6 +54,13 @@ export default function LoginPage() {
 
   const params = new URLSearchParams(window.location.search);
   const error = params.get("error");
+
+  const errorMessage =
+    error === "replit-proxy"
+      ? "Replit login only works in the Replit editor preview pane — not on the published URL."
+      : error
+      ? "Sign-in failed. Please try again."
+      : null;
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background px-4">
@@ -65,9 +80,9 @@ export default function LoginPage() {
         </div>
 
         {/* Error message */}
-        {error && (
+        {errorMessage && (
           <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400">
-            Sign-in failed. Please try again.
+            {errorMessage}
           </div>
         )}
 
@@ -92,6 +107,26 @@ export default function LoginPage() {
             <GoogleIcon />
             Sign in with Google
           </a>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 py-1">
+            <div className="flex-1 h-px bg-white/10" />
+            <span className="text-xs text-muted-foreground">or</span>
+            <div className="flex-1 h-px bg-white/10" />
+          </div>
+
+          {/* Continue with Replit — works in the Replit editor preview pane */}
+          <a
+            href="/api/auth/replit"
+            data-testid="button-login-replit"
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-orange-500/30 bg-orange-500/10 px-5 py-3.5 text-sm font-semibold text-orange-400 hover:bg-orange-500/20 active:bg-orange-500/30 transition-colors"
+          >
+            <ReplitIcon />
+            Continue with Replit
+          </a>
+          <p className="text-xs text-muted-foreground -mt-1">
+            Use this button inside the Replit editor preview to test the app
+          </p>
         </div>
 
         {/* Fine print */}
@@ -107,10 +142,10 @@ export default function LoginPage() {
         {/* Value prop */}
         <div className="border-t pt-6 space-y-2">
           <p className="text-sm text-muted-foreground">
-            List on eBay, Amazon, Etsy, Shopify, Reverb and 10 more marketplaces.
+            List on eBay, Amazon, Etsy, Shopify, StockX, Poshmark, Mercari, TikTok Shop, Shopee, Vinted, Wallapop, Bol.com, and more — across 26 marketplaces worldwide.
           </p>
           <p className="text-xs text-muted-foreground">
-            30-day free trial · No credit card required
+            30-day free trial · No credit card required · 2% per sale after trial
           </p>
         </div>
       </div>

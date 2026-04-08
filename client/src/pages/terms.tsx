@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import TranslateWidget from "@/components/translate-widget";
 
 export default function Terms() {
-  const lastUpdated = "April 4, 2026";
+  const lastUpdated = "April 8, 2026";
 
   return (
     <div className="min-h-screen bg-background">
@@ -76,13 +76,30 @@ export default function Terms() {
             <CardContent className="pt-6 space-y-3">
               <h2 className="text-lg font-semibold text-foreground">5. Service Fee Disclosure</h2>
               <p>
-                The Service offers a <strong className="text-foreground">30-day free trial</strong> from the date of your first login. During the trial period, no service fees are charged.
+                The Service offers a <strong className="text-foreground">30-day free trial</strong> from the date of your first login. During the trial period, no service fees are charged and the user may create up to one (1) listing per day. After the trial period, the Service continues automatically with no action required from the user.
               </p>
               <p>
-                Following the free trial, the Service charges a fee of <strong className="text-foreground">1% of each self-reported sale amount</strong> entered by the user. For example, if you enter a sale of $100, the service fee is $1.00. This fee is charged solely for access to and use of the Service software and is paid through Stripe.
+                <strong className="text-foreground">Per-Sale Fee (2%):</strong> Following the free trial, the Service charges a fee of <strong className="text-foreground">2% of each self-reported sale amount</strong> entered by the user. This fee applies only to transactions that the user records as sold — it does not apply to listings that are posted but do not result in a recorded sale. For example, if you have 500 items listed and one sells for $100, the service fee is $2.00. No fee is charged on the remaining 499 listings.
               </p>
               <p>
-                <strong className="text-foreground">Important:</strong> The service fee is based solely on the sale amount you enter within the App. The Service is not a party to any transaction between you and any buyer or Marketplace. The Service has no right, claim, or interest in any actual transaction proceeds, and its fee does not constitute a commission, lien, or interest in any funds you receive from any sale.
+                <strong className="text-foreground">Monthly Volume Surcharge:</strong> In addition to the 2% per-sale fee, a flat monthly surcharge applies based on the number of sales recorded within a calendar month, as follows:
+              </p>
+              <ul className="list-disc pl-6 space-y-1 text-muted-foreground">
+                <li>0–25 sales/month: No surcharge</li>
+                <li>26–50 sales/month: $4.99/month</li>
+                <li>51–100 sales/month: $9.99/month</li>
+                <li>101–250 sales/month: $19.99/month</li>
+                <li>251–500 sales/month: $49.99/month</li>
+                <li>More than 500 sales/month: Custom enterprise pricing — contact support</li>
+              </ul>
+              <p>
+                The monthly surcharge resets on the first day of each calendar month. Surcharge tiers are determined by total self-reported sales within the current calendar month. The surcharge may be paid directly via Stripe or deducted from sale proceeds at the Service's discretion.
+              </p>
+              <p>
+                <strong className="text-foreground">Important:</strong> All fees are based solely on the sale amounts and sale counts you self-report within the App. The Service is not a party to any transaction between you and any buyer or Marketplace. The Service has no right, claim, or interest in any actual transaction proceeds. These fees do not constitute a commission, lien, or interest in any funds you receive from any sale.
+              </p>
+              <p>
+                <strong className="text-foreground">International Users:</strong> All fees are charged in US Dollars (USD) via Stripe. Users outside the United States are responsible for any applicable currency conversion fees, local taxes, VAT, GST, or other charges imposed by their jurisdiction. The Service does not collect, remit, or represent any local tax on your behalf. You are solely responsible for compliance with all tax obligations in your jurisdiction.
               </p>
               <p>
                 You are solely responsible for accurately reporting sale amounts. The Service takes no responsibility for and makes no representations regarding the accuracy of user-entered data.

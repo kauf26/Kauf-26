@@ -31,6 +31,7 @@ interface MarketplaceDef {
   id: string;
   name: string;
   color: string;
+  country: string;
   signupUrl: string;
   devUrl: string;
   fields: MarketplaceField[];
@@ -41,6 +42,7 @@ const MARKETPLACES: MarketplaceDef[] = [
     id: "ebay",
     name: "eBay",
     color: "text-yellow-400",
+    country: "🇺🇸 United States",
     signupUrl: "https://www.ebay.com/join",
     devUrl: "https://developer.ebay.com",
     fields: [
@@ -51,20 +53,23 @@ const MARKETPLACES: MarketplaceDef[] = [
   },
   {
     id: "amazon",
-    name: "Amazon",
+    name: "Amazon (SP-API)",
     color: "text-orange-400",
+    country: "🇺🇸 United States",
     signupUrl: "https://sell.amazon.com",
     devUrl: "https://developer.amazonservices.com",
     fields: [
       { key: "sellerId", label: "Seller ID", placeholder: "AXXXXXXXXXXXXX", helpUrl: "https://sellercentral.amazon.com/sw/AccountInfo/MerchantToken" },
-      { key: "mwsAuthToken", label: "MWS Auth Token", placeholder: "amzn.mws.XXXXXXXX", secret: true },
-      { key: "marketplaceId", label: "Marketplace ID", placeholder: "ATVPDKIKX0DER (US)" },
+      { key: "clientId", label: "LWA Client ID", placeholder: "amzn1.application-oa2-client.XXXX", helpUrl: "https://developer.amazonservices.com" },
+      { key: "clientSecret", label: "LWA Client Secret", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
+      { key: "refreshToken", label: "Refresh Token", placeholder: "Atzr|XXXXXX", secret: true },
     ],
   },
   {
     id: "etsy",
     name: "Etsy",
     color: "text-orange-300",
+    country: "🇺🇸 United States",
     signupUrl: "https://www.etsy.com/join",
     devUrl: "https://www.etsy.com/developers",
     fields: [
@@ -77,6 +82,7 @@ const MARKETPLACES: MarketplaceDef[] = [
     id: "shopify",
     name: "Shopify",
     color: "text-green-400",
+    country: "🇨🇦 Canada",
     signupUrl: "https://www.shopify.com",
     devUrl: "https://partners.shopify.com",
     fields: [
@@ -86,30 +92,10 @@ const MARKETPLACES: MarketplaceDef[] = [
     ],
   },
   {
-    id: "walmart",
-    name: "Walmart",
-    color: "text-blue-400",
-    signupUrl: "https://marketplace.walmart.com",
-    devUrl: "https://developer.walmart.com",
-    fields: [
-      { key: "clientId", label: "Client ID", placeholder: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", helpUrl: "https://developer.walmart.com/doc/us/mp/auth" },
-      { key: "clientSecret", label: "Client Secret", placeholder: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx", secret: true },
-    ],
-  },
-  {
-    id: "reverb",
-    name: "Reverb",
-    color: "text-teal-400",
-    signupUrl: "https://reverb.com/signup",
-    devUrl: "https://dev.reverb.com",
-    fields: [
-      { key: "apiKey", label: "Personal Access Token", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", helpUrl: "https://reverb.com/my/account/selling/api", secret: true },
-    ],
-  },
-  {
     id: "woocommerce",
     name: "WooCommerce",
     color: "text-purple-400",
+    country: "🇺🇸 United States",
     signupUrl: "https://woocommerce.com",
     devUrl: "https://woocommerce.github.io/woocommerce-rest-api-docs",
     fields: [
@@ -119,21 +105,82 @@ const MARKETPLACES: MarketplaceDef[] = [
     ],
   },
   {
-    id: "aliexpress",
-    name: "AliExpress",
-    color: "text-red-400",
-    signupUrl: "https://sell.aliexpress.com",
-    devUrl: "https://developers.aliexpress.com",
+    id: "squarespace",
+    name: "Squarespace",
+    color: "text-gray-300",
+    country: "🇺🇸 United States",
+    signupUrl: "https://www.squarespace.com",
+    devUrl: "https://developers.squarespace.com",
     fields: [
-      { key: "appKey", label: "App Key", placeholder: "XXXXXXXXXX" },
-      { key: "appSecret", label: "App Secret", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
-      { key: "sessionKey", label: "Session Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
+      { key: "apiKey", label: "API Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", helpUrl: "https://developers.squarespace.com/commerce-apis", secret: true },
+      { key: "websiteId", label: "Website ID", placeholder: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" },
+    ],
+  },
+  {
+    id: "wix",
+    name: "Wix eCommerce",
+    color: "text-blue-300",
+    country: "🇮🇱 Israel",
+    signupUrl: "https://www.wix.com/upgrade/website",
+    devUrl: "https://dev.wix.com",
+    fields: [
+      { key: "apiKey", label: "API Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", helpUrl: "https://dev.wix.com/api/rest/getting-started/api-keys", secret: true },
+      { key: "siteId", label: "Site ID", placeholder: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" },
+    ],
+  },
+  {
+    id: "prestashop",
+    name: "PrestaShop",
+    color: "text-indigo-400",
+    country: "🇫🇷 France",
+    signupUrl: "https://www.prestashop.com",
+    devUrl: "https://devdocs.prestashop-project.org",
+    fields: [
+      { key: "storeUrl", label: "Store URL", placeholder: "https://yourstore.com" },
+      { key: "apiKey", label: "API Key (Webservice Key)", placeholder: "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", secret: true },
+    ],
+  },
+  {
+    id: "stockx",
+    name: "StockX",
+    color: "text-green-300",
+    country: "🇺🇸 United States",
+    signupUrl: "https://stockx.com/sell",
+    devUrl: "https://stockx.com/developer",
+    fields: [
+      { key: "apiKey", label: "API Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", helpUrl: "https://stockx.com/developer", secret: true },
+      { key: "email", label: "Account Email", placeholder: "you@example.com" },
+    ],
+  },
+  {
+    id: "mercari",
+    name: "Mercari US",
+    color: "text-red-400",
+    country: "🇺🇸 United States",
+    signupUrl: "https://www.mercari.com/signup",
+    devUrl: "https://developer.mercari.com",
+    fields: [
+      { key: "apiKey", label: "API Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
+      { key: "clientId", label: "Client ID", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx" },
+    ],
+  },
+  {
+    id: "mercari-jp",
+    name: "Mercari Japan",
+    color: "text-red-300",
+    country: "🇯🇵 Japan",
+    signupUrl: "https://jp.mercari.com",
+    devUrl: "https://developer.mercari.com",
+    fields: [
+      { key: "apiKey", label: "API Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
+      { key: "clientId", label: "Client ID", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx" },
     ],
   },
   {
     id: "mercadolibre",
     name: "Mercado Libre",
     color: "text-yellow-300",
+    country: "🇲🇽 Latin America (Mexico, Brazil, Argentina & more)",
     signupUrl: "https://www.mercadolibre.com",
     devUrl: "https://developers.mercadolibre.com",
     fields: [
@@ -143,47 +190,178 @@ const MARKETPLACES: MarketplaceDef[] = [
     ],
   },
   {
-    id: "rakuten",
-    name: "Rakuten",
-    color: "text-red-300",
-    signupUrl: "https://www.rakuten.com/services/marketplace",
-    devUrl: "https://webservice.rakuten.co.jp",
+    id: "pinterest",
+    name: "Pinterest",
+    color: "text-red-500",
+    country: "🇺🇸 United States",
+    signupUrl: "https://business.pinterest.com",
+    devUrl: "https://developers.pinterest.com",
     fields: [
-      { key: "serviceSecret", label: "Service Secret", placeholder: "xxxxxxxxxxxxxxxx", secret: true },
-      { key: "licenseKey", label: "License Key", placeholder: "xxxxxxxxxxxxxxxx", secret: true },
-    ],
-  },
-  {
-    id: "bigcommerce",
-    name: "BigCommerce",
-    color: "text-blue-300",
-    signupUrl: "https://www.bigcommerce.com",
-    devUrl: "https://developer.bigcommerce.com",
-    fields: [
-      { key: "storeHash", label: "Store Hash", placeholder: "abc123xyz", helpUrl: "https://developer.bigcommerce.com/docs/start/authentication" },
-      { key: "clientId", label: "Client ID", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx" },
+      { key: "appId", label: "App ID", placeholder: "XXXXXXXXXXXXXXXXXX", helpUrl: "https://developers.pinterest.com/apps" },
+      { key: "appSecret", label: "App Secret", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
       { key: "accessToken", label: "Access Token", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
     ],
   },
   {
-    id: "prestashop",
-    name: "PrestaShop",
-    color: "text-indigo-400",
-    signupUrl: "https://www.prestashop.com",
-    devUrl: "https://devdocs.prestashop-project.org",
+    id: "tiktokshop",
+    name: "TikTok Shop",
+    color: "text-cyan-400",
+    country: "🌏 Global",
+    signupUrl: "https://seller-us.tiktok.com",
+    devUrl: "https://partner.tiktokshop.com",
     fields: [
-      { key: "storeUrl", label: "Store URL", placeholder: "https://yourstore.com" },
-      { key: "apiKey", label: "API Key (Webservice Key)", placeholder: "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", secret: true },
+      { key: "appKey", label: "App Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", helpUrl: "https://partner.tiktokshop.com/doc/page/63" },
+      { key: "appSecret", label: "App Secret", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
+      { key: "accessToken", label: "Access Token", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
     ],
   },
   {
-    id: "wish",
-    name: "Wish",
-    color: "text-pink-400",
-    signupUrl: "https://merchant.wish.com/signup",
-    devUrl: "https://merchant.wish.com/documentation/rest",
+    id: "grailed",
+    name: "Grailed",
+    color: "text-slate-300",
+    country: "🇺🇸 United States",
+    signupUrl: "https://www.grailed.com/sell",
+    devUrl: "https://www.grailed.com",
     fields: [
+      { key: "email", label: "Account Email", placeholder: "you@example.com" },
       { key: "apiKey", label: "API Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
+    ],
+  },
+  {
+    id: "whatnot",
+    name: "Whatnot",
+    color: "text-pink-400",
+    country: "🇺🇸 United States",
+    signupUrl: "https://www.whatnot.com/sell",
+    devUrl: "https://www.whatnot.com",
+    fields: [
+      { key: "email", label: "Account Email", placeholder: "you@example.com" },
+      { key: "apiKey", label: "API Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
+    ],
+  },
+  {
+    id: "tcgplayer",
+    name: "TCGplayer",
+    color: "text-blue-400",
+    country: "🇺🇸 United States",
+    signupUrl: "https://store.tcgplayer.com/sellerwizard",
+    devUrl: "https://docs.tcgplayer.com",
+    fields: [
+      { key: "publicKey", label: "Public Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", helpUrl: "https://docs.tcgplayer.com/docs/getting-started" },
+      { key: "privateKey", label: "Private Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
+    ],
+  },
+  {
+    id: "discogs",
+    name: "Discogs",
+    color: "text-yellow-500",
+    country: "🇺🇸 United States",
+    signupUrl: "https://www.discogs.com/users/create",
+    devUrl: "https://www.discogs.com/developers",
+    fields: [
+      { key: "consumerKey", label: "Consumer Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", helpUrl: "https://www.discogs.com/settings/developers" },
+      { key: "consumerSecret", label: "Consumer Secret", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
+      { key: "accessToken", label: "Access Token", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
+    ],
+  },
+  {
+    id: "gumtree",
+    name: "Gumtree",
+    color: "text-green-500",
+    country: "🇦🇺 Australia",
+    signupUrl: "https://www.gumtree.com.au/register",
+    devUrl: "https://www.gumtree.com.au",
+    fields: [
+      { key: "email", label: "Account Email", placeholder: "you@example.com" },
+      { key: "apiKey", label: "API Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
+    ],
+  },
+  {
+    id: "poshmark",
+    name: "Poshmark",
+    color: "text-rose-400",
+    country: "🇺🇸 United States",
+    signupUrl: "https://poshmark.com/signup",
+    devUrl: "https://poshmark.com/developer",
+    fields: [
+      { key: "clientId", label: "Client ID", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", helpUrl: "https://poshmark.com/developer" },
+      { key: "clientSecret", label: "Client Secret", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
+      { key: "accessToken", label: "Access Token", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
+    ],
+  },
+  {
+    id: "wallapop",
+    name: "Wallapop",
+    color: "text-teal-400",
+    country: "🇪🇸 Spain",
+    signupUrl: "https://es.wallapop.com/register",
+    devUrl: "https://wallapop.com",
+    fields: [
+      { key: "email", label: "Account Email", placeholder: "you@example.com" },
+      { key: "apiKey", label: "API Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
+    ],
+  },
+  {
+    id: "vinted",
+    name: "Vinted",
+    color: "text-teal-300",
+    country: "🇪🇺 Europe",
+    signupUrl: "https://www.vinted.com/signup",
+    devUrl: "https://vinted.com",
+    fields: [
+      { key: "clientId", label: "Client ID", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", helpUrl: "https://vinted.com" },
+      { key: "clientSecret", label: "Client Secret", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
+      { key: "accessToken", label: "Access Token", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
+    ],
+  },
+  {
+    id: "shopee",
+    name: "Shopee",
+    color: "text-orange-500",
+    country: "🇧🇷 Brazil / 🌏 Southeast Asia",
+    signupUrl: "https://seller.shopee.com.br/signup",
+    devUrl: "https://open.shopee.com",
+    fields: [
+      { key: "partnerId", label: "Partner ID", placeholder: "000000", helpUrl: "https://open.shopee.com/developer-guide/1" },
+      { key: "partnerKey", label: "Partner Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
+      { key: "shopId", label: "Shop ID", placeholder: "000000" },
+    ],
+  },
+  {
+    id: "olx",
+    name: "OLX",
+    color: "text-purple-300",
+    country: "🇧🇷 Brazil / Latin America",
+    signupUrl: "https://www.olx.com.br/cadastro",
+    devUrl: "https://developers.olx.com.br",
+    fields: [
+      { key: "clientId", label: "Client ID", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", helpUrl: "https://developers.olx.com.br" },
+      { key: "clientSecret", label: "Client Secret", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
+      { key: "accessToken", label: "Access Token", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
+    ],
+  },
+  {
+    id: "falabella",
+    name: "Falabella",
+    color: "text-emerald-400",
+    country: "🇨🇱 Chile / South America",
+    signupUrl: "https://www.falabella.com/falabella-cl/page/vende-en-falabella",
+    devUrl: "https://developers.falabella.com",
+    fields: [
+      { key: "apiKey", label: "API Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", helpUrl: "https://developers.falabella.com", secret: true },
+      { key: "sellerId", label: "Seller ID", placeholder: "XXXXXXXXXX" },
+    ],
+  },
+  {
+    id: "bolcom",
+    name: "Bol.com",
+    color: "text-blue-500",
+    country: "🇳🇱 Netherlands & Belgium",
+    signupUrl: "https://www.bol.com/nl/rnwy/account/verkopen-op-bol/introductie",
+    devUrl: "https://developers.bol.com",
+    fields: [
+      { key: "clientId", label: "Client ID", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", helpUrl: "https://developers.bol.com" },
+      { key: "clientSecret", label: "Client Secret", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
     ],
   },
 ];
@@ -226,7 +404,10 @@ function MarketplaceCard({ def, savedCreds }: { def: MarketplaceDef; savedCreds:
           {isConnected
             ? <CheckCircle2 className="w-5 h-5 text-green-400 shrink-0" />
             : <Circle className="w-5 h-5 text-muted-foreground shrink-0" />}
-          <span className={`font-semibold ${def.color}`}>{def.name}</span>
+          <div>
+            <span className={`font-semibold ${def.color}`}>{def.name}</span>
+            <p className="text-[11px] text-muted-foreground leading-none mt-0.5">{def.country}</p>
+          </div>
           {isConnected && <span className="text-xs text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full">Connected</span>}
         </div>
         {open ? <ChevronDown className="w-4 h-4 text-muted-foreground" /> : <ChevronRight className="w-4 h-4 text-muted-foreground" />}

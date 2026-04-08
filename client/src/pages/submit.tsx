@@ -43,28 +43,40 @@ function Step({ num, title, done, children }: { num: number; title: string; done
   );
 }
 
-const shortDesc = `AI-powered product listing tool for eBay, Amazon, Etsy, Shopify, Mercado Libre, Rakuten, and more. Snap a photo, get an AI-generated title and description, and publish to multiple marketplaces at once — with automatic currency conversion and translation.`;
+const shortDesc = `AI-powered listing tool for eBay, Amazon, Etsy, Shopify, StockX, Poshmark, Mercari, TikTok Shop, Shopee, Vinted & 16 more. Snap a photo, publish everywhere instantly.`;
 
-const longDesc = `Global Marketplace Lister makes selling online simple. Take a photo of any product, and our AI instantly generates a professional title and description. Then publish your listing to multiple e-commerce marketplaces with a single tap — including eBay, Amazon, Etsy, Shopify, Walmart, Wish, Reverb, AliExpress, Mercado Libre, Rakuten, and more.
+const longDesc = `Global Marketplace Lister makes selling online simple. Take a photo of any product, and our AI instantly generates a professional title and description. Then publish your listing to 26 e-commerce marketplaces with a single tap — across the US, Japan, Australia, Latin America, Europe, and beyond.
 
 KEY FEATURES
 • AI-powered listing creation from a single product photo
-• Publish to 13+ marketplaces simultaneously
-• Automatic currency conversion (USD, EUR, GBP, JPY, MXN, and more)
-• Built-in translation for international marketplaces
+• Publish to 26 marketplaces simultaneously
+• Country-specific pricing and automatic currency conversion (USD, JPY, AUD, EUR, MXN & more)
+• Auto-translation for international platforms
 • Sales tracking with fee management
 • 30-day free trial — no credit card required
-• Simple 1% service fee per sale after your 30-day free trial
+• After your trial, pay only 2% per sale — no subscription needed
+• Small monthly surcharge for high-volume sellers (25+ sales/month)
 
 WHO IT'S FOR
-Perfect for resellers, small business owners, estate sale shoppers, thrift flippers, collectibles dealers, and anyone who sells on multiple platforms.
+Perfect for resellers, sneaker and streetwear sellers, card collectors, vinyl/record dealers, small business owners, and anyone who sells across multiple platforms internationally.
 
 MARKETPLACES SUPPORTED
-eBay, Amazon, Etsy, Shopify, WooCommerce, Walmart, Wish, Reverb, AliExpress, BigCommerce, Mercado Libre, Rakuten, PrestaShop
+🇺🇸 eBay · Amazon (SP-API) · Etsy · Shopify · WooCommerce · Squarespace · StockX · Poshmark · Mercari US · Grailed · Whatnot · TCGplayer · Discogs · Pinterest
+🇯🇵 Mercari Japan
+🇦🇺 Gumtree
+🇲🇽 Mercado Libre
+🇫🇷 PrestaShop
+🇮🇱 Wix eCommerce
+🇪🇸 Wallapop
+🇪🇺 Vinted
+🇧🇷 Shopee · OLX
+🇨🇱 Falabella
+🇳🇱 Bol.com
+🌏 TikTok Shop
 
-Start your free trial today and simplify your selling workflow.`;
+Start your free trial today and simplify your global selling workflow.`;
 
-const keywords = `product listing,eBay,Amazon,Etsy,reseller,marketplace,sell online,multi-platform,AI listing,Shopify,price converter,translation,cross-listing`;
+const keywords = `product listing,eBay,Amazon,Etsy,StockX,Mercari,Grailed,Whatnot,TikTok Shop,Gumtree,Discogs,TCGplayer,Mercado Libre,reseller,marketplace,sell online,multi-platform,AI listing,Shopify,WooCommerce,PrestaShop,Wix,Squarespace,Wallapop,Vinted,Shopee,OLX,Falabella,Bol.com`;
 
 export default function Submit() {
   return (

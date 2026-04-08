@@ -19,23 +19,35 @@ interface AnalysisResult {
 }
 
 const localMarketplaces = [
-  { id: "ebay", name: "eBay", currency: "USD" },
-  { id: "amazon", name: "Amazon", currency: "USD" },
-  { id: "walmart", name: "Walmart", currency: "USD" },
-  { id: "wish", name: "Wish", currency: "USD" },
-  { id: "reverb", name: "Reverb", currency: "USD" },
-  { id: "offerup", name: "OfferUp", currency: "USD" },
+  { id: "ebay", name: "eBay", currency: "USD", country: "🇺🇸" },
+  { id: "amazon", name: "Amazon", currency: "USD", country: "🇺🇸" },
+  { id: "mercari", name: "Mercari US", currency: "USD", country: "🇺🇸" },
+  { id: "mercari-jp", name: "Mercari Japan", currency: "JPY", country: "🇯🇵" },
+  { id: "stockx", name: "StockX", currency: "USD", country: "🇺🇸" },
+  { id: "grailed", name: "Grailed", currency: "USD", country: "🇺🇸" },
+  { id: "whatnot", name: "Whatnot", currency: "USD", country: "🇺🇸" },
+  { id: "tcgplayer", name: "TCGplayer", currency: "USD", country: "🇺🇸" },
+  { id: "discogs", name: "Discogs", currency: "USD", country: "🇺🇸" },
+  { id: "poshmark", name: "Poshmark", currency: "USD", country: "🇺🇸" },
+  { id: "gumtree", name: "Gumtree", currency: "AUD", country: "🇦🇺" },
 ];
 
 const globalMarketplaces = [
-  { id: "etsy", name: "Etsy", currency: "USD" },
-  { id: "shopify", name: "Shopify", currency: "USD" },
-  { id: "woocommerce", name: "WooCommerce", currency: "USD" },
-  { id: "aliexpress", name: "AliExpress", currency: "USD" },
-  { id: "mercadolibre", name: "Mercado Libre", currency: "MXN" },
-  { id: "rakuten", name: "Rakuten", currency: "JPY" },
-  { id: "bigcommerce", name: "BigCommerce", currency: "USD" },
-  { id: "prestashop", name: "PrestaShop", currency: "EUR" },
+  { id: "etsy", name: "Etsy", currency: "USD", country: "🇺🇸" },
+  { id: "shopify", name: "Shopify", currency: "USD", country: "🇨🇦" },
+  { id: "woocommerce", name: "WooCommerce", currency: "USD", country: "🇺🇸" },
+  { id: "squarespace", name: "Squarespace", currency: "USD", country: "🇺🇸" },
+  { id: "wix", name: "Wix eCommerce", currency: "USD", country: "🇮🇱" },
+  { id: "prestashop", name: "PrestaShop", currency: "EUR", country: "🇫🇷" },
+  { id: "mercadolibre", name: "Mercado Libre", currency: "USD", country: "🇲🇽" },
+  { id: "pinterest", name: "Pinterest", currency: "USD", country: "🇺🇸" },
+  { id: "tiktokshop", name: "TikTok Shop", currency: "USD", country: "🌏" },
+  { id: "wallapop", name: "Wallapop", currency: "EUR", country: "🇪🇸" },
+  { id: "vinted", name: "Vinted", currency: "EUR", country: "🇪🇺" },
+  { id: "shopee", name: "Shopee", currency: "BRL", country: "🇧🇷" },
+  { id: "olx", name: "OLX", currency: "BRL", country: "🇧🇷" },
+  { id: "falabella", name: "Falabella", currency: "USD", country: "🇨🇱" },
+  { id: "bolcom", name: "Bol.com", currency: "EUR", country: "🇳🇱" },
 ];
 
 export default function Create() {
@@ -47,7 +59,7 @@ export default function Create() {
   const [quantity, setQuantity] = useState("1");
   const [currency, setCurrency] = useState("USD");
   const [condition, setCondition] = useState<"new" | "used">("new");
-  const [selectedMarketplaces, setSelectedMarketplaces] = useState<string[]>(["ebay", "amazon", "etsy"]);
+  const [selectedMarketplaces, setSelectedMarketplaces] = useState<string[]>(["ebay", "etsy"]);
   const [additionalImages, setAdditionalImages] = useState<string[]>([]);
   const [uploadingImages, setUploadingImages] = useState(false);
   const additionalInputRef = useRef<HTMLInputElement>(null);
@@ -111,6 +123,10 @@ export default function Create() {
           quantity: parseInt(quantity) || 1,
         }),
       });
+      if (productRes.status === 429) {
+        const data = await productRes.json();
+        throw new Error(data.message || "Daily post limit reached");
+      }
       if (!productRes.ok) throw new Error("Failed to create product");
       const product = await productRes.json();
 
@@ -131,10 +147,13 @@ export default function Create() {
       });
       setTimeout(() => setLocation("/listings"), 1200);
     },
-    onError: () => {
+    onError: (error: Error) => {
+      const isLimitError = error.message.includes("trial") || error.message.includes("limit");
       toast({
-        title: "Listing Failed",
-        description: "Could not list product. Please try again.",
+        title: isLimitError ? "Daily Post Limit Reached" : "Listing Failed",
+        description: isLimitError
+          ? error.message
+          : "Could not list product. Please try again.",
         variant: "destructive",
       });
     },
@@ -373,7 +392,7 @@ export default function Create() {
                         data-testid={`checkbox-marketplace-${m.id}`}
                       />
                       <div>
-                        <div className="font-medium text-sm">{m.name}</div>
+                        <div className="font-medium text-sm">{m.country} {m.name}</div>
                         <div className="text-xs text-muted-foreground">{m.currency}</div>
                       </div>
                     </label>
@@ -396,7 +415,7 @@ export default function Create() {
                         data-testid={`checkbox-marketplace-${m.id}`}
                       />
                       <div>
-                        <div className="font-medium text-sm">{m.name}</div>
+                        <div className="font-medium text-sm">{m.country} {m.name}</div>
                         <div className="text-xs text-muted-foreground">{m.currency}</div>
                       </div>
                     </label>

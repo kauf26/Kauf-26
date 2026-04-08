@@ -14,6 +14,7 @@ import Privacy from "@/pages/privacy";
 import Submit from "@/pages/submit";
 import Create from "@/pages/create";
 import SettingsPage from "@/pages/settings";
+import PricingPage from "@/pages/pricing";
 import LoginPage from "@/pages/login";
 import Screenshots from "@/pages/screenshots";
 import {
@@ -33,6 +34,7 @@ import {
   FileText,
   Shield,
   Camera,
+  Star,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
@@ -44,35 +46,48 @@ interface SubscriptionStatus {
   isTrialActive: boolean;
   trialDaysRemaining: number;
   trialEndsAt: string;
-  subscriptionStatus: string;
-  hasActiveSubscription: boolean;
-  canSubscribeMonthly: boolean;
-  daysUntilSubscriptionOffer: number;
+  trialStartedAt: string;
+  monthlySaleCount: number;
+  tier: { name: string; min: number; max: number; surchargeCents: number; surcharge: number };
 }
 
 function TrialBanner({ status }: { status: SubscriptionStatus }) {
-  if (status.hasActiveSubscription) {
+  const [, setLocation] = useLocation();
+
+  if (!status.isTrialActive) {
+    // Post-trial — show current tier info
+    const { tier, monthlySaleCount } = status;
+    const hasSurcharge = tier.surchargeCents > 0 && tier.surchargeCents !== -1;
+    const isEnterprise = tier.surchargeCents === -1;
+
+    if (isEnterprise) {
+      return (
+        <div className="bg-purple-500/10 border-b border-purple-500/20 px-4 py-2 flex items-center justify-center gap-2 text-sm flex-wrap">
+          <AlertTriangle className="w-4 h-4 text-purple-400 shrink-0" />
+          <span className="text-purple-300">{monthlySaleCount} sales this month — Enterprise volume. Contact support for pricing.</span>
+          <Button size="sm" className="h-7 px-3 bg-purple-600 hover:bg-purple-700 text-white" onClick={() => setLocation("/pricing")} data-testid="banner-enterprise-button">
+            Contact
+          </Button>
+        </div>
+      );
+    }
+
+    if (hasSurcharge) {
+      return (
+        <div className="bg-orange-500/10 border-b border-orange-500/20 px-4 py-2 flex items-center justify-center gap-2 text-sm flex-wrap">
+          <Zap className="w-4 h-4 text-orange-400 shrink-0" />
+          <span className="text-orange-300">{tier.name} tier · {monthlySaleCount} sales this month · ${tier.surcharge.toFixed(2)}/month surcharge due</span>
+          <Button size="sm" className="h-7 px-3 bg-orange-500 hover:bg-orange-600 text-white" onClick={() => setLocation("/pricing")} data-testid="banner-pay-surcharge-button">
+            Pay now
+          </Button>
+        </div>
+      );
+    }
+
     return (
       <div className="bg-green-500/10 border-b border-green-500/20 px-4 py-2 flex items-center justify-center gap-2 text-sm">
         <Zap className="w-4 h-4 text-green-500" />
-        <span className="text-green-400">Pro Plan active — 1% fee on transactions</span>
-      </div>
-    );
-  }
-
-  if (!status.isTrialActive) {
-    return (
-      <div className="bg-red-500/10 border-b border-red-500/20 px-4 py-2 flex items-center justify-center gap-2 text-sm flex-wrap">
-        <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
-        <span className="text-red-300">Your free trial has ended.</span>
-        <Button
-          size="sm"
-          className="h-7 px-3 bg-red-500 hover:bg-red-600 text-white"
-          onClick={() => window.location.href = "/sales"}
-          data-testid="banner-upgrade-button"
-        >
-          Pay Fees in Sales
-        </Button>
+        <span className="text-green-400">{tier.name} tier · {monthlySaleCount} sale{monthlySaleCount !== 1 ? "s" : ""} this month · 2% per sale · 26 marketplaces</span>
       </div>
     );
   }
@@ -82,11 +97,17 @@ function TrialBanner({ status }: { status: SubscriptionStatus }) {
     <div className={`border-b px-4 py-2 flex items-center justify-center gap-2 text-sm flex-wrap ${urgency ? "bg-orange-500/10 border-orange-500/20" : "bg-blue-500/10 border-blue-500/20"}`}>
       <Clock className={`w-4 h-4 shrink-0 ${urgency ? "text-orange-400" : "text-blue-400"}`} />
       <span className={urgency ? "text-orange-300" : "text-blue-300"}>
-        Free trial: <strong>{status.trialDaysRemaining} day{status.trialDaysRemaining !== 1 ? "s" : ""} remaining</strong> — 1% fee applies after trial
+        Free trial: <strong>{status.trialDaysRemaining} day{status.trialDaysRemaining !== 1 ? "s" : ""} remaining</strong>
       </span>
-      <span className={urgency ? "text-orange-400 text-xs" : "text-blue-400 text-xs"}>
-        No charge until trial ends.
-      </span>
+      <Button
+        size="sm"
+        variant="ghost"
+        className={`h-6 px-2 text-xs ${urgency ? "text-orange-300 hover:text-orange-100" : "text-blue-300 hover:text-blue-100"}`}
+        onClick={() => setLocation("/pricing")}
+        data-testid="banner-view-pricing"
+      >
+        View pricing →
+      </Button>
     </div>
   );
 }
@@ -103,6 +124,7 @@ const DESKTOP_NAV_ITEMS = [
   { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { path: "/listings", label: "Listings", icon: ShoppingBag },
   { path: "/sales", label: "Sales", icon: DollarSign },
+  { path: "/pricing", label: "Pricing", icon: Star },
   { path: "/tools", label: "Tools", icon: Wrench },
   { path: "/settings", label: "Connections", icon: Settings },
 ];
@@ -151,6 +173,14 @@ function MoreDrawer({ onClose }: { onClose: () => void }) {
 
         <div className="px-3 py-2 space-y-1">
           <button
+            onClick={() => navigate("/pricing")}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-primary/10 transition-colors text-left"
+            data-testid="drawer-nav-pricing"
+          >
+            <Star className="w-5 h-5 text-primary" />
+            <span className="text-sm font-medium text-primary">Pricing &amp; Upgrade</span>
+          </button>
+          <button
             onClick={() => navigate("/tools")}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-muted/50 transition-colors text-left"
             data-testid="drawer-nav-tools"
@@ -197,6 +227,10 @@ function MoreDrawer({ onClose }: { onClose: () => void }) {
           </button>
         </div>
         <div className="h-4" />
+        <div className="flex items-center justify-center gap-1.5 pb-2 text-xs text-muted-foreground">
+          <img src="/kauf-logo.png" alt="KAUF" className="w-3.5 h-3.5 object-contain" />
+          <span className="font-semibold text-foreground">Sold with KAUF</span>
+        </div>
       </div>
     </>
   );
@@ -378,12 +412,19 @@ function ProtectedRouter() {
           <Route path="/tools" component={Tools} />
           <Route path="/create" component={Create} />
           <Route path="/settings" component={SettingsPage} />
+          <Route path="/pricing" component={PricingPage} />
           <Route component={NotFound} />
         </Switch>
       </div>
       {/* Footer — desktop only */}
       <footer className="hidden md:block border-t bg-card mt-auto py-4 px-4 text-center text-xs text-muted-foreground space-x-3">
+        <span className="inline-flex items-center gap-1.5 font-semibold text-foreground">
+          <img src="/kauf-logo.png" alt="KAUF" className="w-4 h-4 object-contain" />
+          Sold with KAUF
+        </span>
+        <span>·</span>
         <span>Global Marketplace Lister — listing assistance tool only.</span>
+        <span>·</span>
         <Link href="/privacy" className="underline hover:text-foreground transition-colors">Privacy Policy</Link>
         <span>·</span>
         <Link href="/terms" className="underline hover:text-foreground transition-colors">Terms of Service</Link>

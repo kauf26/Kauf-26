@@ -74,7 +74,7 @@ export default function Sales() {
             <h1 className="text-4xl font-bold tracking-tight">Sales & Earnings</h1>
           </div>
           <p className="text-muted-foreground text-lg">
-            Track your sales — 1% service fee applies after your 30-day free trial
+            Track your sales — a 2% service fee applies to each item that sells, not to items you post
           </p>
         </div>
 
@@ -98,14 +98,14 @@ export default function Sales() {
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium text-muted-foreground">
-                Service Fees (1%)
+                Service Fees (2%)
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-orange-500" data-testid="text-total-fees">
                 -${totalFees.toFixed(2)}
               </div>
-              <p className="text-xs text-muted-foreground mt-1">Auto-deducted</p>
+              <p className="text-xs text-muted-foreground mt-1">2% on each item sold</p>
             </CardContent>
           </Card>
 
@@ -160,6 +160,11 @@ export default function Sales() {
                           })}
                         </CardDescription>
                       </div>
+                      <div className="flex items-center gap-2 flex-wrap justify-end">
+                        <div className="flex items-center gap-1.5 bg-gradient-to-r from-purple-900/60 to-purple-700/40 border border-purple-500/40 rounded-full px-2.5 py-1" data-testid={`badge-sold-kauf-${sale.id}`}>
+                          <img src="/kauf-logo.jpeg" alt="KAUF" className="w-4 h-4 rounded-sm object-cover" />
+                          <span className="text-xs font-semibold text-purple-200">Sold with KAUF</span>
+                        </div>
                       {sale.feePaid ? (
                         <Badge
                           variant="default"
@@ -179,9 +184,10 @@ export default function Sales() {
                           data-testid={`button-pay-fee-${sale.id}`}
                         >
                           <CreditCard className="w-3 h-3" />
-                          Pay 1% Fee (${parseFloat(sale.ourFee).toFixed(2)})
+                          Pay 2% Fee (${parseFloat(sale.ourFee).toFixed(2)})
                         </Button>
                       )}
+                      </div>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -199,7 +205,7 @@ export default function Sales() {
                         </div>
                       </div>
                       <div>
-                        <div className="text-sm text-muted-foreground">Service Fee (1%)</div>
+                        <div className="text-sm text-muted-foreground">Service Fee (2%)</div>
                         <div className="text-lg font-semibold mt-1 text-orange-400">
                           -${ourFee.toFixed(2)}
                         </div>
