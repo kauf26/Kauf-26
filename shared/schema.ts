@@ -1,169 +1,54 @@
-import { sql } from "drizzle-orm";
-import { pgTable, serial, integer, text, varchar, timestamp, decimal, boolean, jsonb, index } from "drizzle-orm/pg-core";
+import { pgTable, text, decimal, integer, timestamp, serial } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
+import { sql } from "drizzle-orm";
 import { z } from "zod";
 
-export const sessions = pgTable(
-  "sessions",
-  {
-    sid: varchar("sid").primaryKey(),
-    sess: jsonb("sess").notNull(),
-    expire: timestamp("expire").notNull(),
-  },
-  (table) => [index("IDX_session_expire").on(table.expire)]
-);
+// 1. Define the marketplaces array for the type system\
+export const marketplaces = [
+    "ebay",
+    "amazon",
+    "walmart",
+    "wish",
+    "reverb",
+    "offerup",
+    "etsy",
+    "shopify",
+    "woocommerce",
+    "aliexpress",
+    "mercadolibre",
+    "rakuten",
+    "bigcommerce",
+    "prestashop"
+   ] as const;
 
+// 2. Define the Users table
 export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  email: varchar("email").unique(),
-  firstName: varchar("first_name"),
-  lastName: varchar("last_name"),
-  profileImageUrl: varchar("profile_image_url"),
-  firstLoginAt: timestamp("first_login_at").defaultNow(),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+ id: serial("id").primaryKey(),
+ username: text("username").notNull().unique(),
+ email: text("email").notNull().unique(),
+ firstLoginAt: timestamp("first_login_at"),
+ createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-export const insertUserSchema = createInsertSchema(users).omit({ createdAt: true, updatedAt: true });
-export type InsertUser = z.infer<typeof insertUserSchema>;
-export type User = typeof users.$inferSelect;
-export type UpsertUser = typeof users.$inferInsert;
-
+// 3. Define the Products table
 export const products = pgTable("products", {
-  id: serial("id").primaryKey(),
-  imageUrl: text("image_url").notNull(),
-  additionalImages: text("additional_images").array().notNull().default(sql`ARRAY[]::text[]`),
-  originalTitle: text("original_title").notNull(),
-  aiDescription: text("ai_description").notNull(),
-  basePrice: decimal("base_price", { precision: 10, scale: 2 }).notNull(),
-  currency: text("currency").notNull().default("USD"),
-  quantity: integer("quantity").notNull().default(1),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+ id: serial("id").primaryKey(),
+ aiDescription: text("ai_description").notNull(),
+ basePrice: decimal("base_price", { precision: 10, scale: 2 }).notNull(),
+ currency: text("currency").notNull().default("USD"),
+ quantity: integer("quantity").notNull().default(1),
+ wish: text("wish"),
+ createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+// 4. Create Zod Schemas for validation
 export const insertProductSchema = createInsertSchema(products).omit({
-  id: true,
-  createdAt: true,
+ id: true,
+ createdAt: true,
 });
 
+// 5. Export Types
 export type Product = typeof products.$inferSelect;
 export type InsertProduct = z.infer<typeof insertProductSchema>;
-
-export const marketplaces = ["ebay", "amazon", "walmart", "wish", "reverb", "offerup", "etsy", "shopify", "woocommerce", "aliexpress", "mercadolibre", "rakuten", "bigcommerce", "prestashop"] as const;
 export type Marketplace = typeof marketplaces[number];
-
-export const listings = pgTable("listings", {
-  id: serial("id").primaryKey(),
-  productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
-  marketplace: text("marketplace").notNull(),
-  marketplaceListingId: text("marketplace_listing_id"),
-  translatedTitle: text("translated_title").notNull(),
-  translatedDescription: text("translated_description").notNull(),
-  localPrice: decimal("local_price", { precision: 10, scale: 2 }).notNull(),
-  localCurrency: text("local_currency").notNull(),
-  status: text("status").notNull().default("pending"),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
-export const insertListingSchema = createInsertSchema(listings).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export type Listing = typeof listings.$inferSelect;
-export type InsertListing = z.infer<typeof insertListingSchema>;
-
-export const sales = pgTable("sales", {
-  id: serial("id").primaryKey(),
-  listingId: integer("listing_id").notNull().references(() => listings.id, { onDelete: "cascade" }),
-  saleAmount: decimal("sale_amount", { precision: 10, scale: 2 }).notNull(),
-  saleCurrency: text("sale_currency").notNull(),
-  platformFee: decimal("platform_fee", { precision: 10, scale: 2 }).notNull().default("0"),
-  ourFee: decimal("our_fee", { precision: 10, scale: 2 }).notNull(),
-  feePaid: boolean("fee_paid").notNull().default(false),
-  saleDate: timestamp("sale_date").default(sql`CURRENT_TIMESTAMP`).notNull(),
-  buyerInfo: text("buyer_info"),
-  shippingLabelGenerated: boolean("shipping_label_generated").notNull().default(false),
-});
-
-export const insertSaleSchema = createInsertSchema(sales).omit({
-  id: true,
-  saleDate: true,
-});
-
-export type Sale = typeof sales.$inferSelect;
-export type InsertSale = z.infer<typeof insertSaleSchema>;
-
-export const conversations = pgTable("conversations", {
-  id: serial("id").primaryKey(),
-  title: text("title").notNull(),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
-export const messages = pgTable("messages", {
-  id: serial("id").primaryKey(),
-  conversationId: integer("conversation_id").notNull().references(() => conversations.id, { onDelete: "cascade" }),
-  role: text("role").notNull(),
-  content: text("content").notNull(),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
-export const insertConversationSchema = createInsertSchema(conversations).omit({
-  id: true,
-  createdAt: true,
-});
-
-export const insertMessageSchema = createInsertSchema(messages).omit({
-  id: true,
-  createdAt: true,
-});
-
-export type Conversation = typeof conversations.$inferSelect;
-export type InsertConversation = z.infer<typeof insertConversationSchema>;
-export type Message = typeof messages.$inferSelect;
-export type InsertMessage = z.infer<typeof insertMessageSchema>;
-
-export const marketplaceCredentials = pgTable("marketplace_credentials", {
-  id: serial("id").primaryKey(),
-  marketplace: text("marketplace").notNull().unique(),
-  credentials: text("credentials").notNull(),
-  connected: boolean("connected").notNull().default(false),
-  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
-export const insertMarketplaceCredentialsSchema = createInsertSchema(marketplaceCredentials).omit({
-  id: true,
-  updatedAt: true,
-});
-
-export type MarketplaceCredentials = typeof marketplaceCredentials.$inferSelect;
-export type InsertMarketplaceCredentials = z.infer<typeof insertMarketplaceCredentialsSchema>;
-
-export const appConfig = pgTable("app_config", {
-  id: serial("id").primaryKey(),
-  trialStartedAt: timestamp("trial_started_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-  stripeCustomerId: text("stripe_customer_id"),
-  stripeSubscriptionId: text("stripe_subscription_id"),
-  subscriptionStatus: text("subscription_status").notNull().default("trial"),
-});
-
-export type AppConfig = typeof appConfig.$inferSelect;
-
-export const dashboardLayouts = pgTable("dashboard_layouts", {
-  id: serial("id").primaryKey(),
-  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }),
-  layout: text("layout").notNull(),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
-export const insertDashboardLayoutSchema = createInsertSchema(dashboardLayouts).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
-export type DashboardLayout = typeof dashboardLayouts.$inferSelect;
-export type InsertDashboardLayout = z.infer<typeof insertDashboardLayoutSchema>;
+export type User = typeof users.$inferSelect;
