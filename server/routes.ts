@@ -13,7 +13,18 @@ import { deleteProductImagesIfRecentlySold } from "./cleanup";
 
 const TRIAL_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
 
-function calcTrialStatus(firstLoginAt: Date) {
+function getUnlockTime(): Date {
+  // Get current time in Pacific Time (San Diego)
+  const now = new Date();
+  const pacificDate = new Date(now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
+ 
+  // Calculate Tomorrow at 00:00:00
+  const tomorrow = new Date(pacificDate);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+ 
+  return tomorrow;
+ }
   const elapsed = Date.now() - firstLoginAt.getTime();
   const isTrialActive = elapsed < TRIAL_DURATION_MS;
   const trialDaysRemaining = Math.max(0, Math.ceil((TRIAL_DURATION_MS - elapsed) / (24 * 60 * 60 * 1000)));
