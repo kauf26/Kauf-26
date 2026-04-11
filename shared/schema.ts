@@ -1,27 +1,10 @@
-import { pgTable, text, decimal, integer, timestamp, serial } from "drizzle-orm/pg-core";
+import { pgTable, serial, text, timestamp, integer, decimal, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
-// 1. Define the marketplaces array for the type system\
-export const marketplaces = [
-    "ebay",
-    "amazon",
-    "walmart",
-    "wish",
-    "reverb",
-    "offerup",
-    "etsy",
-    "shopify",
-    "woocommerce",
-    "aliexpress",
-    "mercadolibre",
-    "rakuten",
-    "bigcommerce",
-    "prestashop"
-   ] as const;
+export const marketplaces = ["ebay", "poshmark", "mercari", "depop"] as const;
 
-// 2. Define the Users table
 export const users = pgTable("users", {
  id: serial("id").primaryKey(),
  username: text("username").notNull().unique(),
@@ -30,25 +13,43 @@ export const users = pgTable("users", {
  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-// 3. Define the Products table
 export const products = pgTable("products", {
  id: serial("id").primaryKey(),
- aiDescription: text("ai_description").notNull(),
- basePrice: decimal("base_price", { precision: 10, scale: 2 }).notNull(),
- currency: text("currency").notNull().default("USD"),
- quantity: integer("quantity").notNull().default(1),
- wish: text("wish"),
+ name: text("name").notNull(),
+ description: text("description"),
+ category: text("category"),
  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-// 4. Create Zod Schemas for validation
-export const insertProductSchema = createInsertSchema(products).omit({
- id: true,
- createdAt: true,
+export const listings = pgTable("listings", {
+ id: serial("id").primaryKey(),
+ productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+ platform: text("platform").notNull(),
+ externalId: text("external_id"),
+ status: text("status").notNull().default("active"),
+ price: decimal("price", { precision: 10, scale: 2 }).notNull(),
+ createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-// 5. Export Types
-export type Product = typeof products.$inferSelect;
-export type InsertProduct = z.infer<typeof insertProductSchema>;
-export type Marketplace = typeof marketplaces[number];
+export const sales = pgTable("sales", {
+ id: serial("id").primaryKey(),
+ listingId: integer("listing_id").notNull().references(() => listings.id, { onDelete: "cascade" }),
+ saleAmount: decimal("sale_amount", { precision: 10, scale: 2 }).notNull(),
+ saleCurrency: text("sale_currency").notNull(),
+ platformFee: decimal("platform_fee", { precision: 10, scale: 2 }).notNull().default("0"),
+ ourFee: decimal("our_fee", { precision: 10, scale: 2 }).notNull(),
+ platform: text("platform").notNull().default("web"),
+ feePaid: boolean("fee_paid").notNull().default(false),
+ saleDate: timestamp("sale_date").default(sql`CURRENT_TIMESTAMP`).notNull(),
+ buyerInfo: text("buyer_info"),
+ shippingLabelGenerated: boolean("shipping_label_generated").notNull().default(false),
+});
+
+export const insertUserSchema = createInsertSchema(users).omit({
+ createdAt: true
+});
+
 export type User = typeof users.$inferSelect;
+export type Sale = typeof sales.$inferSelect;
+export type Product = typeof products.$inferSelect;
+export type Marketplace = (typeof marketplaces)[number];
