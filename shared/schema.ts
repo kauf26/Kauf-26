@@ -53,3 +53,4 @@ export type User = typeof users.$inferSelect;
 export type Sale = typeof sales.$inferSelect;
 export type Product = typeof products.$inferSelect;
 export type Marketplace = (typeof marketplaces)[number];
+export type UpsertUser = z.infer<typeof insertUserSchema>;

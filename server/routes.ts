@@ -4,6 +4,21 @@ import { insertUserSchema } from "@shared/schema";
 
 export function registerRoutes(app: Router) {
  // Add your routes here
+ app.delete("/api/user", async (req, res) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).send("Not logged in");
+  }
+
+  try {
+    await (storage as any).deleteUser(String((req.user as any).id));
+    req.logout((err) => {
+      if (err) return res.status(500).send("Error logging out");
+      res.sendStatus(200);
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to delete account" });
+  }
+});
  return app;
 }
 
