@@ -42,6 +42,9 @@ export default function Home() {
       formData.append("image", file);
       const res = await fetch("/api/products/analyze", {
         method: "POST",
+        headers: {
+          "X-Client-Timezone": Intl.DateTimeFormat().resolvedOptions().timeZone,
+        },
         body: formData,
       });
       if (!res.ok) throw new Error("Failed to analyze image");

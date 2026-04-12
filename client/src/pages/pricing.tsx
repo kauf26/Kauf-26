@@ -10,6 +10,7 @@ import {
   Star,
   TrendingUp,
 } from "lucide-react";
+import { DAILY_PRODUCT_CREATE_LIMIT } from "@shared/limits";
 
 interface Tier {
   name: string;
@@ -106,8 +107,8 @@ export default function PricingPage() {
           <div className="mb-8 bg-primary/10 border border-primary/20 rounded-2xl px-6 py-4 max-w-sm mx-auto text-center space-y-1">
             <p className="text-sm font-semibold text-primary">Free Trial Active</p>
             <p className="text-xs text-muted-foreground">
-              {trialDaysRemaining} day{trialDaysRemaining !== 1 ? "s" : ""} remaining — 1 listing per day during trial.
-              After your trial, listing is unlimited.
+              {trialDaysRemaining} day{trialDaysRemaining !== 1 ? "s" : ""} remaining — up to {DAILY_PRODUCT_CREATE_LIMIT} new listings per calendar day.
+              After your trial, there is no subscription; you still pay only when you sell.
             </p>
           </div>
         ) : (

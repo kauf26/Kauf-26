@@ -1,6 +1,7 @@
 import { ScrollText } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import TranslateWidget from "@/components/translate-widget";
+import { DAILY_PRODUCT_CREATE_LIMIT } from "@shared/limits";
 
 export default function Terms() {
   const lastUpdated = "April 8, 2026";
@@ -76,7 +77,7 @@ export default function Terms() {
             <CardContent className="pt-6 space-y-3">
               <h2 className="text-lg font-semibold text-foreground">5. Service Fee Disclosure</h2>
               <p>
-                The Service offers a <strong className="text-foreground">30-day free trial</strong> from the date of your first login. During the trial period, no service fees are charged and the user may create up to one (1) listing per day. After the trial period, the Service continues automatically with no action required from the user.
+                The Service offers a <strong className="text-foreground">30-day free trial</strong> from the date of your first login. During the trial period, no service fees are charged. You may create up to {DAILY_PRODUCT_CREATE_LIMIT} new product listings per calendar day. After the trial period, the Service continues automatically with no action required from the user.
               </p>
               <p>
                 <strong className="text-foreground">Per-Sale Fee (2%):</strong> Following the free trial, the Service charges a fee of <strong className="text-foreground">2% of each self-reported sale amount</strong> entered by the user. This fee applies only to transactions that the user records as sold — it does not apply to listings that are posted but do not result in a recorded sale. For example, if you have 500 items listed and one sells for $100, the service fee is $2.00. No fee is charged on the remaining 499 listings.

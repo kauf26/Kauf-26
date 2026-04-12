@@ -110,9 +110,13 @@ export default function Create() {
     mutationFn: async () => {
       if (!analysis || !price) throw new Error("Missing data");
 
+      const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       const productRes = await fetch("/api/products", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Client-Timezone": timeZone,
+        },
         body: JSON.stringify({
           imageUrl: analysis.imageUrl,
           additionalImages,
@@ -124,8 +128,17 @@ export default function Create() {
         }),
       });
       if (productRes.status === 429) {
-        const data = await productRes.json();
-        throw new Error(data.message || "Daily post limit reached");
+        const data = (await productRes.json()) as { message?: string; resetAt?: string };
+        let msg = data.message || "Daily post limit reached";
+        if (data.resetAt) {
+          try {
+            const t = new Date(data.resetAt);
+            msg += ` Resets at ${t.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}.`;
+          } catch {
+            /* ignore */
+          }
+        }
+        throw new Error(msg);
       }
       if (!productRes.ok) throw new Error("Failed to create product");
       const product = await productRes.json();

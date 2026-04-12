@@ -10,12 +10,12 @@ export interface IAuthStorage {
 
 class AuthStorage implements IAuthStorage {
   async getUser(id: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.id, Number(id)));
+    const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
   }
 
   async deleteUser(id: string): Promise<void> {
-    await db.delete(users).where(eq(users.id, Number(id)));
+    await db.delete(users).where(eq(users.id, id));
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {

@@ -41,6 +41,7 @@ import SettingsPage from "@/pages/settings";
 import PricingPage from "@/pages/pricing";
 import LoginPage from "@/pages/login";
 import Screenshots from "@/pages/screenshots";
+import { DAILY_PRODUCT_CREATE_LIMIT } from "@shared/limits";
 
 interface LockStatus {
  locked: boolean;
@@ -78,8 +79,8 @@ function LockScreen({ unlockAt }: { unlockAt: string }) {
        <div className="space-y-2">
          <h1 className="text-2xl font-bold text-foreground">App Locked for Today</h1>
          <p className="text-muted-foreground text-sm leading-relaxed">
-           You took 3 photos today without posting any items to a marketplace.
-           The app is locked until midnight to encourage active listing.
+           You took {DAILY_PRODUCT_CREATE_LIMIT} photos today without posting any items to a marketplace.
+           The app is locked until midnight in your local time zone to encourage active listing.
          </p>
        </div>
        <div className="w-full bg-card border rounded-xl px-5 py-4 space-y-1">

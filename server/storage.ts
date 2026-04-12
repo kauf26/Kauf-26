@@ -1,13 +1,22 @@
-import { db } from "./db";
-import { 
-  users, type User, type InsertUser,
-  products, type Product, type InsertProduct,
-  listings, type Listing, type InsertListing,
-  sales, type Sale, type InsertSale,
-  dashboardLayouts, type DashboardLayout,
-  appConfig, type AppConfig,
-  marketplaceCredentials, type MarketplaceCredentials,
-  type Marketplace
+import { db, pool } from "./db";
+import {
+  users,
+  type User,
+  products,
+  type Product,
+  type InsertProduct,
+  listings,
+  type Listing,
+  type InsertListing,
+  sales,
+  type Sale,
+  type InsertSale,
+  dashboardLayouts,
+  type DashboardLayout,
+  appConfig,
+  type AppConfig,
+  marketplaceCredentials,
+  type MarketplaceCredentials,
 } from "@shared/schema";
 import { eq, desc, isNull, gte } from "drizzle-orm";
 
@@ -17,7 +26,10 @@ export interface IStorage {
   createProduct(product: InsertProduct): Promise<Product>;
   getProduct(id: number): Promise<Product | undefined>;
   getAllProducts(): Promise<Product[]>;
-  countProductsCreatedToday(): Promise<number>;
+  /** Products whose created_at falls on the user's local calendar day (IANA tz). */
+  countProductsCreatedOnUserCalendarDay(timeZone: string): Promise<number>;
+  /** Next 00:00:00 in the user's zone, as a UTC Date (for lockout / limit messaging). */
+  getNextUserLocalMidnightUtc(timeZone: string): Promise<Date>;
   countProductsCreatedThisMonth(): Promise<number>;
   countSalesThisMonth(): Promise<number>;
   deleteProduct(id: number): Promise<void>;
@@ -28,6 +40,10 @@ export interface IStorage {
   getAllListings(): Promise<Listing[]>;
   updateListingStatus(id: number, status: string, marketplaceListingId?: string): Promise<void>;
   deleteListingsByProduct(productId: number): Promise<void>;
+  deleteListing(id: number): Promise<void>;
+  getAllListingsWithProductMedia(): Promise<
+    { listing: Listing; productImageUrl: string }[]
+  >;
   
   createSale(sale: InsertSale): Promise<Sale>;
   getSalesByListing(listingId: number): Promise<Sale[]>;
@@ -68,11 +84,29 @@ export const storage: IStorage = {
     return db.select().from(products).orderBy(desc(products.createdAt));
   },
 
-  async countProductsCreatedToday() {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const rows = await db.select().from(products).where(gte(products.createdAt, startOfDay));
-    return rows.length;
+  async countProductsCreatedOnUserCalendarDay(timeZone: string) {
+    const { rows } = await pool.query<{ c: string }>(
+      `SELECT COUNT(*)::int AS c
+       FROM products
+       WHERE ((created_at AT TIME ZONE 'UTC') AT TIME ZONE $1)::date = (CURRENT_TIMESTAMP AT TIME ZONE $1)::date`,
+      [timeZone],
+    );
+    return parseInt(rows[0]?.c ?? "0", 10);
+  },
+
+  async getNextUserLocalMidnightUtc(timeZone: string) {
+    const { rows } = await pool.query<{ next_midnight: Date }>(
+      `SELECT (
+         ((CURRENT_TIMESTAMP AT TIME ZONE $1)::date + interval '1 day')::timestamp
+         AT TIME ZONE $1
+       ) AS next_midnight`,
+      [timeZone],
+    );
+    const v = rows[0]?.next_midnight;
+    if (v == null) {
+      throw new Error("next_midnight query returned no row");
+    }
+    return v instanceof Date ? v : new Date(String(v));
   },
 
   async countProductsCreatedThisMonth() {
@@ -122,6 +156,21 @@ export const storage: IStorage = {
 
   async deleteListingsByProduct(productId: number) {
     await db.delete(listings).where(eq(listings.productId, productId));
+  },
+
+  async deleteListing(id: number) {
+    await db.delete(listings).where(eq(listings.id, id));
+  },
+
+  async getAllListingsWithProductMedia() {
+    return db
+      .select({
+        listing: listings,
+        productImageUrl: products.imageUrl,
+      })
+      .from(listings)
+      .innerJoin(products, eq(listings.productId, products.id))
+      .orderBy(desc(listings.createdAt));
   },
 
   async createSale(sale: InsertSale) {

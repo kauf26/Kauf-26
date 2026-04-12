@@ -84,9 +84,13 @@ export default function HomeScreen() {
   const analyzeImage = async (base64: string) => {
     setIsAnalyzing(true);
     try {
+      const deviceTz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
       const response = await fetch(`${API_BASE_URL}/api/products/analyze-base64`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Client-Timezone': deviceTz,
+        },
         body: JSON.stringify({ image: `data:image/jpeg;base64,${base64}` }),
       });
       
