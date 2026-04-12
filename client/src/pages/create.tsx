@@ -90,7 +90,11 @@ export default function Create() {
     try {
       const formData = new FormData();
       toUpload.forEach((f) => formData.append("images", f));
-      const res = await fetch("/api/products/upload-additional", { method: "POST", body: formData });
+      const res = await fetch("/api/products/upload-additional", {
+        method: "POST",
+        headers: { "X-Client-Timezone": Intl.DateTimeFormat().resolvedOptions().timeZone },
+        body: formData,
+      });
       if (!res.ok) throw new Error("Upload failed");
       const data = await res.json();
       setAdditionalImages((prev) => [...prev, ...data.urls]);
@@ -141,16 +145,24 @@ export default function Create() {
         throw new Error(msg);
       }
       if (!productRes.ok) throw new Error("Failed to create product");
-      const product = await productRes.json();
+      const created = (await productRes.json()) as { id: number; dailyLimitWarning?: string };
 
-      const listRes = await fetch(`/api/products/${product.id}/list`, {
+      if (created.dailyLimitWarning) {
+        toast({
+          title: "Almost at your daily limit",
+          description: created.dailyLimitWarning,
+          variant: "default",
+        });
+      }
+
+      const listRes = await fetch(`/api/products/${created.id}/list`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ selectedMarketplaces }),
       });
       if (!listRes.ok) throw new Error("Failed to create listings");
 
-      return product;
+      return created;
     },
     onSuccess: () => {
       sessionStorage.removeItem("pendingAnalysis");

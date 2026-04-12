@@ -9,6 +9,15 @@ const isDev = typeof __DEV__ !== 'undefined' ? __DEV__ : false;
 export const API_BASE_URL = 'https://global-marketplace-lister.replit.app';  // Your published Replit app URL
 
 // Helper function for API requests
+function clientTimeZoneHeader(): Record<string, string> {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return tz ? { "X-Client-Timezone": tz } : {};
+  } catch {
+    return {};
+  }
+}
+
 export async function apiRequest<T>(
   endpoint: string,
   options?: RequestInit
@@ -18,7 +27,8 @@ export async function apiRequest<T>(
   const config: RequestInit = {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
+      ...clientTimeZoneHeader(),
       ...options?.headers,
     },
   };

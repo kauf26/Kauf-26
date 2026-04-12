@@ -3,10 +3,13 @@ import fs from "fs/promises";
 import path from "path";
 import multer from "multer";
 import OpenAI from "openai";
-import { storage } from "./storage";
+import { storage, buildDailyProductLimitLockoutBody } from "./storage";
 import { currencyRates, resolveMarketplaceLocale } from "./marketplaceMeta";
 import type { Listing } from "@shared/schema";
-import { DAILY_PRODUCT_CREATE_LIMIT } from "@shared/limits";
+import {
+  DAILY_PRODUCT_CREATE_LIMIT,
+  DAILY_PRODUCT_CREATE_WARNING_THRESHOLD,
+} from "@shared/limits";
 import { getClientIanaTimeZone } from "./clientTimezone";
 
 const openai = new OpenAI({
@@ -79,6 +82,10 @@ function serializeListingForApi(
     price: Number.isFinite(priceNum) ? priceNum : 0,
     imageUrl,
   };
+}
+
+function nearDailyLimitWarningText(): string {
+  return `You have ${DAILY_PRODUCT_CREATE_LIMIT - DAILY_PRODUCT_CREATE_WARNING_THRESHOLD} pictures left before your 24-hour lockout.`;
 }
 
 export function registerCatalogRoutes(app: Express): void {
@@ -207,11 +214,16 @@ export function registerCatalogRoutes(app: Express): void {
         storage.countProductsCreatedOnUserCalendarDay(tz),
         storage.getNextUserLocalMidnightUtc(tz),
       ]);
+      const warningMessage =
+        productsCreatedToday === DAILY_PRODUCT_CREATE_WARNING_THRESHOLD
+          ? nearDailyLimitWarningText()
+          : null;
       res.json({
         productsCreatedToday,
         limit: DAILY_PRODUCT_CREATE_LIMIT,
         resetAt: resetAt.toISOString(),
         timeZone: tz,
+        warningMessage,
       });
     } catch {
       res.status(500).json({ error: "Failed to fetch usage" });
@@ -224,11 +236,9 @@ export function registerCatalogRoutes(app: Express): void {
       const createdToday = await storage.countProductsCreatedOnUserCalendarDay(tz);
       if (createdToday >= DAILY_PRODUCT_CREATE_LIMIT) {
         const resetAt = await storage.getNextUserLocalMidnightUtc(tz);
-        return res.status(429).json({
-          message: `Daily limit reached: you can create up to ${DAILY_PRODUCT_CREATE_LIMIT} listings per calendar day. Your limit resets at midnight local time.`,
-          resetAt: resetAt.toISOString(),
-          timeZone: tz,
-        });
+        return res.status(429).json(
+          buildDailyProductLimitLockoutBody(DAILY_PRODUCT_CREATE_LIMIT, resetAt, tz),
+        );
       }
 
       const { imageUrl, additionalImages, originalTitle, aiDescription, basePrice, currency, quantity } =
@@ -242,7 +252,16 @@ export function registerCatalogRoutes(app: Express): void {
         currency: typeof currency === "string" ? currency : "USD",
         quantity: quantity != null ? parseInt(String(quantity), 10) || 1 : 1,
       });
-      res.status(201).json(product);
+
+      const countAfter = createdToday + 1;
+      const dailyLimitWarning =
+        countAfter === DAILY_PRODUCT_CREATE_WARNING_THRESHOLD
+          ? nearDailyLimitWarningText()
+          : undefined;
+
+      res.status(201).json(
+        dailyLimitWarning ? { ...product, dailyLimitWarning } : product,
+      );
     } catch {
       res.status(500).json({ error: "Failed to create product" });
     }

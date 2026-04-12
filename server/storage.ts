@@ -20,6 +20,36 @@ import {
 } from "@shared/schema";
 import { eq, desc, isNull, gte } from "drizzle-orm";
 
+/** JSON body for HTTP 429 when the per-calendar-day product create limit is exceeded. */
+export type DailyProductLimitLockoutBody = {
+  message: string;
+  resetAt: string;
+  timeZone: string;
+};
+
+/**
+ * Builds the lockout payload. The daily cap clears at the next local midnight in `timeZone`
+ * (see `getNextUserLocalMidnightUtc`); `resetAt` is that instant in ISO 8601.
+ */
+export function buildDailyProductLimitLockoutBody(
+  limit: number,
+  resetAt: Date,
+  timeZone: string,
+): DailyProductLimitLockoutBody {
+  const scope =
+    timeZone === "UTC"
+      ? "per calendar day (UTC — send X-Client-Timezone for your local midnight)"
+      : "per calendar day in your local time zone";
+  return {
+    message:
+      `Daily listing limit reached: you can create up to ${limit} products ${scope}. ` +
+      `The limit resets at midnight (12:00 AM) when the next calendar day begins in that same time zone. ` +
+      `The resetAt field is the exact UTC time of that midnight reset.`,
+    resetAt: resetAt.toISOString(),
+    timeZone,
+  };
+}
+
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   
@@ -85,6 +115,7 @@ export const storage: IStorage = {
   },
 
   async countProductsCreatedOnUserCalendarDay(timeZone: string) {
+    // Assumes `created_at` stores UTC instants in a timestamp-without-tz column (typical Node/pg behavior).
     const { rows } = await pool.query<{ c: string }>(
       `SELECT COUNT(*)::int AS c
        FROM products

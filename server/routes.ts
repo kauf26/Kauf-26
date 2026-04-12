@@ -2,6 +2,12 @@ import type { Express } from "express";
 import { authStorage } from "./replit_integrations/auth/storage";
 import { registerCatalogRoutes } from "./catalogRoutes";
 
+/** Used by POST /api/products (catalog) for 429 daily cap; resets at local midnight — see `buildDailyProductLimitLockoutBody`. */
+export {
+  buildDailyProductLimitLockoutBody,
+  type DailyProductLimitLockoutBody,
+} from "./storage";
+
 export function registerRoutes(app: Express) {
   registerCatalogRoutes(app);
 
