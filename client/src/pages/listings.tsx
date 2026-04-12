@@ -3,7 +3,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Trash2, Loader2, Package, Hash } from "lucide-react";
+import { MARKETPLACES } from "@/config/marketplaces";
+import { Trash2, Loader2, Package, Hash, RefreshCw, ExternalLink } from "lucide-react";
 
 interface Product {
   id: number;
@@ -201,6 +202,44 @@ export default function Listings() {
                           </div>
                         </div>
                       ))}
+                    </div>
+                    <div
+                      className="mt-4 pt-4 border-t border-border"
+                      data-testid={`marketplaces-section-${product.id}`}
+                    >
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground mb-2.5">
+                        Marketplaces
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {MARKETPLACES.map((mp) => (
+                          <Badge
+                            key={mp.slug}
+                            variant="secondary"
+                            className="inline-flex max-w-full items-center gap-1 px-2.5 py-1 text-[11px] font-medium leading-none"
+                            data-testid={`marketplace-badge-${product.id}-${mp.slug}`}
+                            title={
+                              mp.integrationType === "API"
+                                ? `${mp.name} — API integration (sync)`
+                                : `${mp.name} — manual integration`
+                            }
+                          >
+                            {mp.integrationType === "API" ? (
+                              <RefreshCw
+                                className="size-3 shrink-0 opacity-80"
+                                strokeWidth={2.25}
+                                aria-hidden
+                              />
+                            ) : (
+                              <ExternalLink
+                                className="size-3 shrink-0 opacity-80"
+                                strokeWidth={2.25}
+                                aria-hidden
+                              />
+                            )}
+                            <span className="min-w-0 truncate">{mp.name}</span>
+                          </Badge>
+                        ))}
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
