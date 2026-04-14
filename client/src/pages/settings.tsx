@@ -425,6 +425,20 @@ function MarketplaceCard({ def, savedCreds }: { def: MarketplaceDef; savedCreds:
               className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
               <ExternalLink className="w-3 h-3" /> Get API credentials
             </a>
+
+            {def.id === "shopify" && (savedCreds?.storeUrl || values.storeUrl) && (
+              <>
+                <span className="text-muted-foreground">·</span>
+                <a
+                  href={`https://${savedCreds?.storeUrl || values.storeUrl}/admin/apps`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <ExternalLink className="w-3 h-3" /> Open Shopify App Config
+                </a>
+              </>
+            )}
           </div>
 
           <div className="space-y-3">
