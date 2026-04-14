@@ -1,13 +1,14 @@
-import { users, products, type User, type InsertUser, type Product, type InsertProduct } from "@shared/schema";
+import { users, products, type User, type InsertUser } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, gte } from "drizzle-orm";
 
 export interface IStorage {
- getUser(id: number): Promise<User | undefined>;
- getUserByUsername(username: string): Promise<User | undefined>;
- createUser(user: InsertUser): Promise<User>;
- buildDailyProductLimitLockoutBody(userId: string): Promise<boolean>;
-}
+    getUser(id: number): Promise<User | undefined>;
+    getUserByUsername(username: string): Promise<User | undefined>;
+    createUser(user: InsertUser): Promise<User>;
+    deleteUser(userId: string): Promise<void>;
+    buildDailyProductLimitLockoutBody(userId: string): Promise<any>;
+   }
 
 export class DatabaseStorage implements IStorage {
  async getUser(id: number): Promise<User | undefined> {
