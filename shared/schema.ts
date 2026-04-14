@@ -41,6 +41,11 @@ export const users = pgTable("users", {
   firstLoginAt: timestamp("first_login_at").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  dailyImageCount: integer("daily_image_count").default(0),
+  weeklyViolationStrikes: integer("weekly_violation_strikes").default(0),
+  lockoutExpiry: timestamp("lockout_expiry"),
+
+  permanentBan: boolean("permanent_ban").default(false),
 });
 
 export const insertUserSchema = createInsertSchema(users).omit({

@@ -1,302 +1,55 @@
-import { db, pool } from "./db";
-import {
-  users,
-  type User,
-  products,
-  type Product,
-  type InsertProduct,
-  listings,
-  type Listing,
-  type InsertListing,
-  sales,
-  type Sale,
-  type InsertSale,
-  dashboardLayouts,
-  type DashboardLayout,
-  appConfig,
-  type AppConfig,
-  marketplaceCredentials,
-  type MarketplaceCredentials,
-} from "@shared/schema";
-import { eq, desc, isNull, gte } from "drizzle-orm";
-
-/** JSON body for HTTP 429 when the per-calendar-day product create limit is exceeded. */
-export type DailyProductLimitLockoutBody = {
-  message: string;
-  resetAt: string;
-  timeZone: string;
-};
-
-/**
- * Builds the lockout payload. The daily cap clears at the next local midnight in `timeZone`
- * (see `getNextUserLocalMidnightUtc`); `resetAt` is that instant in ISO 8601.
- */
-export function buildDailyProductLimitLockoutBody(
-  limit: number,
-  resetAt: Date,
-  timeZone: string,
-): DailyProductLimitLockoutBody {
-  const scope =
-    timeZone === "UTC"
-      ? "per calendar day (UTC — send X-Client-Timezone for your local midnight)"
-      : "per calendar day in your local time zone";
-  return {
-    message:
-      `Daily listing limit reached: you can create up to ${limit} products ${scope}. ` +
-      `The limit resets at midnight (12:00 AM) when the next calendar day begins in that same time zone. ` +
-      `The resetAt field is the exact UTC time of that midnight reset.`,
-    resetAt: resetAt.toISOString(),
-    timeZone,
-  };
-}
+import { users, products, type User, type InsertUser, type Product, type InsertProduct } from "@shared/schema";
+import { db } from "./db";
+import { eq, and, gte } from "drizzle-orm";
 
 export interface IStorage {
-  getUser(id: string): Promise<User | undefined>;
-  
-  createProduct(product: InsertProduct): Promise<Product>;
-  getProduct(id: number): Promise<Product | undefined>;
-  getAllProducts(): Promise<Product[]>;
-  /** Products whose created_at falls on the user's local calendar day (IANA tz). */
-  countProductsCreatedOnUserCalendarDay(timeZone: string): Promise<number>;
-  /** Next 00:00:00 in the user's zone, as a UTC Date (for lockout / limit messaging). */
-  getNextUserLocalMidnightUtc(timeZone: string): Promise<Date>;
-  countProductsCreatedThisMonth(): Promise<number>;
-  countSalesThisMonth(): Promise<number>;
-  deleteProduct(id: number): Promise<void>;
-  updateProductQuantity(id: number, quantity: number): Promise<void>;
-  
-  createListing(listing: InsertListing): Promise<Listing>;
-  getListingsByProduct(productId: number): Promise<Listing[]>;
-  getAllListings(): Promise<Listing[]>;
-  updateListingStatus(id: number, status: string, marketplaceListingId?: string): Promise<void>;
-  deleteListingsByProduct(productId: number): Promise<void>;
-  deleteListing(id: number): Promise<void>;
-  getAllListingsWithProductMedia(): Promise<
-    { listing: Listing; productImageUrl: string }[]
-  >;
-  
-  createSale(sale: InsertSale): Promise<Sale>;
-  getSalesByListing(listingId: number): Promise<Sale[]>;
-  getAllSales(): Promise<Sale[]>;
-  updateSaleFeePaid(id: number, paid: boolean): Promise<void>;
-  
-  getDashboardLayout(userId?: string): Promise<DashboardLayout | undefined>;
-  saveDashboardLayout(userId: string | null, layout: string): Promise<DashboardLayout>;
-
-  getAppConfig(): Promise<AppConfig | undefined>;
-  initAppConfig(): Promise<AppConfig>;
-  updateSubscription(stripeCustomerId: string, stripeSubscriptionId: string, status: string): Promise<void>;
-
-  getAllMarketplaceCredentials(): Promise<MarketplaceCredentials[]>;
-  upsertMarketplaceCredentials(marketplace: string, credentials: string): Promise<MarketplaceCredentials>;
-  deleteMarketplaceCredentials(marketplace: string): Promise<void>;
-
-  deleteAllData(userId: string): Promise<void>;
+ getUser(id: number): Promise<User | undefined>;
+ getUserByUsername(username: string): Promise<User | undefined>;
+ createUser(user: InsertUser): Promise<User>;
+ buildDailyProductLimitLockoutBody(userId: string): Promise<boolean>;
 }
 
-export const storage: IStorage = {
-  async getUser(id: string) {
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user;
-  },
+export class DatabaseStorage implements IStorage {
+ async getUser(id: number): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id.toString())).limit(1);
+   return user;
+ }
 
-  async createProduct(product: InsertProduct) {
-    const [created] = await db.insert(products).values(product).returning();
-    return created;
-  },
+ async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq((users as any).username, username)).limit(1);
+   return user;
+ }
 
-  async getProduct(id: number) {
-    const [product] = await db.select().from(products).where(eq(products.id, id));
-    return product;
-  },
-
-  async getAllProducts() {
-    return db.select().from(products).orderBy(desc(products.createdAt));
-  },
-
-  async countProductsCreatedOnUserCalendarDay(timeZone: string) {
-    // Assumes `created_at` stores UTC instants in a timestamp-without-tz column (typical Node/pg behavior).
-    const { rows } = await pool.query<{ c: string }>(
-      `SELECT COUNT(*)::int AS c
-       FROM products
-       WHERE ((created_at AT TIME ZONE 'UTC') AT TIME ZONE $1)::date = (CURRENT_TIMESTAMP AT TIME ZONE $1)::date`,
-      [timeZone],
-    );
-    return parseInt(rows[0]?.c ?? "0", 10);
-  },
-
-  async getNextUserLocalMidnightUtc(timeZone: string) {
-    const { rows } = await pool.query<{ next_midnight: Date }>(
-      `SELECT (
-         ((CURRENT_TIMESTAMP AT TIME ZONE $1)::date + interval '1 day')::timestamp
-         AT TIME ZONE $1
-       ) AS next_midnight`,
-      [timeZone],
-    );
-    const v = rows[0]?.next_midnight;
-    if (v == null) {
-      throw new Error("next_midnight query returned no row");
-    }
-    return v instanceof Date ? v : new Date(String(v));
-  },
-
-  async countProductsCreatedThisMonth() {
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-    const rows = await db.select().from(products).where(gte(products.createdAt, startOfMonth));
-    return rows.length;
-  },
-
-  async countSalesThisMonth() {
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
-    const rows = await db.select().from(sales).where(gte(sales.saleDate, startOfMonth));
-    return rows.length;
-  },
-
-  async deleteProduct(id: number) {
-    await db.delete(products).where(eq(products.id, id));
-  },
-
-  async updateProductQuantity(id: number, quantity: number) {
-    await db.update(products).set({ quantity }).where(eq(products.id, id));
-  },
-
-  async createListing(listing: InsertListing) {
-    const [created] = await db.insert(listings).values(listing).returning();
-    return created;
-  },
-
-  async getListingsByProduct(productId: number) {
-    return db.select().from(listings).where(eq(listings.productId, productId));
-  },
-
-  async getAllListings() {
-    return db.select().from(listings).orderBy(desc(listings.createdAt));
-  },
-
-  async updateListingStatus(id: number, status: string, marketplaceListingId?: string) {
-    await db.update(listings)
-      .set({ 
-        status, 
-        ...(marketplaceListingId && { marketplaceListingId }),
-        updatedAt: new Date()
-      })
-      .where(eq(listings.id, id));
-  },
-
-  async deleteListingsByProduct(productId: number) {
-    await db.delete(listings).where(eq(listings.productId, productId));
-  },
-
-  async deleteListing(id: number) {
-    await db.delete(listings).where(eq(listings.id, id));
-  },
-
-  async getAllListingsWithProductMedia() {
-    return db
-      .select({
-        listing: listings,
-        productImageUrl: products.imageUrl,
-      })
-      .from(listings)
-      .innerJoin(products, eq(listings.productId, products.id))
-      .orderBy(desc(listings.createdAt));
-  },
-
-  async createSale(sale: InsertSale) {
-    const [created] = await db.insert(sales).values(sale).returning();
-    return created;
-  },
-
-  async getSalesByListing(listingId: number) {
-    return db.select().from(sales).where(eq(sales.listingId, listingId));
-  },
-
-  async getAllSales() {
-    return db.select().from(sales).orderBy(desc(sales.saleDate));
-  },
-
-  async updateSaleFeePaid(id: number, paid: boolean) {
-    await db.update(sales).set({ feePaid: paid }).where(eq(sales.id, id));
-  },
-
-  async getDashboardLayout(userId?: string) {
-    if (userId) {
-      const [layout] = await db.select().from(dashboardLayouts).where(eq(dashboardLayouts.userId, userId));
-      return layout;
-    }
-    const [layout] = await db.select().from(dashboardLayouts).where(isNull(dashboardLayouts.userId));
-    return layout;
-  },
-
-  async saveDashboardLayout(userId: string | null, layout: string) {
-    const existing = await this.getDashboardLayout(userId || undefined);
-    if (existing) {
-      const [updated] = await db.update(dashboardLayouts)
-        .set({ layout, updatedAt: new Date() })
-        .where(eq(dashboardLayouts.id, existing.id))
-        .returning();
-      return updated;
-    }
-    const [created] = await db.insert(dashboardLayouts)
-      .values({ userId, layout })
-      .returning();
-    return created;
-  },
-
-  async getAppConfig() {
-    const [config] = await db.select().from(appConfig).limit(1);
-    return config;
-  },
-
-  async initAppConfig() {
-    const existing = await this.getAppConfig();
-    if (existing) return existing;
-    const [created] = await db.insert(appConfig).values({}).returning();
-    return created;
-  },
-
-  async updateSubscription(stripeCustomerId: string, stripeSubscriptionId: string, status: string) {
-    const existing = await this.getAppConfig();
-    if (existing) {
-      await db.update(appConfig)
-        .set({ stripeCustomerId, stripeSubscriptionId, subscriptionStatus: status })
-        .where(eq(appConfig.id, existing.id));
-    }
-  },
-
-  async getAllMarketplaceCredentials() {
-    return db.select().from(marketplaceCredentials);
-  },
-
-  async upsertMarketplaceCredentials(marketplace: string, credentials: string) {
-    const existing = await db.select().from(marketplaceCredentials)
-      .where(eq(marketplaceCredentials.marketplace, marketplace)).limit(1);
-    if (existing.length > 0) {
-      const [updated] = await db.update(marketplaceCredentials)
-        .set({ credentials, connected: true, updatedAt: new Date() })
-        .where(eq(marketplaceCredentials.marketplace, marketplace))
-        .returning();
-      return updated;
-    }
-    const [created] = await db.insert(marketplaceCredentials)
-      .values({ marketplace, credentials, connected: true })
-      .returning();
-    return created;
-  },
-
-  async deleteMarketplaceCredentials(marketplace: string) {
-    await db.delete(marketplaceCredentials).where(eq(marketplaceCredentials.marketplace, marketplace));
-  },
-
-  async deleteAllData(userId: string) {
-    await db.delete(sales);
-    await db.delete(listings);
-    await db.delete(products);
-    await db.delete(marketplaceCredentials);
-    await db.delete(dashboardLayouts);
-    await db.delete(appConfig);
+ async createUser(insertUser: InsertUser): Promise<User> {
+   const [user] = await db.insert(users).values(insertUser).returning();
+   return user;
+ }
+ async deleteUser(userId: string): Promise<void> {
     await db.delete(users).where(eq(users.id, userId));
-  },
-};
+  }
+ async buildDailyProductLimitLockoutBody(userId: string): Promise<boolean> {
+   const today = new Date();
+   today.setHours(0, 0, 0, 0);
+
+   try {
+     const userProducts = await db
+       .select()
+       .from(products)
+       .where(
+         and(
+           eq((products as any).userId, userId),
+           gte((products as any).createdAt, today)
+         )
+       );
+
+       return userProducts.length >= 50;
+    } catch (e) {
+        console.error("Error checking product limits:", e);
+        return false;
+      }
+     }
+    }
+    export const authStorage = new DatabaseStorage();
+export type DailyProductLimitLockoutBody = boolean;
+
+    

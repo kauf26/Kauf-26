@@ -1,44 +1,29 @@
 import type { Express } from "express";
-import { authStorage } from "./replit_integrations/auth/storage";
+import { authStorage, type DailyProductLimitLockoutBody } from "./storage";
 import { registerCatalogRoutes } from "./catalogRoutes";
 
-/** Used by POST /api/products (catalog) for 429 daily cap; resets at local midnight — see `buildDailyProductLimitLockoutBody`. */
-export {
-  buildDailyProductLimitLockoutBody,
-  type DailyProductLimitLockoutBody,
-} from "./storage";
-
 export function registerRoutes(app: Express) {
-  registerCatalogRoutes(app);
+ registerCatalogRoutes(app);
 
-  app.delete("/api/user", async (req, res) => {
-    if (!req.isAuthenticated()) {
-      return res.status(401).send("Not logged in");
-    }
+ app.delete("/api/user", async (req, res) => {
+   if (!req.isAuthenticated()) {
+     return res.status(401).send("Not logged in");
+   }
 
-    try {
-      const sub = (req.user as { claims?: { sub?: string } })?.claims?.sub;
-      if (!sub) {
-        return res.status(400).json({ message: "Missing user id" });
-      }
-      await authStorage.deleteUser(sub);
-      req.logout((err) => {
-        if (err) return res.status(500).send("Error logging out");
-        res.sendStatus(200);
-      });
-    } catch {
-      res.status(500).json({ message: "Failed to delete account" });
-    }
-  });
+   try {
+     const sub = (req.user as { claims?: { sub?: string } })?.claims?.sub;
+     if (!sub) {
+       return res.status(400).json({ message: "Missing user subject" });
+     }
 
-  return app;
-}
+     await authStorage.deleteUser(sub);
 
-export function calcTrialStatus(firstLoginAt: Date) {
- const TRIAL_DURATION_MS = 7 * 24 * 60 * 60 * 1000;
- const elapsed = Date.now() - firstLoginAt.getTime();
- const isTrialActive = elapsed < TRIAL_DURATION_MS;
- const trialDaysRemaining = Math.max(0, Math.ceil((TRIAL_DURATION_MS - elapsed) / (24 * 60 * 60 * 1000)));
- const trialEndsAt = new Date(firstLoginAt.getTime() + TRIAL_DURATION_MS);
- return { isTrialActive, trialDaysRemaining, trialEndsAt };
+     req.logout((err) => {
+       if (err) return res.status(500).send("Error logging out");
+       res.sendStatus(200);
+     });
+   } catch (err) {
+     res.status(500).json({ message: "Failed to delete account" });
+   }
+ });
 }
