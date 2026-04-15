@@ -1,19 +1,21 @@
-import { sql } from "drizzle-orm";
 import {
   pgTable,
+  text,
   serial,
   integer,
-  text,
-  varchar,
   timestamp,
-  decimal,
-  boolean,
+  varchar,
   jsonb,
   index,
-} from "drizzle-orm/pg-core";
+  boolean,
+  decimal
+
+ } from "drizzle-orm/pg-core";
+ import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+//
 export { conversations, messages, insertConversationSchema, insertMessageSchema } from "./models/chat";
 export type {
   Conversation,
@@ -35,6 +37,7 @@ export const sessions = pgTable(
 export const users = pgTable("users", {
   id: varchar("id").primaryKey(),
   email: varchar("email").unique(),
+  username: varchar("username").unique(), 
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
@@ -58,6 +61,7 @@ export type UpsertUser = typeof users.$inferInsert;
 
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(),
   imageUrl: text("image_url").notNull(),
   additionalImages: text("additional_images").array().notNull().default(sql`ARRAY[]::text[]`),
   originalTitle: text("original_title").notNull(),

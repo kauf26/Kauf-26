@@ -1,5 +1,5 @@
-import type { Express } from "express";
-import { authStorage, type DailyProductLimitLockoutBody } from "./storage";
+import { type Express } from "express";
+import { authStorage } from "./storage";
 import { registerCatalogRoutes } from "./catalogRoutes";
 
 export function registerRoutes(app: Express) {
