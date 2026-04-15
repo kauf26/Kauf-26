@@ -14,7 +14,23 @@ import {
  import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-
+// 1. Define the Global Categories
+export const PRODUCT_CATEGORIES = {
+  FOOTWEAR: ["Sneakers", "Boots", "Sandals", "Slides"],
+  APPAREL: ["T-Shirts", "Hoodies", "Pants", "Outerwear"],
+  ELECTRONICS: ["TVs", "VCRs", "Computers", "Gaming"],
+  COLLECTIBLES: ["Trading Cards", "Figures"]
+ } as const;
+ 
+ // 2. Define Platform-Specific Restrictions
+ // This is where you enforce the "Shoes Only" rule for specific apps
+ export const PLATFORM_RESTRICTIONS = {
+  "goat": ["FOOTWEAR"], // Strictly shoes
+  "stockx": ["FOOTWEAR", "APPAREL", "COLLECTIBLES"],
+  "grailed": ["FOOTWEAR", "APPAREL"],
+  "ebay": ["FOOTWEAR", "APPAREL", "ELECTRONICS", "COLLECTIBLES"], // Allows everything
+  "shopify": ["FOOTWEAR", "APPAREL", "ELECTRONICS", "COLLECTIBLES"]
+ } as const;
 //
 export { conversations, messages, insertConversationSchema, insertMessageSchema } from "./models/chat";
 export type {
@@ -66,6 +82,8 @@ export const products = pgTable("products", {
   additionalImages: text("additional_images").array().notNull().default(sql`ARRAY[]::text[]`),
   originalTitle: text("original_title").notNull(),
   aiDescription: text("ai_description").notNull(),
+  category: text("category").notNull(),
+  subcategory: text("subcategory").notNull(),
   basePrice: decimal("base_price", { precision: 10, scale: 2 }).notNull(),
   currency: text("currency").notNull().default("USD"),
   quantity: integer("quantity").notNull().default(1),
