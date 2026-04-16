@@ -21,6 +21,7 @@ export const PRODUCT_CATEGORIES = {
   ELECTRONICS: ["TVs", "VCRs", "Computers", "Gaming"],
   COLLECTIBLES: ["Trading Cards", "Figures"]
  } as const;
+ export const DAILY_PRODUCT_CREATE_LIMIT = 10;
  
  // 2. Define Platform-Specific Restrictions
  // This is where you enforce the "Shoes Only" rule for specific apps

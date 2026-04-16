@@ -39,4 +39,7 @@ app.use(express.urlencoded({ extended: false }));
 const server = createServer(app);
 
 registerRoutes(app);
- console.log("Kauf26 Server running on port 5000");
+const PORT = 5001;
+app.listen(PORT, "0.0.0.0", () => {
+ console.log(`Kauf26 Server running on port ${PORT}`);
+});

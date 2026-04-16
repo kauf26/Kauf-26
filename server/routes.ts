@@ -1,5 +1,5 @@
 import { type Express } from "express";
-import { authStorage } from "./storage";
+import { storage } from "./storage";
 import { registerCatalogRoutes } from "./catalogRoutes";
 
 export function registerRoutes(app: Express) {
@@ -16,7 +16,7 @@ export function registerRoutes(app: Express) {
        return res.status(400).json({ message: "Missing user subject" });
      }
 
-     await authStorage.deleteUser(sub);
+     await storage.deleteUser(sub)
 
      req.logout((err) => {
        if (err) return res.status(500).send("Error logging out");
