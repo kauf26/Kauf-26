@@ -138,6 +138,8 @@ export const listings = pgTable("listings", {
   localPrice: decimal("local_price", { precision: 10, scale: 2 }).notNull(),
   localCurrency: text("local_currency").notNull(),
   status: text("status").notNull().default("pending"),
+  ebayItemId: text("ebay_item_id"),
+shopifyVariantId: text("shopify_variant_id"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
