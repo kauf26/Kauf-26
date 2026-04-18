@@ -54,21 +54,18 @@ export class DatabaseStorage implements IStorage {
   const [product] = await db.insert(products).values(insertProduct).returning();
   return product;
 }
-
- async getCommissionRate(): Promise<number> {
-   return 0.10;
- }
-
- async buildDailyProductLimitLockoutBody(): Promise<string> {
-   return "Daily limit reached.";
- }
-
- async DailyProductLimitLockoutBody(): Promise<any> {
-   return {
-     status: "locked",
-     message: await this.buildDailyProductLimitLockoutBody()
-   };
- }
+async getCommissionRate(): Promise<number> {
+  const config = ConfigService.getInstance();
+  const rate = await config.get("commission_rate");
+  return rate;
 }
+async getDailyProductLimitLockoutBody(): Promise<any> {
+  return {
+    status: "locked",
+    message: "Daily limit reached."
+  };
+}
+}
+
 
 export const storage = new DatabaseStorage();

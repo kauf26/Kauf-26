@@ -5,6 +5,7 @@ export interface RemoteConfigs {
  ebay_integration_enabled: boolean;
  shopify_sync_interval: number;
  max_listings_free_tier: number;
+ commission_rate: number; // New Line Added
 }
 
 // 2. Set safe defaults in case the internet or Firebase fails
@@ -12,7 +13,9 @@ const DEFAULT_CONFIGS: RemoteConfigs = {
  ebay_integration_enabled: true,
  shopify_sync_interval: 5000,
  max_listings_free_tier: 10,
+ commission_rate: 0.10, // New Line Added
 };
+
 
 export class ConfigService {
  private static instance: ConfigService;
