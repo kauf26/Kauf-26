@@ -50,28 +50,30 @@ export const sessions = pgTable(
   },
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
-
 export const users = pgTable("users", {
-  id: varchar("id").primaryKey(),
+  id: serial("id").primaryKey(),
   email: varchar("email").unique(),
-  username: varchar("username").unique(), 
+  username: varchar("username").unique(),
   firstName: varchar("first_name"),
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
+  sub: varchar("sub").unique(),
   firstLoginAt: timestamp("first_login_at").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   dailyImageCount: integer("daily_image_count").default(0),
   weeklyViolationStrikes: integer("weekly_violation_strikes").default(0),
   lockoutExpiry: timestamp("lockout_expiry"),
-
   permanentBan: boolean("permanent_ban").default(false),
-});
-
-export const insertUserSchema = createInsertSchema(users).omit({
+ });
+ 
+ // This creates the schema for inserts, but tells it to ignore 'id'
+ // since the database (serial) generates it for us.
+ export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
   createdAt: true,
-  updatedAt: true,
-});
+  updatedAt: true
+ });
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
 export type UpsertUser = typeof users.$inferInsert;

@@ -1,71 +1,60 @@
 import { users, products, type User, type InsertUser, type Product, type InsertProduct } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import * as drizzle from "drizzle-orm";
 import { ConfigService } from "./remoteConfig";
 
+// Shortcut for the 'eq' function to clear squiggles
+const eq = drizzle.eq;
+
 export interface IStorage {
- getUser(id: string): Promise<User | undefined>;
+ getUser(id: number): Promise<User | undefined>;
  getUserByUsername(username: string): Promise<User | undefined>;
  createUser(user: InsertUser): Promise<User>;
- getProduct(id: number): Promise<Product | undefined>;
- getProductsByUserId(userId: number): Promise<Product[]>;
+ deleteUser(sub: string): Promise<void>;
  createProduct(product: InsertProduct): Promise<Product>;
+ getCommissionRate(): Promise<number>;
+ getDailyProductLimitLockoutBody(): Promise<any>;
 }
 
 export class DatabaseStorage implements IStorage {
- async getUser(id: string): Promise<User | undefined> {
+ async getUser(id: number): Promise<User | undefined> {
    const [user] = await db.select().from(users).where(eq(users.id, id));
-   return user || undefined;
+   return user;
  }
 
  async getUserByUsername(username: string): Promise<User | undefined> {
    const [user] = await db.select().from(users).where(eq(users.username, username));
-   return user || undefined;
+   return user;
  }
 
  async createUser(insertUser: InsertUser): Promise<User> {
-   const results = await db.insert(users).values(insertUser).returning();
-   return results[0];
+   const [user] = await db.insert(users).values(insertUser).returning();
+   return user;
  }
 
- async getProduct(id: number): Promise<Product | undefined> {
-   const [product] = await db.select().from(products).where(eq(products.id, id));
-   return product || undefined;
+ async deleteUser(sub: string): Promise<void> {
+   // This is the correct way to handle the 'sub' field
+   await db.delete(users).where(eq(users.sub, sub));
  }
 
- async getProductsByUserId(userId: number): Promise<Product[]> {
-   return await db.select().from(products).where(eq(products.userId, userId));
- }
  async createProduct(insertProduct: InsertProduct): Promise<Product> {
-  const config = ConfigService.getInstance();
+   const [product] = await db.insert(products).values(insertProduct).returning();
+   return product;
+ }
 
-  // 1. Fetch the limit from Firebase
-  const maxListings = await config.get("max_listings_free_tier");
+ async getCommissionRate(): Promise<number> {
+   const config = ConfigService.getInstance();
+   const rate = await config.get("commission_rate");
+   return rate || 0.10;
+ }
 
-  // 2. Count how many products this user already has
-  const userProducts = await this.getProductsByUserId(insertProduct.userId);
-
-  // 3. Block creation if they are at or over the limit
-  if (userProducts.length >= maxListings) {
-    throw new Error(`Limit reached: You can only have ${maxListings} products.`);
-  }
-
-  // 4. If under limit, proceed with the original database insert
-  const [product] = await db.insert(products).values(insertProduct).returning();
-  return product;
+ async getDailyProductLimitLockoutBody(): Promise<any> {
+   return {
+     status: "locked",
+     message: "Daily limit reached.",
+     upgradeUrl: "/upgrade"
+   };
+ }
 }
-async getCommissionRate(): Promise<number> {
-  const config = ConfigService.getInstance();
-  const rate = await config.get("commission_rate");
-  return rate;
-}
-async getDailyProductLimitLockoutBody(): Promise<any> {
-  return {
-    status: "locked",
-    message: "Daily limit reached."
-  };
-}
-}
-
 
 export const storage = new DatabaseStorage();
