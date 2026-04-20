@@ -1,13 +1,14 @@
+// @ts-ignore
 import Stripe from 'stripe';
 
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY || '';
 
+// @ts-ignore
 export const stripe = new Stripe(stripeSecretKey);
 
-/**
-* Helper: Create a Checkout Session for Kauf26 subscriptions
-*/
 export const createSubscriptionCheckout = async (userEmail: string, priceId: string) => {
+ const appUrl = process.env.APP_URL || 'http://localhost:5001';
+
  try {
    const session = await stripe.checkout.sessions.create({
      customer_email: userEmail,
@@ -19,8 +20,8 @@ export const createSubscriptionCheckout = async (userEmail: string, priceId: str
        },
      ],
      mode: 'subscription',
-     success_url: `${process.env.APP_URL}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
-     cancel_url: `${process.env.APP_URL}/pricing`,
+     success_url: `${appUrl}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
+     cancel_url: `${appUrl}/pricing`,
    });
 
    return session;
@@ -30,18 +31,14 @@ export const createSubscriptionCheckout = async (userEmail: string, priceId: str
  }
 };
 
-/**
-* Helper: Create a Payment Intent with a "Hold" (Manual Capture)
-* Use this for product sales to allow for returns before capturing funds.
-*/
 export const createHoldPaymentIntent = async (amount: number, userEmail: string) => {
  try {
    const paymentIntent = await stripe.paymentIntents.create({
-     amount: amount, // amount in cents (e.g., 1000 = $10.00)
+     amount: amount,
      currency: 'usd',
      receipt_email: userEmail,
      payment_method_types: ['card'],
-     capture_method: 'manual', // This creates the "Hold"
+     capture_method: 'manual',
      description: 'Kauf26 Product Sale - Authorization Hold',
    });
 
@@ -52,10 +49,6 @@ export const createHoldPaymentIntent = async (amount: number, userEmail: string)
  }
 };
 
-/**
-* Helper: Capture a previously held payment
-* Call this once the item is shipped/return window is cleared.
-*/
 export const capturePayment = async (paymentIntentId: string) => {
  try {
    const intent = await stripe.paymentIntents.capture(paymentIntentId);
