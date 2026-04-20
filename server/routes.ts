@@ -59,3 +59,14 @@ export class DatabaseStorage implements IStorage {
 }
 
 export const storage = new DatabaseStorage();
+
+export async function registerRoutes(app: any) {
+ // Your route definitions will go here
+ // Example:
+ // app.get("/api/data", async (req, res) => {
+ //   const rate = await storage.getCommissionRate();
+ //   res.json({ rate });
+ // });
+
+ return storage;
+}
