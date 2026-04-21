@@ -4,7 +4,7 @@ import * as drizzle from "drizzle-orm";
 import { ConfigService } from "./remoteConfig";
 
 // Shortcut for the 'eq' function to clear squiggles
-const eq = drizzle.eq;
+const eq = (drizzle as any).eq;
 
 export interface IStorage {
  getUser(id: number): Promise<User | undefined>;
@@ -58,3 +58,31 @@ export class DatabaseStorage implements IStorage {
 }
 
 export const storage = new DatabaseStorage();
+// --- MARKETPLACE P2P HELPERS (Lines 61+) ---
+
+/**
+* Maps internal condition booleans to marketplace-specific strings.
+* Critical for P2P expansion in France/Spain (Vinted, Wallapop).
+*/
+export const getMarketplaceCondition = (marketplaceId: string, isNew: boolean): string => {
+  const conditionMap: Record<string, { new: string; used: string }> = {
+    ebay: { new: "1000", used: "3000" },
+    vinted: { new: "new_with_tags", used: "very_good" },
+    wallapop: { new: "new", used: "as_new" },
+    backmarket: { new: "new", used: "reconditioned" },
+    etsy: { new: "made_to_order", used: "vintage" },
+    cdiscount: { new: "neuf", used: "occasion" },
+    default: { new: "new", used: "used" }
+  };
+ 
+  const platform = conditionMap[marketplaceId] || conditionMap.default;
+  return isNew ? platform.new : platform.used;
+ };
+ 
+ /**
+ * Returns regional currency based on the target marketplace.
+ */
+ export const getMarketplaceCurrency = (marketplaceId: string): string => {
+  const euroPlatforms = ['vinted', 'wallapop', 'backmarket', 'cdiscount', 'manomano', 'rakuten_fr', 'allegro'];
+  return euroPlatforms.includes(marketplaceId) ? 'EUR' : 'USD';
+ };

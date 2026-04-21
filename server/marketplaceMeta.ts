@@ -1,34 +1,41 @@
-/** Target language + listing currency per marketplace (aligned with client create flow). */
-export const marketplaceLocale: Record<string, { lang: string; currency: string }> = {
+/** Target language + listing currency per marketplace **/
+export const marketplaceLocale: Record<string, { lang: string, currency: string }> = {
+  // --- GLOBAL P2P ---
   ebay: { lang: "en", currency: "USD" },
-  amazon: { lang: "en", currency: "USD" },
-  mercari: { lang: "en", currency: "USD" },
-  "mercari-jp": { lang: "ja", currency: "JPY" },
+  etsy: { lang: "en", currency: "USD" },
+  discogs: { lang: "en", currency: "USD" },
+  reverb: { lang: "en", currency: "USD" },
   stockx: { lang: "en", currency: "USD" },
   grailed: { lang: "en", currency: "USD" },
-  whatnot: { lang: "en", currency: "USD" },
-  tcgplayer: { lang: "en", currency: "USD" },
-  discogs: { lang: "en", currency: "USD" },
+  depop: { lang: "en", currency: "USD" },
   poshmark: { lang: "en", currency: "USD" },
-  gumtree: { lang: "en", currency: "AUD" },
-  etsy: { lang: "en", currency: "USD" },
+ 
+  // --- FRANCE & SPAIN ANCHORS ---
+  wallapop: { lang: "es", currency: "EUR" },
+  vinted: { lang: "fr", currency: "EUR" },
+  backmarket: { lang: "fr", currency: "EUR" },
+  cdiscount: { lang: "fr", currency: "EUR" },
+  manomano: { lang: "fr", currency: "EUR" },
+  rakuten_fr: { lang: "fr", currency: "EUR" },
+  vestiaire: { lang: "fr", currency: "EUR" },
+ 
+  // --- REGIONAL & HOBBY ---
+  mercadolibre: { lang: "es", currency: "USD" },
+  cardmarket: { lang: "en", currency: "EUR" },
+  allegro: { lang: "en", currency: "PLN" },
+  gumtree: { lang: "en", currency: "GBP" },
+  bonanza: { lang: "en", currency: "USD" },
+  abebooks: { lang: "en", currency: "USD" },
+  biblio: { lang: "en", currency: "USD" },
+  rubylane: { lang: "en", currency: "USD" },
+ 
+  // --- DIRECT STORES ---
   shopify: { lang: "en", currency: "USD" },
   woocommerce: { lang: "en", currency: "USD" },
-  squarespace: { lang: "en", currency: "USD" },
   wix: { lang: "en", currency: "USD" },
-  prestashop: { lang: "en", currency: "EUR" },
-  mercadolibre: { lang: "es", currency: "USD" },
-  pinterest: { lang: "en", currency: "USD" },
-  tiktokshop: { lang: "en", currency: "USD" },
-  wallapop: { lang: "es", currency: "EUR" },
-  vinted: { lang: "en", currency: "EUR" },
-  shopee: { lang: "pt", currency: "BRL" },
-  olx: { lang: "pt", currency: "BRL" },
-  falabella: { lang: "es", currency: "USD" },
-  bolcom: { lang: "nl", currency: "EUR" },
-};
-
-export const currencyRates: Record<string, number> = {
+ };
+ 
+ export const currencyRates: Record<string, number> = {
   USD: 1,
   EUR: 0.92,
   GBP: 0.79,
@@ -36,9 +43,6 @@ export const currencyRates: Record<string, number> = {
   MXN: 17.2,
   BRL: 5.1,
   AUD: 1.52,
-  CAD: 1.35,
-};
-
-export function resolveMarketplaceLocale(marketplace: string): { lang: string; currency: string } {
-  return marketplaceLocale[marketplace] ?? { lang: "en", currency: "USD" };
-}
+  PLN: 4.01, // Added for Allegro
+ };
+ 
