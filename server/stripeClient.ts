@@ -2,8 +2,8 @@
 import Stripe from 'stripe';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
- apiVersion: '2023-10-16',
-});
+  apiVersion: '2023-10-16' as any,
+ });
 
 // @ts-ignore
 export const createSubscriptionCheckout = async (userId: string, userEmail: string) => {
@@ -39,20 +39,21 @@ export const createSubscriptionCheckout = async (userId: string, userEmail: stri
 };
 
 export const createHoldPayment = async (userId: string, amount: number) => {
- try {
-   const paymentIntent = await stripe.paymentIntents.create({
-     amount: amount * 100, // Converts dollars to cents
-     currency: 'usd',
-     payment_method_types: ['card'],
-     capture_method: 'manual', // This keeps the 30-day safety buffer
-     metadata: {
-       userId: userId,
-     },
-   });
-
-   return paymentIntent;
- } catch (error) {
-   console.error("Stripe Hold Error:", error);
-   throw error;
- }
-};
+  try {
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: amount * 100, // Converts dollars to cents
+      currency: 'usd',
+      payment_method_types: ['card'],
+      capture_method: 'manual', // This creates the 30-day escrow hold
+      metadata: {
+        userId: userId,
+        hold_type: 'escrow_30_day'
+      },
+    });
+ 
+    return paymentIntent;
+  } catch (error) {
+    console.error("Stripe Hold Error:", error);
+    throw error;
+  }
+ };
