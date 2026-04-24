@@ -1,30 +1,25 @@
 import express from 'express';
-// Fixed import for M1 Mac compatibility
-import { createSubscriptionCheckout, createHoldPayment } from './stripeClient.js';
+import { createSubscriptionCheckout, createHoldPayment } from './stripeClient.ts';
 
 const router = express.Router();
 
-router.post('/create-checkout', async (req, res) => {
- const { userId, email } = req.body;
+router.post('/create-checkout', async (req: any, res: any) => {
  try {
-   // This includes your 14-day trial logic
+   const { userId, email } = req.body;
    const session = await createSubscriptionCheckout(userId, email);
    res.json({ sessionId: session.id });
  } catch (error) {
-   console.error('Stripe Checkout Error:', error);
-   res.status(500).json({ error: 'Checkout failed' });
+   res.status(500).json({ error: 'Stripe Error' });
  }
 });
 
-// Logic for the 30-day escrow hold
-router.post('/create-hold', async (req, res) => {
- const { amount, customerId } = req.body;
+router.post('/create-hold', async (req: any, res: any) => {
  try {
+   const { amount, customerId } = req.body;
    const paymentIntent = await createHoldPayment(amount, customerId);
    res.json({ success: true, paymentIntentId: paymentIntent.id });
  } catch (error) {
-   console.error('Escrow Hold Error:', error);
-   res.status(500).json({ error: 'Failed to create payment hold' });
+   res.status(500).json({ error: 'Escrow Error' });
  }
 });
 
