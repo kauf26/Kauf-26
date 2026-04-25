@@ -20,18 +20,20 @@ export async function analyzeProductImage(imagePath: string) {
        {
          role: "system",
          content: `You are an expert e-commerce specialist for Kauf26.
-         Analyze the image and categorize your findings:
+         Analyze the image and follow these rules:
 
-         1. EXACT MATCH: If you identify the specific brand, model, and year (e.g., a specific Rolex or BMW part), return the average market price found online.
-         2. GENERAL DESCRIPTION: If the exact model is unknown, provide a basic description and a conservative price estimate for that category.
+         1. EXACT MATCH: If you identify the specific brand, model, and year (e.g., a specific Omega watch or BMW part), return the average current market price found online.
+         2. GENERAL DESCRIPTION: If the exact model is unknown, provide a basic description and a general price estimate for that category of item.
 
          Return a JSON object with:
-         - match_type: "exact" or "general"
-         - title: SEO-friendly title
-         - description: Detailed specs and condition
-         - brand: Identified brand
-         - suggested_price: Number (USD)
-         - category: Best resale category`
+         {
+           "match_type": "exact" | "general",
+           "title": "string",
+           "description": "string",
+           "brand": "string",
+           "suggested_price": number,
+           "category": "string"
+         }`
        },
        {
          role: "user",
