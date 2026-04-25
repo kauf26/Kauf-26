@@ -4,11 +4,11 @@ import path from "path";
 import multer from "multer";
 import OpenAI from "openai";
 
-// 1. Database import - Force type to any to clear the 'storage' squiggle
+// 1. Database import
 import * as Database from "./db";
 const storage = (Database as any).storage;
 
-// 2. Shared Limits - Using dynamic access to clear 'buildDailyProductLimitLockoutBody' squiggle
+// 2. Shared Limits logic
 import * as Limits from "../shared/limits";
 const buildDailyProductLimitLockoutBody = (Limits as any).buildDailyProductLimitLockoutBody;
 const DAILY_PRODUCT_CREATE_LIMIT = (Limits as any).DAILY_PRODUCT_CREATE_LIMIT || 10;
@@ -18,9 +18,10 @@ import * as Unified from "./services/unified";
 const currencyRates = (Unified as any).currencyRates || {};
 const resolveMarketplaceLocale = (Unified as any).resolveMarketplaceLocale;
 
-// 4. Schema and Timezone
+// 4. Schema, Timezone, and your NEW OpenAI Service
 import type { Listing } from "../shared/schema";
 import { getClientIanaTimeZone } from "./clientTimezone";
+import { analyzeProductImage } from "./services/openai"; // <--- Added this
 
 const router = express.Router();
 
@@ -48,43 +49,42 @@ const upload = multer({
  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
 });
 
-/**
-* Translates text using OpenAI GPT-4o
-*/
-async function translateText(text: string, targetLang: string): Promise<string> {
- if (!text || targetLang === "en") return text;
-
- const langMap: Record<string, string> = {
-   es: "Spanish", ja: "Japanese", pt: "Portuguese",
-   nl: "Dutch", de: "German", fr: "French"
- };
-
- const langLabel = langMap[targetLang] || "the target language";
-
- try {
-   const response = await openai.chat.completions.create({
-     model: "gpt-4o",
-     messages: [
-       { role: "system", content: `You are a professional translator. Translate to ${langLabel}.` },
-       { role: "user", content: text },
-     ],
-   });
-   return response.choices[0]?.message?.content || text;
- } catch (error) {
-   return text;
- }
-}
-
-// Exporting the setup function for index.ts
+// Main setup function
 export function setupCatalogRoutes(app: Express) {
  app.use("/api/catalog", router);
 
+ /**
+  * NEW ROUTE: AI Image Analysis
+  * This takes the photo and returns the suggested listing details.
+  */
+ router.post("/analyze", upload.single("image"), async (req: Request, res: Response) => {
+   try {
+     if (!req.file) {
+       return res.status(400).json({ error: "No image uploaded" });
+     }
+
+     // Call the new service we just created
+     const analysis = await analyzeProductImage(req.file.path);
+
+     res.status(200).json({
+       message: "Analysis successful",
+       data: analysis,
+       tempImagePath: req.file.path
+     });
+   } catch (error) {
+     console.error("Analysis route error:", error);
+     res.status(500).json({ error: "AI analysis failed to process the image" });
+   }
+ });
+
+ /**
+  * EXISTING ROUTE: Create Product
+  */
  router.post("/create", upload.single("image"), async (req: Request, res: Response) => {
    try {
      const userId = 1;
-
      let lockout = { isLocked: false };
-     // Check if function exists before calling to prevent runtime crashes
+
      if (typeof buildDailyProductLimitLockoutBody === 'function') {
        lockout = await buildDailyProductLimitLockoutBody(userId);
      }
