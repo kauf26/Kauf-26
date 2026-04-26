@@ -1,6 +1,7 @@
 {
   "name": "rest-express",
   "version": "1.0.0",
+<<<<<<< HEAD
   "type": "module",
   "license": "MIT",
   "scripts": {
@@ -8,6 +9,14 @@
     "dev": "NODE_ENV=development npx tsx server/index.ts",
     "build": "npx tsx script/build.ts",
     "start": "NODE_ENV=production npx tsx server/index.ts",
+=======
+
+  "license": "MIT",
+  "scripts": {
+    "dev": "tsx watch server/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+>>>>>>> 3c619e1a8 (Migration to local and npm update)
     "check": "tsc",
     "db:push": "drizzle-kit push"
   },
