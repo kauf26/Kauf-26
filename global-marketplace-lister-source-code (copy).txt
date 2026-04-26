@@ -1,0 +1,2163 @@
+================================================================================
+  GLOBAL MARKETPLACE LISTER — COMPLETE SOURCE CODE (FINAL)
+  Generated: April 4, 2026
+  Deployment fix included: passport-apple now uses dynamic import()
+  instead of createRequire(import.meta.url) — works in both dev and prod
+================================================================================
+
+TABLE OF CONTENTS
+  1.  shared/schema.ts
+  2.  server/db.ts
+  3.  server/storage.ts
+  4.  server/replit_integrations/auth/storage.ts
+  5.  server/replit_integrations/auth/replitAuth.ts   ← DEPLOYMENT FIX HERE
+  6.  server/replit_integrations/auth/routes.ts
+  7.  server/replit_integrations/auth/index.ts
+  8.  server/cleanup.ts
+  9.  server/stripeClient.ts
+  10. server/webhookHandlers.ts
+  11. server/routes.ts
+  12. server/index.ts
+  13. client/index.html
+  14. client/public/manifest.json
+  15. client/src/App.tsx
+  16. client/src/hooks/use-auth.ts
+  17. client/src/pages/login.tsx
+  18. client/src/pages/privacy.tsx
+  19. client/src/pages/terms.tsx
+  20. client/src/components/gdpr-banner.tsx
+  21. client/src/components/translate-widget.tsx
+
+REQUIRED SECRETS (add in Replit → Secrets tab)
+  GOOGLE_CLIENT_ID       from Google Cloud Console
+  GOOGLE_CLIENT_SECRET   from Google Cloud Console
+  APPLE_CLIENT_ID        your Service ID  e.g. com.kauf26.app.service
+  APPLE_TEAM_ID          10-char Team ID from Apple Developer portal
+  APPLE_KEY_ID           Key ID from the key you create
+  APPLE_PRIVATE_KEY      contents of .p8 file, newlines replaced with \n
+
+CALLBACK URLS TO REGISTER
+  Google:  https://kauf26.com/api/auth/google/callback
+  Apple:   https://kauf26.com/api/auth/apple/callback
+
+================================================================================
+FILE 1: shared/schema.ts
+================================================================================
+import { sql } from "drizzle-orm";
+import { pgTable, serial, integer, text, varchar, timestamp, decimal, boolean, jsonb, index } from "drizzle-orm/pg-core";
+import { createInsertSchema } from "drizzle-zod";
+import { z } from "zod";
+
+export const sessions = pgTable(
+  "sessions",
+  {
+    sid: varchar("sid").primaryKey(),
+    sess: jsonb("sess").notNull(),
+    expire: timestamp("expire").notNull(),
+  },
+  (table) => [index("IDX_session_expire").on(table.expire)]
+);
+
+export const users = pgTable("users", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: varchar("email").unique(),
+  firstName: varchar("first_name"),
+  lastName: varchar("last_name"),
+  profileImageUrl: varchar("profile_image_url"),
+  firstLoginAt: timestamp("first_login_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertUserSchema = createInsertSchema(users).omit({ createdAt: true, updatedAt: true });
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type User = typeof users.$inferSelect;
+export type UpsertUser = typeof users.$inferInsert;
+
+export const products = pgTable("products", {
+  id: serial("id").primaryKey(),
+  imageUrl: text("image_url").notNull(),
+  additionalImages: text("additional_images").array().notNull().default(sql`ARRAY[]::text[]`),
+  originalTitle: text("original_title").notNull(),
+  aiDescription: text("ai_description").notNull(),
+  basePrice: decimal("base_price", { precision: 10, scale: 2 }).notNull(),
+  currency: text("currency").notNull().default("USD"),
+  quantity: integer("quantity").notNull().default(1),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertProductSchema = createInsertSchema(products).omit({ id: true, createdAt: true });
+export type Product = typeof products.$inferSelect;
+export type InsertProduct = z.infer<typeof insertProductSchema>;
+
+export const marketplaces = [
+  "ebay", "amazon", "walmart", "wish", "reverb", "offerup", "etsy",
+  "shopify", "woocommerce", "aliexpress", "mercadolibre", "rakuten",
+  "bigcommerce", "prestashop"
+] as const;
+export type Marketplace = typeof marketplaces[number];
+
+export const listings = pgTable("listings", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  marketplace: text("marketplace").notNull(),
+  marketplaceListingId: text("marketplace_listing_id"),
+  translatedTitle: text("translated_title").notNull(),
+  translatedDescription: text("translated_description").notNull(),
+  localPrice: decimal("local_price", { precision: 10, scale: 2 }).notNull(),
+  localCurrency: text("local_currency").notNull(),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertListingSchema = createInsertSchema(listings).omit({ id: true, createdAt: true, updatedAt: true });
+export type Listing = typeof listings.$inferSelect;
+export type InsertListing = z.infer<typeof insertListingSchema>;
+
+export const sales = pgTable("sales", {
+  id: serial("id").primaryKey(),
+  listingId: integer("listing_id").notNull().references(() => listings.id, { onDelete: "cascade" }),
+  saleAmount: decimal("sale_amount", { precision: 10, scale: 2 }).notNull(),
+  saleCurrency: text("sale_currency").notNull(),
+  platformFee: decimal("platform_fee", { precision: 10, scale: 2 }).notNull().default("0"),
+  ourFee: decimal("our_fee", { precision: 10, scale: 2 }).notNull(),
+  feePaid: boolean("fee_paid").notNull().default(false),
+  saleDate: timestamp("sale_date").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  buyerInfo: text("buyer_info"),
+  shippingLabelGenerated: boolean("shipping_label_generated").notNull().default(false),
+});
+
+export const insertSaleSchema = createInsertSchema(sales).omit({ id: true, saleDate: true });
+export type Sale = typeof sales.$inferSelect;
+export type InsertSale = z.infer<typeof insertSaleSchema>;
+
+export const marketplaceCredentials = pgTable("marketplace_credentials", {
+  id: serial("id").primaryKey(),
+  marketplace: text("marketplace").notNull().unique(),
+  credentials: text("credentials").notNull(),
+  connected: boolean("connected").notNull().default(false),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertMarketplaceCredentialsSchema = createInsertSchema(marketplaceCredentials).omit({ id: true, updatedAt: true });
+export type MarketplaceCredentials = typeof marketplaceCredentials.$inferSelect;
+export type InsertMarketplaceCredentials = z.infer<typeof insertMarketplaceCredentialsSchema>;
+
+export const appConfig = pgTable("app_config", {
+  id: serial("id").primaryKey(),
+  trialStartedAt: timestamp("trial_started_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  subscriptionStatus: text("subscription_status").notNull().default("trial"),
+});
+
+export type AppConfig = typeof appConfig.$inferSelect;
+
+export const dashboardLayouts = pgTable("dashboard_layouts", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }),
+  layout: text("layout").notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+export const insertDashboardLayoutSchema = createInsertSchema(dashboardLayouts).omit({ id: true, createdAt: true, updatedAt: true });
+export type DashboardLayout = typeof dashboardLayouts.$inferSelect;
+export type InsertDashboardLayout = z.infer<typeof insertDashboardLayoutSchema>;
+
+
+================================================================================
+FILE 2: server/db.ts
+================================================================================
+import { drizzle } from "drizzle-orm/node-postgres";
+import pg from "pg";
+
+const { Pool } = pg;
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+export const db = drizzle(pool);
+
+
+================================================================================
+FILE 3: server/storage.ts
+================================================================================
+import { db } from "./db";
+import {
+  users, type User,
+  products, type Product, type InsertProduct,
+  listings, type Listing, type InsertListing,
+  sales, type Sale, type InsertSale,
+  dashboardLayouts, type DashboardLayout,
+  appConfig, type AppConfig,
+  marketplaceCredentials, type MarketplaceCredentials,
+} from "@shared/schema";
+import { eq, desc, isNull } from "drizzle-orm";
+
+export interface IStorage {
+  getUser(id: string): Promise<User | undefined>;
+  createProduct(product: InsertProduct): Promise<Product>;
+  getProduct(id: number): Promise<Product | undefined>;
+  getAllProducts(): Promise<Product[]>;
+  deleteProduct(id: number): Promise<void>;
+  updateProductQuantity(id: number, quantity: number): Promise<void>;
+  createListing(listing: InsertListing): Promise<Listing>;
+  getListingsByProduct(productId: number): Promise<Listing[]>;
+  getAllListings(): Promise<Listing[]>;
+  updateListingStatus(id: number, status: string, marketplaceListingId?: string): Promise<void>;
+  deleteListingsByProduct(productId: number): Promise<void>;
+  createSale(sale: InsertSale): Promise<Sale>;
+  getSalesByListing(listingId: number): Promise<Sale[]>;
+  getAllSales(): Promise<Sale[]>;
+  updateSaleFeePaid(id: number, paid: boolean): Promise<void>;
+  getDashboardLayout(userId?: string): Promise<DashboardLayout | undefined>;
+  saveDashboardLayout(userId: string | null, layout: string): Promise<DashboardLayout>;
+  getAppConfig(): Promise<AppConfig | undefined>;
+  initAppConfig(): Promise<AppConfig>;
+  updateSubscription(stripeCustomerId: string, stripeSubscriptionId: string, status: string): Promise<void>;
+  getAllMarketplaceCredentials(): Promise<MarketplaceCredentials[]>;
+  upsertMarketplaceCredentials(marketplace: string, credentials: string): Promise<MarketplaceCredentials>;
+  deleteMarketplaceCredentials(marketplace: string): Promise<void>;
+  deleteAllData(userId: string): Promise<void>;
+}
+
+export const storage: IStorage = {
+  async getUser(id) {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  },
+  async createProduct(product) {
+    const [created] = await db.insert(products).values(product).returning();
+    return created;
+  },
+  async getProduct(id) {
+    const [product] = await db.select().from(products).where(eq(products.id, id));
+    return product;
+  },
+  async getAllProducts() {
+    return db.select().from(products).orderBy(desc(products.createdAt));
+  },
+  async deleteProduct(id) {
+    await db.delete(products).where(eq(products.id, id));
+  },
+  async updateProductQuantity(id, quantity) {
+    await db.update(products).set({ quantity }).where(eq(products.id, id));
+  },
+  async createListing(listing) {
+    const [created] = await db.insert(listings).values(listing).returning();
+    return created;
+  },
+  async getListingsByProduct(productId) {
+    return db.select().from(listings).where(eq(listings.productId, productId));
+  },
+  async getAllListings() {
+    return db.select().from(listings).orderBy(desc(listings.createdAt));
+  },
+  async updateListingStatus(id, status, marketplaceListingId) {
+    await db.update(listings)
+      .set({ status, ...(marketplaceListingId && { marketplaceListingId }), updatedAt: new Date() })
+      .where(eq(listings.id, id));
+  },
+  async deleteListingsByProduct(productId) {
+    await db.delete(listings).where(eq(listings.productId, productId));
+  },
+  async createSale(sale) {
+    const [created] = await db.insert(sales).values(sale).returning();
+    return created;
+  },
+  async getSalesByListing(listingId) {
+    return db.select().from(sales).where(eq(sales.listingId, listingId));
+  },
+  async getAllSales() {
+    return db.select().from(sales).orderBy(desc(sales.saleDate));
+  },
+  async updateSaleFeePaid(id, paid) {
+    await db.update(sales).set({ feePaid: paid }).where(eq(sales.id, id));
+  },
+  async getDashboardLayout(userId) {
+    if (userId) {
+      const [layout] = await db.select().from(dashboardLayouts).where(eq(dashboardLayouts.userId, userId));
+      return layout;
+    }
+    const [layout] = await db.select().from(dashboardLayouts).where(isNull(dashboardLayouts.userId));
+    return layout;
+  },
+  async saveDashboardLayout(userId, layout) {
+    const existing = await this.getDashboardLayout(userId || undefined);
+    if (existing) {
+      const [updated] = await db.update(dashboardLayouts)
+        .set({ layout, updatedAt: new Date() })
+        .where(eq(dashboardLayouts.id, existing.id))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(dashboardLayouts).values({ userId, layout }).returning();
+    return created;
+  },
+  async getAppConfig() {
+    const [config] = await db.select().from(appConfig).limit(1);
+    return config;
+  },
+  async initAppConfig() {
+    const existing = await this.getAppConfig();
+    if (existing) return existing;
+    const [created] = await db.insert(appConfig).values({}).returning();
+    return created;
+  },
+  async updateSubscription(stripeCustomerId, stripeSubscriptionId, status) {
+    const existing = await this.getAppConfig();
+    if (existing) {
+      await db.update(appConfig)
+        .set({ stripeCustomerId, stripeSubscriptionId, subscriptionStatus: status })
+        .where(eq(appConfig.id, existing.id));
+    }
+  },
+  async getAllMarketplaceCredentials() {
+    return db.select().from(marketplaceCredentials);
+  },
+  async upsertMarketplaceCredentials(marketplace, credentials) {
+    const existing = await db.select().from(marketplaceCredentials)
+      .where(eq(marketplaceCredentials.marketplace, marketplace)).limit(1);
+    if (existing.length > 0) {
+      const [updated] = await db.update(marketplaceCredentials)
+        .set({ credentials, connected: true, updatedAt: new Date() })
+        .where(eq(marketplaceCredentials.marketplace, marketplace))
+        .returning();
+      return updated;
+    }
+    const [created] = await db.insert(marketplaceCredentials)
+      .values({ marketplace, credentials, connected: true })
+      .returning();
+    return created;
+  },
+  async deleteMarketplaceCredentials(marketplace) {
+    await db.delete(marketplaceCredentials).where(eq(marketplaceCredentials.marketplace, marketplace));
+  },
+  async deleteAllData(userId) {
+    await db.delete(sales);
+    await db.delete(listings);
+    await db.delete(products);
+    await db.delete(marketplaceCredentials);
+    await db.delete(dashboardLayouts);
+    await db.delete(appConfig);
+    await db.delete(users).where(eq(users.id, userId));
+  },
+};
+
+
+================================================================================
+FILE 4: server/replit_integrations/auth/storage.ts
+================================================================================
+import { users, type User, type UpsertUser } from "@shared/schema";
+import { db } from "../../db";
+import { eq } from "drizzle-orm";
+
+export interface IAuthStorage {
+  getUser(id: string): Promise<User | undefined>;
+  upsertUser(user: UpsertUser): Promise<User>;
+}
+
+class AuthStorage implements IAuthStorage {
+  async getUser(id: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
+  }
+
+  async upsertUser(userData: UpsertUser): Promise<User> {
+    const { firstLoginAt, ...updateFields } = userData;
+    const [user] = await db
+      .insert(users)
+      .values(userData)
+      .onConflictDoUpdate({
+        target: users.id,
+        set: {
+          ...updateFields,
+          updatedAt: new Date(),
+          // firstLoginAt intentionally excluded — never reset on re-login
+        },
+      })
+      .returning();
+    return user;
+  }
+}
+
+export const authStorage = new AuthStorage();
+
+
+================================================================================
+FILE 5: server/replit_integrations/auth/replitAuth.ts
+================================================================================
+// DEPLOYMENT FIX APPLIED:
+// Previously used createRequire(import.meta.url) to load passport-apple.
+// When bundled to CJS for production, import.meta.url becomes undefined → crash.
+// Fix: use dynamic import() which esbuild handles correctly in both modes.
+
+import { Strategy as GoogleStrategy } from "passport-google-oauth20";
+import passport from "passport";
+import session from "express-session";
+import type { Express, RequestHandler } from "express";
+import connectPg from "connect-pg-simple";
+import { authStorage } from "./storage";
+
+export function getSession() {
+  const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 7 days
+  const pgStore = connectPg(session);
+  const sessionStore = new pgStore({
+    conString: process.env.DATABASE_URL,
+    createTableIfMissing: false,
+    ttl: sessionTtl,
+    tableName: "sessions",
+  });
+  return session({
+    secret: process.env.SESSION_SECRET!,
+    store: sessionStore,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      secure: true,
+      maxAge: sessionTtl,
+    },
+  });
+}
+
+function getBaseUrl(): string {
+  const domains = process.env.REPLIT_DOMAINS;
+  if (domains) return `https://${domains.split(",")[0].trim()}`;
+  return process.env.APP_BASE_URL || "https://kauf26.com";
+}
+
+export async function setupAuth(app: Express) {
+  app.set("trust proxy", 1);
+  app.use(getSession());
+  app.use(passport.initialize());
+  app.use(passport.session());
+
+  passport.serializeUser((user, cb) => cb(null, user));
+  passport.deserializeUser((user, cb) => cb(null, user as Express.User));
+
+  // Dynamic import works in both ESM (dev) and bundled CJS (production).
+  // createRequire(import.meta.url) was previously used here but crashes in
+  // production because import.meta.url is undefined in the CJS bundle.
+  const appleModule = await import("passport-apple");
+  const AppleStrategy = (appleModule as any).default ?? appleModule;
+
+  // ── Google OAuth 2.0 ──────────────────────────────────────────────────────
+  const googleClientId = process.env.GOOGLE_CLIENT_ID;
+  const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+
+  if (googleClientId && googleClientSecret) {
+    passport.use(
+      new GoogleStrategy(
+        {
+          clientID: googleClientId,
+          clientSecret: googleClientSecret,
+          callbackURL: "/api/auth/google/callback",
+          scope: ["profile", "email"],
+        },
+        async (
+          _accessToken: string,
+          _refreshToken: string,
+          profile: any,
+          done: Function
+        ) => {
+          try {
+            const userId = `google_${profile.id}`;
+            const email = profile.emails?.[0]?.value;
+            const firstName = profile.name?.givenName;
+            const lastName = profile.name?.familyName;
+            const profileImageUrl = profile.photos?.[0]?.value;
+
+            await authStorage.upsertUser({
+              id: userId,
+              email,
+              firstName,
+              lastName,
+              profileImageUrl,
+            });
+
+            done(null, {
+              claims: { sub: userId },
+              provider: "google",
+              email,
+              firstName,
+              lastName,
+              profileImageUrl,
+            });
+          } catch (err) {
+            done(err);
+          }
+        }
+      )
+    );
+    console.log("[auth] Google OAuth strategy registered");
+  } else {
+    console.warn("[auth] GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET not set — Google sign-in disabled");
+  }
+
+  // ── Apple Sign In ─────────────────────────────────────────────────────────
+  const appleClientId = process.env.APPLE_CLIENT_ID;
+  const appleTeamId = process.env.APPLE_TEAM_ID;
+  const appleKeyId = process.env.APPLE_KEY_ID;
+  const applePrivateKey = process.env.APPLE_PRIVATE_KEY;
+
+  if (appleClientId && appleTeamId && appleKeyId && applePrivateKey) {
+    passport.use(
+      new AppleStrategy(
+        {
+          clientID: appleClientId,
+          teamID: appleTeamId,
+          keyID: appleKeyId,
+          // Stored in env as single line with literal \n — convert back to real newlines
+          privateKeyString: applePrivateKey.replace(/\\n/g, "\n"),
+          // Apple requires an absolute HTTPS callback URL registered in their portal
+          callbackURL: `${getBaseUrl()}/api/auth/apple/callback`,
+          scope: ["name", "email"],
+        },
+        async (
+          _accessToken: string,
+          _refreshToken: string,
+          idToken: any,
+          profile: any,
+          done: Function
+        ) => {
+          try {
+            const userId = `apple_${profile.id}`;
+            // Apple only sends name/email on the VERY FIRST sign-in — store what we get
+            const email = profile.email ?? idToken?.email ?? undefined;
+            const firstName = profile.name?.firstName ?? undefined;
+            const lastName = profile.name?.lastName ?? undefined;
+
+            await authStorage.upsertUser({ id: userId, email, firstName, lastName });
+
+            done(null, {
+              claims: { sub: userId },
+              provider: "apple",
+              email,
+              firstName,
+              lastName,
+            });
+          } catch (err) {
+            done(err);
+          }
+        }
+      )
+    );
+    console.log("[auth] Apple Sign In strategy registered");
+  } else {
+    console.warn("[auth] Apple Sign In credentials not set — Apple sign-in disabled");
+  }
+
+  // ── Google routes ─────────────────────────────────────────────────────────
+  app.get(
+    "/api/auth/google",
+    passport.authenticate("google", { scope: ["profile", "email"] })
+  );
+
+  app.get(
+    "/api/auth/google/callback",
+    passport.authenticate("google", { failureRedirect: "/login?error=google" }),
+    (_req, res) => res.redirect("/")
+  );
+
+  // ── Apple routes — Apple uses POST for the callback, not GET ──────────────
+  app.get("/api/auth/apple", passport.authenticate("apple"));
+
+  app.post(
+    "/api/auth/apple/callback",
+    passport.authenticate("apple", { failureRedirect: "/login?error=apple" }),
+    (_req, res) => res.redirect("/")
+  );
+
+  // ── Backward compat ───────────────────────────────────────────────────────
+  app.get("/api/login", (_req, res) => res.redirect("/login"));
+
+  // ── Logout ────────────────────────────────────────────────────────────────
+  app.get("/api/logout", (req, res) => {
+    req.logout(() => res.redirect("/login"));
+  });
+}
+
+export const isAuthenticated: RequestHandler = (req, res, next) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+  return next();
+};
+
+
+================================================================================
+FILE 6: server/replit_integrations/auth/routes.ts
+================================================================================
+import type { Express } from "express";
+import { authStorage } from "./storage";
+import { isAuthenticated } from "./replitAuth";
+
+export function registerAuthRoutes(app: Express): void {
+  app.get("/api/auth/user", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      const user = await authStorage.getUser(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error fetching user:", error);
+      res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+}
+
+
+================================================================================
+FILE 7: server/replit_integrations/auth/index.ts
+================================================================================
+export { setupAuth, isAuthenticated, getSession } from "./replitAuth";
+export { authStorage, type IAuthStorage } from "./storage";
+export { registerAuthRoutes } from "./routes";
+
+
+================================================================================
+FILE 8: server/cleanup.ts
+================================================================================
+import fs from "fs/promises";
+import path from "path";
+import { db } from "./db";
+import { products } from "@shared/schema";
+
+const UPLOADS_DIR = path.join(process.cwd(), "uploads");
+const MAX_AGE_MS = 90 * 24 * 60 * 60 * 1000; // 90 days
+
+function extractTimestampFromFilename(filename: string): number | null {
+  // Filenames are like: image-1770056928355-551870951.jpg
+  const match = filename.match(/^image-(\d+)-/);
+  if (match) return parseInt(match[1], 10);
+  return null;
+}
+
+async function getReferencedUploadPaths(): Promise<Set<string>> {
+  const rows = await db.select({
+    imageUrl: products.imageUrl,
+    additionalImages: products.additionalImages,
+  }).from(products);
+
+  const referenced = new Set<string>();
+  for (const row of rows) {
+    if (row.imageUrl) referenced.add(path.basename(row.imageUrl));
+    if (row.additionalImages?.length) {
+      for (const url of row.additionalImages) {
+        if (url) referenced.add(path.basename(url));
+      }
+    }
+  }
+  return referenced;
+}
+
+export interface CleanupResult {
+  scanned: number;
+  deleted: number;
+  skippedInUse: number;
+  skippedTooNew: number;
+  errors: number;
+  freedBytes: number;
+}
+
+export async function cleanupOldImages(dryRun = false): Promise<CleanupResult> {
+  const result: CleanupResult = {
+    scanned: 0, deleted: 0, skippedInUse: 0,
+    skippedTooNew: 0, errors: 0, freedBytes: 0,
+  };
+
+  try {
+    await fs.mkdir(UPLOADS_DIR, { recursive: true });
+    const files = await fs.readdir(UPLOADS_DIR);
+    const referenced = await getReferencedUploadPaths();
+    const now = Date.now();
+
+    for (const filename of files) {
+      result.scanned++;
+      const filePath = path.join(UPLOADS_DIR, filename);
+
+      if (referenced.has(filename)) { result.skippedInUse++; continue; }
+
+      let fileAgeMs: number;
+      const ts = extractTimestampFromFilename(filename);
+      if (ts) {
+        fileAgeMs = now - ts;
+      } else {
+        try {
+          const stat = await fs.stat(filePath);
+          fileAgeMs = now - stat.mtimeMs;
+        } catch { result.errors++; continue; }
+      }
+
+      if (fileAgeMs < MAX_AGE_MS) { result.skippedTooNew++; continue; }
+
+      try {
+        const stat = await fs.stat(filePath);
+        result.freedBytes += stat.size;
+        if (!dryRun) await fs.unlink(filePath);
+        result.deleted++;
+        console.log(`[cleanup] ${dryRun ? "(dry-run) " : ""}Deleted old upload: ${filename} (age: ${Math.round(fileAgeMs / 86400000)}d)`);
+      } catch (err: any) {
+        console.error(`[cleanup] Error deleting ${filename}:`, err.message);
+        result.errors++;
+      }
+    }
+  } catch (err: any) {
+    console.error("[cleanup] Error during image cleanup:", err.message);
+    result.errors++;
+  }
+
+  const freed = (result.freedBytes / 1024 / 1024).toFixed(1);
+  console.log(
+    `[cleanup] Done — scanned: ${result.scanned}, deleted: ${result.deleted}, ` +
+    `in-use: ${result.skippedInUse}, too-new: ${result.skippedTooNew}, ` +
+    `errors: ${result.errors}, freed: ${freed} MB${dryRun ? " (dry-run)" : ""}`
+  );
+
+  return result;
+}
+
+const SOLD_WITHIN_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+export async function deleteProductImagesIfRecentlySold(product: {
+  id: number;
+  imageUrl: string;
+  additionalImages: string[];
+  createdAt: Date | null;
+}): Promise<void> {
+  const age = Date.now() - (product.createdAt?.getTime() ?? 0);
+  if (age > SOLD_WITHIN_MS) {
+    console.log(`[cleanup] Product ${product.id} listed >30 days ago — keeping images`);
+    return;
+  }
+
+  const pathsToDelete = [product.imageUrl, ...(product.additionalImages ?? [])].filter(Boolean);
+
+  for (const urlPath of pathsToDelete) {
+    const filename = path.basename(urlPath);
+    const filePath = path.join(UPLOADS_DIR, filename);
+    try {
+      await fs.unlink(filePath);
+      console.log(`[cleanup] Deleted sold-out image: ${filename} (product ${product.id})`);
+    } catch (err: any) {
+      if (err.code !== "ENOENT") {
+        console.error(`[cleanup] Could not delete ${filename}:`, err.message);
+      }
+    }
+  }
+}
+
+export function scheduleImageCleanup() {
+  const INTERVAL_MS = 24 * 60 * 60 * 1000;
+
+  const runInitial = setTimeout(async () => {
+    console.log("[cleanup] Running initial image cleanup...");
+    await cleanupOldImages();
+  }, 5 * 60 * 1000);
+
+  const runPeriodic = setInterval(async () => {
+    console.log("[cleanup] Running scheduled image cleanup...");
+    await cleanupOldImages();
+  }, INTERVAL_MS);
+
+  runInitial.unref();
+  runPeriodic.unref();
+
+  console.log("[cleanup] Image cleanup scheduled (every 24h, first run in 5 min)");
+}
+
+
+================================================================================
+FILE 9: server/stripeClient.ts
+================================================================================
+import Stripe from 'stripe';
+
+let connectionSettings: any;
+
+async function getCredentials() {
+  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
+  const xReplitToken = process.env.REPL_IDENTITY
+    ? 'repl ' + process.env.REPL_IDENTITY
+    : process.env.WEB_REPL_RENEWAL
+      ? 'depl ' + process.env.WEB_REPL_RENEWAL
+      : null;
+
+  if (!xReplitToken) throw new Error('X_REPLIT_TOKEN not found for repl/depl');
+
+  const connectorName = 'stripe';
+  const isProduction = process.env.REPLIT_DEPLOYMENT === '1';
+  const targetEnvironment = isProduction ? 'production' : 'development';
+
+  const url = new URL(`https://${hostname}/api/v2/connection`);
+  url.searchParams.set('include_secrets', 'true');
+  url.searchParams.set('connector_names', connectorName);
+  url.searchParams.set('environment', targetEnvironment);
+
+  const response = await fetch(url.toString(), {
+    headers: { 'Accept': 'application/json', 'X_REPLIT_TOKEN': xReplitToken }
+  });
+
+  const data = await response.json();
+  connectionSettings = data.items?.[0];
+
+  if (!connectionSettings || (!connectionSettings.settings.publishable || !connectionSettings.settings.secret)) {
+    throw new Error(`Stripe ${targetEnvironment} connection not found`);
+  }
+
+  return {
+    publishableKey: connectionSettings.settings.publishable,
+    secretKey: connectionSettings.settings.secret,
+  };
+}
+
+export async function getUncachableStripeClient() {
+  const { secretKey } = await getCredentials();
+  return new Stripe(secretKey, { apiVersion: '2025-08-27.basil' });
+}
+
+export async function getStripePublishableKey() {
+  const { publishableKey } = await getCredentials();
+  return publishableKey;
+}
+
+export async function getStripeSecretKey() {
+  const { secretKey } = await getCredentials();
+  return secretKey;
+}
+
+let stripeSync: any = null;
+
+export async function getStripeSync() {
+  if (!stripeSync) {
+    const { StripeSync } = await import('stripe-replit-sync');
+    const secretKey = await getStripeSecretKey();
+    stripeSync = new StripeSync({
+      poolConfig: { connectionString: process.env.DATABASE_URL!, max: 2 },
+      stripeSecretKey: secretKey,
+    });
+  }
+  return stripeSync;
+}
+
+
+================================================================================
+FILE 10: server/webhookHandlers.ts
+================================================================================
+import { getStripeSync } from './stripeClient';
+import { storage } from './storage';
+
+export class WebhookHandlers {
+  static async processWebhook(payload: Buffer, signature: string): Promise<void> {
+    if (!Buffer.isBuffer(payload)) {
+      throw new Error(
+        'STRIPE WEBHOOK ERROR: Payload must be a Buffer. ' +
+        'Received type: ' + typeof payload + '. ' +
+        'This usually means express.json() parsed the body before reaching this handler. ' +
+        'FIX: Ensure webhook route is registered BEFORE app.use(express.json()).'
+      );
+    }
+    const sync = await getStripeSync();
+    await sync.processWebhook(payload, signature);
+  }
+
+  static async handleCheckoutComplete(session: any): Promise<void> {
+    const saleId = session.metadata?.saleId;
+    if (saleId) {
+      await storage.updateSaleFeePaid(parseInt(saleId), true);
+    }
+  }
+}
+
+
+================================================================================
+FILE 11: server/routes.ts
+================================================================================
+import type { Express } from "express";
+import { createServer, type Server } from "http";
+import { storage } from "./storage";
+import { marketplaces, type Marketplace } from "@shared/schema";
+import { registerAuthRoutes } from "./replit_integrations/auth";
+import { authStorage } from "./replit_integrations/auth/storage";
+import OpenAI from "openai";
+import multer from "multer";
+import path from "path";
+import fs from "fs/promises";
+import { getUncachableStripeClient } from "./stripeClient";
+import { deleteProductImagesIfRecentlySold } from "./cleanup";
+
+const TRIAL_DURATION_MS = 30 * 24 * 60 * 60 * 1000;
+
+function calcTrialStatus(firstLoginAt: Date) {
+  const elapsed = Date.now() - firstLoginAt.getTime();
+  const isTrialActive = elapsed < TRIAL_DURATION_MS;
+  const trialDaysRemaining = Math.max(0, Math.ceil((TRIAL_DURATION_MS - elapsed) / (24 * 60 * 60 * 1000)));
+  const trialEndsAt = new Date(firstLoginAt.getTime() + TRIAL_DURATION_MS);
+  return { isTrialActive, trialDaysRemaining, trialEndsAt };
+}
+
+async function getUserTrialActive(req: any): Promise<boolean> {
+  try {
+    if (req.user?.claims?.sub) {
+      const user = await authStorage.getUser(req.user.claims.sub);
+      if (user?.firstLoginAt) {
+        return calcTrialStatus(new Date(user.firstLoginAt)).isTrialActive;
+      }
+    }
+  } catch {}
+  return false;
+}
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY || process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+  baseURL: process.env.OPENAI_API_KEY ? undefined : process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+});
+
+const upload = multer({
+  storage: multer.diskStorage({
+    destination: async (req, file, cb) => {
+      const uploadDir = path.join(process.cwd(), "uploads");
+      await fs.mkdir(uploadDir, { recursive: true });
+      cb(null, uploadDir);
+    },
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+      cb(null, file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname));
+    },
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 },
+});
+
+const currencyRates: Record<string, number> = {
+  USD: 1, EUR: 0.92, GBP: 0.79, JPY: 149.5,
+  MXN: 17.2, BRL: 5.1, AUD: 1.52, CAD: 1.35,
+};
+
+const marketplaceLanguages: Record<Marketplace, string> = {
+  ebay: "en", amazon: "en", walmart: "en", wish: "en", reverb: "en",
+  offerup: "en", etsy: "en", shopify: "en", woocommerce: "en",
+  aliexpress: "en", mercadolibre: "es", rakuten: "ja",
+  bigcommerce: "en", prestashop: "en",
+};
+
+const marketplaceCurrencies: Record<Marketplace, string> = {
+  ebay: "USD", amazon: "USD", walmart: "USD", wish: "USD", reverb: "USD",
+  offerup: "USD", etsy: "USD", shopify: "USD", woocommerce: "USD",
+  aliexpress: "USD", mercadolibre: "MXN", rakuten: "JPY",
+  bigcommerce: "USD", prestashop: "EUR",
+};
+
+async function translateText(text: string, targetLang: string): Promise<string> {
+  if (targetLang === "en") return text;
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      {
+        role: "system",
+        content: `You are a professional translator. Translate the following text to ${
+          targetLang === "es" ? "Spanish" : targetLang === "ja" ? "Japanese" : "the target language"
+        }. Maintain the same tone and style. Return ONLY the translated text, no explanations.`,
+      },
+      { role: "user", content: text },
+    ],
+  });
+  return response.choices[0]?.message?.content || text;
+}
+
+export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
+  app.use("/uploads", (await import("express")).static(path.join(process.cwd(), "uploads")));
+
+  registerAuthRoutes(app);
+
+  // GET /api/products
+  app.get("/api/products", async (req, res) => {
+    try {
+      res.json(await storage.getAllProducts());
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch products" });
+    }
+  });
+
+  // GET /api/products/:id
+  app.get("/api/products/:id", async (req, res) => {
+    try {
+      const product = await storage.getProduct(parseInt(req.params.id));
+      if (!product) return res.status(404).json({ error: "Product not found" });
+      const listings = await storage.getListingsByProduct(product.id);
+      res.json({ ...product, listings });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch product" });
+    }
+  });
+
+  // POST /api/products/analyze — multipart image upload → GPT-4o
+  app.post("/api/products/analyze", upload.single("image"), async (req, res) => {
+    try {
+      if (!req.file) return res.status(400).json({ error: "No image uploaded" });
+
+      const imageBuffer = await fs.readFile(req.file.path);
+      const base64Image = imageBuffer.toString("base64");
+      const extToMime: Record<string, string> = {
+        jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
+        gif: "image/gif", webp: "image/webp", heic: "image/heic", heif: "image/heif",
+      };
+      const ext = path.extname(req.file.originalname).slice(1).toLowerCase();
+      const mimeType = req.file.mimetype || extToMime[ext] || `image/${ext}`;
+      const imageUrl = `data:${mimeType};base64,${base64Image}`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "You are an expert product identifier for e-commerce listings. Analyze this product image carefully.\n\nSTEP 1: Try to identify the EXACT product — brand, model name, model number, color/variant.\n\nIF YOU RECOGNIZE THE EXACT PRODUCT (e.g. 'Nike Air Max 270', 'Sony WH-1000XM5', 'KitchenAid Stand Mixer 5Qt'):\n- title: Full exact product name with brand and model (e.g. 'Sony WH-1000XM5 Wireless Noise Cancelling Headphones - Black')\n- description: Write the full official-style product description as it would appear on the manufacturer website or Amazon listing. Include: what it is, key specs, key features and benefits, materials/construction, what's in the box if known, and who it's best for. Be thorough — aim for 150-250 words.\n- exactMatch: true\n- suggestedPrice: your best estimate of the retail/resale price in USD as a number\n\nIF YOU CANNOT IDENTIFY THE EXACT PRODUCT:\n- title: A clear descriptive title (max 12 words)\n- description: Write exactly 3 sentences. Sentence 1: what the product is. Sentence 2: its key visible features or materials. Sentence 3: who would want it and why.\n- exactMatch: false\n- suggestedPrice: your best estimate of a fair selling price in USD as a number\n\nReturn ONLY valid JSON: {\"title\": \"...\", \"description\": \"...\", \"exactMatch\": boolean, \"suggestedPrice\": number}",
+            },
+            { type: "image_url", image_url: { url: imageUrl } },
+          ],
+        }],
+        response_format: { type: "json_object" },
+      });
+
+      const result = JSON.parse(response.choices[0]?.message?.content || "{}");
+      res.json({
+        imageUrl: `/uploads/${req.file.filename}`,
+        title: result.title || "Untitled Product",
+        description: result.description || "No description available.",
+        exactMatch: result.exactMatch === true,
+        suggestedPrice: result.suggestedPrice || null,
+      });
+    } catch (error: any) {
+      console.error("Error analyzing product:", error?.message || error);
+      res.status(500).json({ error: "Failed to analyze product" });
+    }
+  });
+
+  // POST /api/products/analyze-base64 — mobile base64 image analysis
+  app.post("/api/products/analyze-base64", async (req, res) => {
+    try {
+      const { image } = req.body;
+      if (!image) return res.status(400).json({ error: "No image provided" });
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [{
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Analyze this product image carefully. Search your knowledge for an EXACT MATCH - the specific brand, model number, and product name.\n\nIF EXACT MATCH FOUND:\n- Title: The exact brand, model, and product name (e.g. 'Apple iPhone 15 Pro Max 256GB Natural Titanium')\n- Description: Start with '[EXACT MATCH]' then provide the full official product description including all key specs, features, dimensions, materials, and notable details. Be thorough and detailed - include everything a buyer would want to know.\n- exactMatch: true\n\nIF NO EXACT MATCH FOUND:\n- Title: A descriptive title (max 10 words)\n- Description: Exactly 3 sentences. First sentence describes what the product is. Second sentence highlights key features or benefits. Third sentence explains why a buyer would want it.\n- exactMatch: false\n\nAlso provide a suggested retail price in USD.\n\nReturn JSON: {\"title\": \"...\", \"description\": \"...\", \"suggestedPrice\": number, \"exactMatch\": boolean}",
+            },
+            { type: "image_url", image_url: { url: image } },
+          ],
+        }],
+        response_format: { type: "json_object" },
+      });
+
+      const result = JSON.parse(response.choices[0]?.message?.content || "{}");
+      res.json({
+        title: result.title || "Untitled Product",
+        description: result.description || "No description available.",
+        suggestedPrice: result.suggestedPrice || 0,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to analyze product" });
+    }
+  });
+
+  // POST /api/products/upload-additional — extra images
+  app.post("/api/products/upload-additional", upload.array("images", 5), async (req, res) => {
+    try {
+      const files = req.files as Express.Multer.File[];
+      if (!files || files.length === 0) return res.status(400).json({ error: "No images uploaded" });
+      res.json({ urls: files.map((f) => `/uploads/${f.filename}`) });
+    } catch (error: any) {
+      res.status(500).json({ error: "Failed to upload images" });
+    }
+  });
+
+  // POST /api/products — create product record
+  app.post("/api/products", async (req, res) => {
+    try {
+      const { imageUrl, additionalImages, originalTitle, aiDescription, basePrice, currency, quantity } = req.body;
+      const product = await storage.createProduct({
+        imageUrl,
+        additionalImages: Array.isArray(additionalImages) ? additionalImages : [],
+        originalTitle,
+        aiDescription,
+        basePrice,
+        currency: currency || "USD",
+        quantity: quantity ? parseInt(quantity) : 1,
+      });
+      res.status(201).json(product);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create product" });
+    }
+  });
+
+  // POST /api/products/:id/list — generate listings for selected marketplaces
+  app.post("/api/products/:id/list", async (req, res) => {
+    try {
+      const productId = parseInt(req.params.id);
+      const { selectedMarketplaces } = req.body;
+      const product = await storage.getProduct(productId);
+      if (!product) return res.status(404).json({ error: "Product not found" });
+
+      const listings = [];
+      for (const marketplace of selectedMarketplaces) {
+        const targetLang = marketplaceLanguages[marketplace as Marketplace];
+        const targetCurrency = marketplaceCurrencies[marketplace as Marketplace];
+        const translatedTitle = await translateText(product.originalTitle, targetLang);
+        const translatedDescription = await translateText(product.aiDescription, targetLang);
+        const baseRate = currencyRates[product.currency] || 1;
+        const targetRate = currencyRates[targetCurrency] || 1;
+        const localPrice = (parseFloat(product.basePrice) / baseRate) * targetRate;
+        listings.push(await storage.createListing({
+          productId,
+          marketplace,
+          marketplaceListingId: null,
+          translatedTitle,
+          translatedDescription,
+          localPrice: localPrice.toFixed(2),
+          localCurrency: targetCurrency,
+          status: "active",
+        }));
+      }
+      res.status(201).json({ listings });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create listings" });
+    }
+  });
+
+  // GET /api/listings
+  app.get("/api/listings", async (req, res) => {
+    try {
+      res.json(await storage.getAllListings());
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch listings" });
+    }
+  });
+
+  // DELETE /api/listings/product/:productId
+  app.delete("/api/listings/product/:productId", async (req, res) => {
+    try {
+      await storage.deleteListingsByProduct(parseInt(req.params.productId));
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete listings" });
+    }
+  });
+
+  // POST /api/sales — record a sale
+  // ourFee = 1% of saleAmount (free during trial)
+  app.post("/api/sales", async (req, res) => {
+    try {
+      const { listingId, saleAmount, saleCurrency, platformFee } = req.body;
+      const isTrialActive = await getUserTrialActive(req);
+      const ourFee = isTrialActive ? "0.00" : (parseFloat(saleAmount) * 0.01).toFixed(2);
+
+      const sale = await storage.createSale({
+        listingId, saleAmount, saleCurrency,
+        platformFee: platformFee || "0",
+        ourFee,
+        feePaid: isTrialActive,
+        buyerInfo: req.body.buyerInfo || null,
+        shippingLabelGenerated: false,
+      });
+
+      // Decrement quantity; if sold out → mark listings sold_out + delete images
+      const allListings = await storage.getAllListings();
+      const listing = allListings.find(l => l.id === listingId);
+      if (listing) {
+        const product = await storage.getProduct(listing.productId);
+        if (product) {
+          const newQty = Math.max(0, product.quantity - 1);
+          await storage.updateProductQuantity(product.id, newQty);
+          if (newQty === 0) {
+            const productListings = await storage.getListingsByProduct(product.id);
+            for (const pl of productListings) {
+              await storage.updateListingStatus(pl.id, "sold_out");
+            }
+            deleteProductImagesIfRecentlySold(product).catch((err) =>
+              console.error("[cleanup] Error deleting sold product images:", err)
+            );
+          }
+        }
+      }
+
+      res.status(201).json(sale);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create sale" });
+    }
+  });
+
+  // GET /api/sales
+  app.get("/api/sales", async (req, res) => {
+    try {
+      res.json(await storage.getAllSales());
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch sales" });
+    }
+  });
+
+  // POST /api/convert-currency
+  app.post("/api/convert-currency", async (req, res) => {
+    try {
+      const { amount, from, to } = req.body;
+      const fromRate = currencyRates[from] || 1;
+      const toRate = currencyRates[to] || 1;
+      const converted = (parseFloat(amount) / fromRate) * toRate;
+      res.json({ amount: parseFloat(amount), from, to, converted: parseFloat(converted.toFixed(2)), rate: toRate / fromRate });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to convert currency" });
+    }
+  });
+
+  // POST /api/shipping-label
+  app.post("/api/shipping-label", async (req, res) => {
+    try {
+      const { saleId, shipTo, shipFrom, weight, dimensions } = req.body;
+      const weightNum = parseFloat(weight) || 1;
+      const dimParts = (dimensions || "10x10x10").split("x").map((d: string) => parseFloat(d) || 10);
+      const dimWeight = (dimParts[0] * dimParts[1] * dimParts[2]) / 139;
+      const billableWeight = Math.max(weightNum, dimWeight);
+      let estimatedCost = 4.99;
+      if (billableWeight <= 1) estimatedCost = 4.99;
+      else if (billableWeight <= 3) estimatedCost = 7.49;
+      else if (billableWeight <= 5) estimatedCost = 9.99;
+      else if (billableWeight <= 10) estimatedCost = 14.99;
+      else if (billableWeight <= 20) estimatedCost = 19.99;
+      else estimatedCost = 19.99 + (billableWeight - 20) * 0.75;
+      res.json({
+        id: `LABEL-${Date.now()}`,
+        trackingNumber: `1Z${Math.random().toString(36).substring(2, 15).toUpperCase()}`,
+        shipTo, shipFrom, weight, dimensions,
+        estimatedCost: Math.round(estimatedCost * 100) / 100,
+        billableWeight: Math.round(billableWeight * 10) / 10,
+        createdAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to generate shipping label" });
+    }
+  });
+
+  // GET /api/marketplaces
+  app.get("/api/marketplaces", async (req, res) => {
+    try {
+      res.json({
+        marketplaces: marketplaces.map((m) => ({
+          id: m,
+          name: m.charAt(0).toUpperCase() + m.slice(1),
+          language: marketplaceLanguages[m],
+          currency: marketplaceCurrencies[m],
+        })),
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch marketplaces" });
+    }
+  });
+
+  // GET /api/marketplace-credentials
+  app.get("/api/marketplace-credentials", async (req, res) => {
+    try {
+      res.json(await storage.getAllMarketplaceCredentials());
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch credentials" });
+    }
+  });
+
+  // POST /api/marketplace-credentials
+  app.post("/api/marketplace-credentials", async (req, res) => {
+    try {
+      const { marketplace, credentials } = req.body;
+      if (!marketplace || !credentials) return res.status(400).json({ error: "marketplace and credentials required" });
+      res.json(await storage.upsertMarketplaceCredentials(marketplace, JSON.stringify(credentials)));
+    } catch (error) {
+      res.status(500).json({ error: "Failed to save credentials" });
+    }
+  });
+
+  // DELETE /api/marketplace-credentials/:marketplace
+  app.delete("/api/marketplace-credentials/:marketplace", async (req, res) => {
+    try {
+      await storage.deleteMarketplaceCredentials(req.params.marketplace);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete credentials" });
+    }
+  });
+
+  // GET /api/subscription/status
+  app.get("/api/subscription/status", async (req, res) => {
+    try {
+      const config = await storage.initAppConfig();
+      const subscriptionOfferMs = 90 * 24 * 60 * 60 * 1000;
+      let trialStartedAt: Date;
+      const userId = (req as any).user?.claims?.sub;
+      if (userId) {
+        const user = await authStorage.getUser(userId);
+        trialStartedAt = user?.firstLoginAt ? new Date(user.firstLoginAt) : new Date(config.trialStartedAt);
+      } else {
+        trialStartedAt = new Date(config.trialStartedAt);
+      }
+      const { isTrialActive, trialDaysRemaining, trialEndsAt } = calcTrialStatus(trialStartedAt);
+      const elapsed = Date.now() - trialStartedAt.getTime();
+      const canSubscribeMonthly = elapsed >= subscriptionOfferMs;
+      const daysUntilSubscriptionOffer = Math.max(0, Math.ceil((subscriptionOfferMs - elapsed) / (24 * 60 * 60 * 1000)));
+      res.json({
+        isTrialActive, trialDaysRemaining,
+        trialEndsAt: trialEndsAt.toISOString(),
+        trialStartedAt: trialStartedAt.toISOString(),
+        subscriptionStatus: config.subscriptionStatus,
+        hasActiveSubscription: config.subscriptionStatus === "active",
+        canSubscribeMonthly, daysUntilSubscriptionOffer,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch subscription status" });
+    }
+  });
+
+  // POST /api/subscription/checkout — Stripe subscription
+  app.post("/api/subscription/checkout", async (req, res) => {
+    try {
+      const stripe = await getUncachableStripeClient();
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [{
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: 'Global Lister — Pro Plan',
+              description: '1% fee on all marketplace transactions. Keep listing across all platforms.',
+            },
+            unit_amount: 999,
+            recurring: { interval: 'month' },
+          },
+          quantity: 1,
+        }],
+        mode: 'subscription',
+        success_url: `${req.protocol}://${req.get('host')}/?subscribed=true`,
+        cancel_url: `${req.protocol}://${req.get('host')}/?subscribed=false`,
+      });
+      res.json({ url: session.url });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create subscription session" });
+    }
+  });
+
+  // POST /api/sales/:saleId/pay-fee — Stripe one-time 1% fee
+  app.post("/api/sales/:saleId/pay-fee", async (req, res) => {
+    try {
+      const saleId = parseInt(req.params.saleId);
+      const sales = await storage.getAllSales();
+      const sale = sales.find(s => s.id === saleId);
+      if (!sale) return res.status(404).json({ error: "Sale not found" });
+      if (sale.feePaid) return res.status(400).json({ error: "Fee already paid" });
+
+      const stripe = await getUncachableStripeClient();
+      const feeInCents = Math.round(parseFloat(sale.ourFee) * 100);
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [{
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: `Service Fee - Sale #${saleId}`,
+              description: `1% service fee for your marketplace sale`,
+            },
+            unit_amount: feeInCents,
+          },
+          quantity: 1,
+        }],
+        mode: 'payment',
+        metadata: { saleId: saleId.toString() },
+        success_url: `${req.protocol}://${req.get('host')}/sales?paid=true`,
+        cancel_url: `${req.protocol}://${req.get('host')}/sales?paid=false`,
+      });
+      res.json({ url: session.url });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to create payment session" });
+    }
+  });
+
+  // GET/POST /api/dashboard/layout
+  app.get("/api/dashboard/layout", async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const layout = await storage.getDashboardLayout(userId);
+      res.json(layout || { layout: null });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch layout" });
+    }
+  });
+
+  app.post("/api/dashboard/layout", async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub || null;
+      const { layout } = req.body;
+      if (!layout) return res.status(400).json({ error: "layout required" });
+      res.json(await storage.saveDashboardLayout(userId, layout));
+    } catch (error) {
+      res.status(500).json({ error: "Failed to save layout" });
+    }
+  });
+
+  // DELETE /api/account — GDPR/Apple requirement: delete all user data
+  app.delete("/api/account", async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      if (!userId) return res.status(401).json({ error: "Not authenticated" });
+      await storage.deleteAllData(userId);
+      req.logout(() => {
+        res.status(200).json({ success: true });
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete account" });
+    }
+  });
+
+  // POST /api/admin/cleanup-images — manual trigger with optional dryRun
+  app.post("/api/admin/cleanup-images", async (req, res) => {
+    try {
+      const { cleanupOldImages } = await import("./cleanup");
+      const dryRun = req.query.dryRun === "true";
+      const result = await cleanupOldImages(dryRun);
+      res.json({ success: true, dryRun, ...result });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  return httpServer;
+}
+
+
+================================================================================
+FILE 12: server/index.ts
+================================================================================
+import express, { type Request, Response, NextFunction } from "express";
+import { registerRoutes } from "./routes";
+import { serveStatic } from "./static";
+import { createServer } from "http";
+import { runMigrations } from 'stripe-replit-sync';
+import { getStripeSync } from "./stripeClient";
+import { WebhookHandlers } from "./webhookHandlers";
+import { setupAuth } from "./replit_integrations/auth";
+import { scheduleImageCleanup } from "./cleanup";
+import pg from "pg";
+
+async function runSchemaMigrations() {
+  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+  try {
+    await pool.query(`
+      ALTER TABLE users
+        ADD COLUMN IF NOT EXISTS email VARCHAR UNIQUE,
+        ADD COLUMN IF NOT EXISTS first_name VARCHAR,
+        ADD COLUMN IF NOT EXISTS last_name VARCHAR,
+        ADD COLUMN IF NOT EXISTS profile_image_url VARCHAR,
+        ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW(),
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+    `);
+    await pool.query(`
+      ALTER TABLE users
+        ALTER COLUMN username DROP NOT NULL,
+        ALTER COLUMN password DROP NOT NULL;
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS sessions (
+        sid VARCHAR PRIMARY KEY,
+        sess JSONB NOT NULL,
+        expire TIMESTAMP NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON sessions(expire);
+    `);
+    console.log("Schema migrations applied");
+  } catch (err: any) {
+    console.log("Migration note:", err.message);
+  } finally {
+    await pool.end();
+  }
+}
+
+const app = express();
+const httpServer = createServer(app);
+
+declare module "http" {
+  interface IncomingMessage { rawBody: unknown; }
+}
+
+async function initStripe() {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) { console.log('DATABASE_URL not set, skipping Stripe init'); return; }
+
+  try {
+    console.log('Initializing Stripe schema...');
+    await runMigrations({ databaseUrl, schema: 'stripe' });
+    console.log('Stripe schema ready');
+
+    const stripeSync = await getStripeSync();
+    const replitDomains = process.env.REPLIT_DOMAINS;
+    if (replitDomains) {
+      console.log('Setting up managed webhook...');
+      const webhookBaseUrl = `https://${replitDomains.split(',')[0]}`;
+      try {
+        const result = await stripeSync.findOrCreateManagedWebhook(`${webhookBaseUrl}/api/stripe/webhook`);
+        if (result?.webhook?.url) console.log(`Webhook configured: ${result.webhook.url}`);
+      } catch {
+        console.log('Webhook setup skipped (may work in production)');
+      }
+    }
+
+    stripeSync.syncBackfill()
+      .then(() => console.log('Stripe data synced'))
+      .catch((err: any) => console.error('Error syncing Stripe data:', err));
+  } catch (error) {
+    console.error('Failed to initialize Stripe:', error);
+  }
+}
+
+initStripe().catch(console.error);
+
+// Stripe webhook — MUST be before express.json() to receive raw body
+app.post(
+  '/api/stripe/webhook',
+  express.raw({ type: 'application/json' }),
+  async (req, res) => {
+    const signature = req.headers['stripe-signature'];
+    if (!signature) return res.status(400).json({ error: 'Missing stripe-signature' });
+    try {
+      const sig = Array.isArray(signature) ? signature[0] : signature;
+      if (!Buffer.isBuffer(req.body)) {
+        return res.status(500).json({ error: 'Webhook processing error' });
+      }
+      await WebhookHandlers.processWebhook(req.body as Buffer, sig);
+      res.status(200).json({ received: true });
+    } catch (error: any) {
+      res.status(400).json({ error: 'Webhook processing error' });
+    }
+  }
+);
+
+app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
+app.use(express.urlencoded({ extended: false }));
+
+export function log(message: string, source = "express") {
+  const formattedTime = new Date().toLocaleTimeString("en-US", {
+    hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true,
+  });
+  console.log(`${formattedTime} [${source}] ${message}`);
+}
+
+app.use((req, res, next) => {
+  const start = Date.now();
+  const path = req.path;
+  let capturedJsonResponse: Record<string, any> | undefined;
+  const originalResJson = res.json;
+  res.json = function (bodyJson, ...args) {
+    capturedJsonResponse = bodyJson;
+    return originalResJson.apply(res, [bodyJson, ...args]);
+  };
+  res.on("finish", () => {
+    const duration = Date.now() - start;
+    if (path.startsWith("/api")) {
+      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+      if (capturedJsonResponse) logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+      log(logLine);
+    }
+  });
+  next();
+});
+
+(async () => {
+  try {
+    console.log("Starting server initialization...");
+    await runSchemaMigrations();
+    await setupAuth(app);
+    await registerRoutes(httpServer, app);
+    console.log("Routes registered successfully");
+    scheduleImageCleanup();
+
+    app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
+      const status = err.status || err.statusCode || 500;
+      const message = err.message || "Internal Server Error";
+      console.error("Internal Server Error:", err);
+      if (res.headersSent) return next(err);
+      return res.status(status).json({ message });
+    });
+
+    if (process.env.NODE_ENV === "production") {
+      console.log("Setting up static file serving for production...");
+      serveStatic(app);
+    } else {
+      const { setupVite } = await import("./vite");
+      await setupVite(httpServer, app);
+    }
+
+    const port = parseInt(process.env.PORT || "5000", 10);
+    httpServer.listen({ port, host: "0.0.0.0", reusePort: true }, () => {
+      log(`serving on port ${port}`);
+      console.log(`Server started successfully on port ${port}`);
+    });
+  } catch (error) {
+    console.error("Failed to start server:", error);
+    process.exit(1);
+  }
+})();
+
+
+================================================================================
+FILE 13: client/index.html
+================================================================================
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, viewport-fit=cover" />
+    <meta property="og:title" content="Global Marketplace Lister" />
+    <meta property="og:description" content="AI-powered multi-marketplace product listing platform. Upload photos, generate descriptions, and list on eBay, Amazon, Etsy, Shopify, and more with automatic translation." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://kauf26.com" />
+    <meta property="og:image" content="https://replit.com/public/images/opengraph.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@replit" />
+    <meta name="twitter:title" content="Global Marketplace Lister" />
+    <meta name="twitter:description" content="AI-powered multi-marketplace product listing platform." />
+    <meta name="twitter:image" content="https://replit.com/public/images/opengraph.png" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.jpeg" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Global Lister" />
+    <meta name="theme-color" content="#3b82f6" />
+    <title>Global Marketplace Lister</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
+
+================================================================================
+FILE 14: client/public/manifest.json
+================================================================================
+{
+  "name": "Global Marketplace Lister",
+  "short_name": "Global Lister",
+  "description": "AI-powered multi-marketplace product listing platform",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0f",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/app-icon.jpeg", "sizes": "512x512", "type": "image/jpeg", "purpose": "maskable" }
+  ]
+}
+
+
+================================================================================
+FILE 15: client/src/App.tsx  (structure)
+================================================================================
+// Routing, navigation, trial banner, GDPR banner integration.
+//
+// Components:
+//   TrialBanner     — ribbon at top showing days remaining or trial-ended CTA
+//   MoreDrawer      — mobile slide-up with Tools, Connections, legal links, logout
+//   Navigation      — desktop top nav + mobile top header + mobile 4-tab bottom bar
+//   ProtectedRouter — auth gate + onboarding check + all protected pages
+//   Router          — top-level route table
+//   App             — QueryClientProvider, TooltipProvider, Toaster, Router, GdprBanner
+//
+// Public routes (no login required):
+//   /login          LoginPage
+//   /terms          Terms
+//   /privacy        Privacy
+//   /submit         Submit
+//   /screenshots    Screenshots
+//
+// Protected routes (redirect to /login if not authenticated):
+//   /               Home
+//   /dashboard      Dashboard
+//   /listings       Listings
+//   /sales          Sales
+//   /tools          Tools
+//   /create         Create
+//   /settings       SettingsPage
+//
+// Mobile bottom nav tabs: Home, Create, Listings, Sales, More (drawer)
+// Mobile content padded with pb-20 to avoid hiding behind bottom nav
+
+
+================================================================================
+FILE 16: client/src/hooks/use-auth.ts
+================================================================================
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { User } from "@shared/schema";
+
+async function fetchUser(): Promise<User | null> {
+  const response = await fetch("/api/auth/user", { credentials: "include" });
+  if (response.status === 401) return null;
+  if (!response.ok) throw new Error(`${response.status}: ${response.statusText}`);
+  return response.json();
+}
+
+async function logout(): Promise<void> {
+  window.location.href = "/api/logout";
+}
+
+export function useAuth() {
+  const queryClient = useQueryClient();
+  const { data: user, isLoading } = useQuery<User | null>({
+    queryKey: ["/api/auth/user"],
+    queryFn: fetchUser,
+    retry: false,
+    staleTime: 1000 * 60 * 5,
+  });
+  const logoutMutation = useMutation({
+    mutationFn: logout,
+    onSuccess: () => { queryClient.setQueryData(["/api/auth/user"], null); },
+  });
+  return {
+    user,
+    isLoading,
+    isAuthenticated: !!user,
+    logout: logoutMutation.mutate,
+    isLoggingOut: logoutMutation.isPending,
+  };
+}
+
+
+================================================================================
+FILE 17: client/src/pages/login.tsx
+================================================================================
+import { useEffect } from "react";
+import { useLocation } from "wouter";
+import { ShoppingBag } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+
+function GoogleIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+    </svg>
+  );
+}
+
+function AppleIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+      <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98l-.09.06c-.22.14-2.18 1.28-2.16 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.77M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+    </svg>
+  );
+}
+
+export default function LoginPage() {
+  const { isAuthenticated, isLoading } = useAuth();
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) setLocation("/");
+  }, [isAuthenticated, isLoading, setLocation]);
+
+  const error = new URLSearchParams(window.location.search).get("error");
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background px-4">
+      <div className="w-full max-w-sm space-y-8 text-center">
+
+        <div className="space-y-3">
+          <div className="flex justify-center">
+            <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
+              <ShoppingBag className="w-8 h-8 text-primary" />
+            </div>
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight">Global Lister</h1>
+          <p className="text-muted-foreground text-sm">
+            Sign in to list your products across every marketplace — instantly.
+          </p>
+        </div>
+
+        {error && (
+          <div className="bg-red-500/10 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-400">
+            Sign-in failed. Please try again.
+          </div>
+        )}
+
+        <div className="space-y-3">
+          <a
+            href="/api/auth/apple"
+            data-testid="button-login-apple"
+            className="flex w-full items-center justify-center gap-3 rounded-xl bg-white text-black px-5 py-3.5 text-sm font-semibold shadow-sm hover:bg-gray-100 active:bg-gray-200 transition-colors"
+          >
+            <AppleIcon />
+            Sign in with Apple
+          </a>
+
+          <a
+            href="/api/auth/google"
+            data-testid="button-login-google"
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-white/10 bg-card px-5 py-3.5 text-sm font-semibold text-foreground shadow-sm hover:bg-muted/50 active:bg-muted transition-colors"
+          >
+            <GoogleIcon />
+            Sign in with Google
+          </a>
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          By signing in you agree to our{" "}
+          <a href="/terms" className="underline hover:text-foreground">Terms of Service</a>
+          {" "}and{" "}
+          <a href="/privacy" className="underline hover:text-foreground">Privacy Policy</a>.
+        </p>
+
+        <div className="border-t pt-6 space-y-2">
+          <p className="text-sm text-muted-foreground">
+            List on eBay, Amazon, Etsy, Shopify, Reverb and 10 more marketplaces.
+          </p>
+          <p className="text-xs text-muted-foreground">
+            30-day free trial · No credit card required
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+================================================================================
+FILE 18: client/src/pages/privacy.tsx  (section headings — full file in project)
+================================================================================
+// 14 sections:
+//  1. Information We Collect
+//  2. Legal Basis for Processing (GDPR Article 6)
+//  3. How We Use Your Information
+//  4. AI-Powered Image Processing (OpenAI / GPT-4o disclosure)
+//  5. Payment Processing (Stripe)
+//  6. Data Storage and Security (HTTPS/TLS, Replit)
+//  7. Data Retention — account deletion, image cleanup timeline
+//  8. Your Rights — access, correction, deletion, portability, objection
+//  9. International Users — GDPR (EU), LGPD (Brazil), PIPEDA (Canada)
+// 10. Third-Party Services — OpenAI, Stripe, Replit disclosures
+// 11. Children's Privacy — COPPA, under-13 prohibited
+// 12. Cookies and Local Storage
+// 13. Changes to This Policy
+// 14. Contact — kaufit@yahoo.com / kauf26.com
+//
+// TranslateWidget in page header — 100+ languages auto-detected from browser
+
+
+================================================================================
+FILE 19: client/src/pages/terms.tsx  (section headings — full file in project)
+================================================================================
+// 15 sections:
+//  1. Eligibility and Age Requirement (13+)
+//  2. Service Description
+//  3. AI-Generated Content (names OpenAI GPT-4o, user consents to image transmission)
+//  4. No Guarantee of Sales or Marketplace Acceptance
+//  5. Service Fee — 30-day free trial, then 1% per self-reported sale
+//     Example: "$100 sale = $1.00 fee"
+//  6. Currency Conversion Disclaimer
+//  7. User Responsibilities — tax, export law, fulfillment, accurate listings
+//  8. Acceptable Use — prohibited: counterfeit, weapons, CSAM, fraud, scraping
+//  9. Account Deletion
+// 10. Limitation of Liability
+// 11. Disclaimer of Warranties
+// 12. Indemnification
+// 13. Governing Law — US (Delaware), EU consumer rights carve-out
+// 14. Changes to Terms
+// 15. Contact — kaufit@yahoo.com / kauf26.com
+//
+// TranslateWidget in page header — 100+ languages auto-detected from browser
+
+
+================================================================================
+FILE 20: client/src/components/gdpr-banner.tsx
+================================================================================
+import { useState, useEffect } from "react";
+import { Link } from "wouter";
+import { Button } from "@/components/ui/button";
+import { X } from "lucide-react";
+
+const STORAGE_KEY = "global_lister_gdpr_consent";
+
+export default function GdprBanner() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const consented = localStorage.getItem(STORAGE_KEY);
+    if (!consented) setVisible(true);
+  }, []);
+
+  const accept = () => {
+    localStorage.setItem(STORAGE_KEY, "accepted");
+    setVisible(false);
+  };
+
+  if (!visible) return null;
+
+  return (
+    <div
+      className="fixed bottom-0 left-0 right-0 z-50 md:bottom-4 md:left-4 md:right-auto md:max-w-sm bg-card border border-white/10 shadow-xl rounded-t-2xl md:rounded-2xl p-5"
+      role="dialog"
+      aria-label="Privacy consent notice"
+      data-testid="gdpr-banner"
+    >
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <p className="text-sm font-semibold text-foreground">Your Privacy</p>
+        <button
+          onClick={accept}
+          className="text-muted-foreground hover:text-foreground transition-colors shrink-0"
+          aria-label="Dismiss"
+          data-testid="gdpr-banner-dismiss"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+      <p className="text-xs text-muted-foreground leading-relaxed mb-4">
+        We use session cookies to keep you logged in and store your preferences
+        locally on your device. Your product photos are processed by OpenAI to
+        generate listing descriptions. We do not sell your data or use advertising
+        trackers.
+      </p>
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button
+          size="sm"
+          onClick={accept}
+          className="flex-1 min-w-fit"
+          data-testid="gdpr-banner-accept"
+        >
+          Got it
+        </Button>
+        <Link href="/privacy">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={accept}
+            className="text-xs text-muted-foreground"
+            data-testid="gdpr-banner-learn-more"
+          >
+            Privacy Policy
+          </Button>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+
+================================================================================
+FILE 21: client/src/components/translate-widget.tsx
+================================================================================
+import { useEffect, useRef, useState } from "react";
+import { Globe } from "lucide-react";
+
+declare global {
+  interface Window {
+    googleTranslateElementInit?: () => void;
+    google?: any;
+  }
+}
+
+const LANGUAGE_NAMES: Record<string, string> = {
+  af: "Afrikaans", sq: "Shqip", am: "አማርኛ", ar: "العربية", hy: "Հայerен",
+  az: "Azərbaycan", eu: "Euskara", be: "Беларуская", bn: "বাংলা", bs: "Bosanski",
+  bg: "Български", ca: "Català", ceb: "Cebuano", zh: "中文", "zh-CN": "中文(简体)",
+  "zh-TW": "中文(繁體)", co: "Corsu", hr: "Hrvatski", cs: "Čeština", da: "Dansk",
+  nl: "Nederlands", en: "English", eo: "Esperanto", et: "Eesti", fi: "Suomi",
+  fr: "Français", fy: "Frysk", gl: "Galego", ka: "ქართული", de: "Deutsch",
+  el: "Ελληνικά", gu: "ગુજરાતી", ht: "Kreyòl ayisyen", ha: "Hausa",
+  haw: "ʻŌlelo Hawaiʻi", he: "עברית", hi: "हिन्दी", hmn: "Hmoob", hu: "Magyar",
+  is: "Íslenska", ig: "Igbo", id: "Bahasa Indonesia", ga: "Gaeilge", it: "Italiano",
+  ja: "日本語", jv: "Basa Jawa", kn: "ಕನ್ನಡ", kk: "Қазақша", km: "ខ្មែរ",
+  rw: "Kinyarwanda", ko: "한국어", ku: "Kurdî", ky: "Кыргызча", lo: "ລາວ",
+  lv: "Latviešu", lt: "Lietuvių", lb: "Lëtzebuergesch", mk: "Македонски",
+  mg: "Malagasy", ms: "Bahasa Melayu", ml: "മലയാളം", mt: "Malti",
+  mi: "Te Reo Māori", mr: "मराठी", mn: "Монгол", my: "မြန်မာ", ne: "नेपाली",
+  no: "Norsk", ny: "Chichewa", or: "ଓଡ଼ିଆ", ps: "پښتو", fa: "فارسی",
+  pl: "Polski", pt: "Português", pa: "ਪੰਜਾਬੀ", ro: "Română", ru: "Русский",
+  sm: "Samoan", gd: "Gàidhlig", sr: "Српски", st: "Sesotho", sn: "Shona",
+  sd: "سنڌي", si: "සිංහල", sk: "Slovenčina", sl: "Slovenščina", so: "Soomaali",
+  es: "Español", su: "Basa Sunda", sw: "Kiswahili", sv: "Svenska", tl: "Filipino",
+  tg: "Тоҷикӣ", ta: "தமிழ்", tt: "Татарча", te: "తెలుగు", th: "ไทย",
+  tr: "Türkçe", tk: "Türkmen", uk: "Українська", ur: "اردو", ug: "ئۇيغۇرچە",
+  uz: "O'zbek", vi: "Tiếng Việt", cy: "Cymraeg", xh: "isiXhosa",
+  yi: "ייִדיש", yo: "Yorùbá", zu: "isiZulu",
+};
+
+function detectBrowserLang(): string {
+  const raw = navigator.language || "";
+  const base = raw.split("-")[0].toLowerCase();
+  if (raw === "zh-TW" || raw === "zh-HK") return "zh-TW";
+  if (base === "zh") return "zh-CN";
+  return base;
+}
+
+export default function TranslateWidget() {
+  const [lang, setLang] = useState("en");
+  const [open, setOpen] = useState(false);
+  const [applied, setApplied] = useState("en");
+  const initialized = useRef(false);
+
+  useEffect(() => {
+    const detected = detectBrowserLang();
+    setLang(detected);
+    if (detected !== "en") applyTranslation(detected);
+  }, []);
+
+  function applyTranslation(targetLang: string) {
+    if (targetLang === "en") {
+      const cookies = document.cookie.split(";");
+      for (const c of cookies) {
+        const [name] = c.trim().split("=");
+        if (name === "googtrans") {
+          document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+          document.cookie = "googtrans=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=." + window.location.hostname;
+        }
+      }
+      window.location.reload();
+      return;
+    }
+
+    const cookieVal = `/en/${targetLang}`;
+    document.cookie = `googtrans=${cookieVal}; path=/`;
+    document.cookie = `googtrans=${cookieVal}; path=/; domain=.${window.location.hostname}`;
+
+    if (!initialized.current) {
+      initialized.current = true;
+      window.googleTranslateElementInit = () => {
+        if (window.google?.translate) {
+          new window.google.translate.TranslateElement(
+            { pageLanguage: "en", autoDisplay: true },
+            "__gt_container"
+          );
+        }
+      };
+      const existing = document.getElementById("__gt_script");
+      if (!existing) {
+        const s = document.createElement("script");
+        s.id = "__gt_script";
+        s.src = "//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
+        s.async = true;
+        document.head.appendChild(s);
+      }
+    } else if (window.google?.translate) {
+      window.googleTranslateElementInit?.();
+    }
+
+    setApplied(targetLang);
+    setOpen(false);
+  }
+
+  function handleSelect(targetLang: string) {
+    setLang(targetLang);
+    applyTranslation(targetLang);
+    setOpen(false);
+  }
+
+  const displayName = LANGUAGE_NAMES[applied] || applied.toUpperCase();
+
+  return (
+    <div className="relative inline-block">
+      <div id="__gt_container" className="hidden" aria-hidden="true" />
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors border border-white/10 rounded-lg px-3 py-1.5 bg-card hover:bg-muted/50"
+        data-testid="translate-button"
+        aria-label="Change language"
+        aria-expanded={open}
+      >
+        <Globe className="w-3.5 h-3.5" />
+        <span>{displayName}</span>
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full mt-1 z-50 bg-card border border-white/10 rounded-xl shadow-xl overflow-hidden w-52 max-h-72 overflow-y-auto">
+            <div className="p-2 space-y-0.5">
+              {Object.entries(LANGUAGE_NAMES).map(([code, name]) => (
+                <button
+                  key={code}
+                  onClick={() => handleSelect(code)}
+                  className={`w-full text-left text-xs px-3 py-2 rounded-lg transition-colors ${
+                    lang === code
+                      ? "bg-primary/20 text-primary font-medium"
+                      : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                  }`}
+                  data-testid={`lang-option-${code}`}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+
+================================================================================
+  KEY NOTES FOR SUBMISSION
+================================================================================
+
+DEPLOYMENT FIX (File 5 — replitAuth.ts)
+  Previously:  const require = createRequire(import.meta.url);
+               const AppleStrategy = require("passport-apple");
+  Problem:     import.meta.url is undefined when bundled to CJS for production
+  Fixed to:    const appleModule = await import("passport-apple");
+               const AppleStrategy = (appleModule as any).default ?? appleModule;
+  Result:      Production build and smoke test both pass with no errors.
+
+AUTHENTICATION
+  • Google sign-in: GET /api/auth/google → OAuth → GET /api/auth/google/callback → session
+  • Apple sign-in:  GET /api/auth/apple  → OAuth → POST /api/auth/apple/callback → session
+  • User IDs prefixed:  google_XXXXX  or  apple_XXXXX  — no collision possible
+  • Sessions stored in PostgreSQL sessions table (7-day TTL, httpOnly secure cookie)
+  • Apple sends name + email ONLY on first sign-in — saved to DB immediately
+  • Logout: GET /api/logout → destroys session → redirect to /login
+
+TRIAL + FEES
+  • 30-day free trial from firstLoginAt (set once, never reset on re-login)
+  • After trial: ourFee = saleAmount × 0.01  (1% per self-reported sale)
+  • During trial: ourFee = "0.00", feePaid = true (no charge)
+  • Fee collected via Stripe Checkout (one-time payment per sale)
+  • Example: $100 sale = $1.00 fee
+
+IMAGE CLEANUP (2-layer)
+  • Sold within 30 days + quantity hits 0 → images deleted immediately
+  • Daily sweep (startup + every 24h) → deletes orphan uploads older than 90 days
+  • Manual trigger: POST /api/admin/cleanup-images?dryRun=true
+
+ACCOUNT DELETION (required by Apple + Google)
+  • DELETE /api/account → wipes all rows for that user → logout
+  • UI: Settings page → Delete Account → type "DELETE" to confirm
+  • Apple reviewer will look for this — it is implemented
+
+GDPR / LEGAL
+  • Consent banner shown on first visit, persisted in localStorage
+  • Privacy Policy: 14 sections, GDPR legal basis, LGPD, PIPEDA, COPPA, AI/OpenAI disclosure
+  • Terms of Service: 15 sections, 13+ age gate, GPT-4o named, 1% fee with example
+  • Both pages auto-translate to 100+ languages via TranslateWidget
+
+CONTACT
+  Email:   kaufit@yahoo.com
+  Website: kauf26.com
+
+================================================================================
+  END OF COMPLETE SOURCE CODE
+================================================================================

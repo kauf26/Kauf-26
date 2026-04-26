@@ -1,0 +1,165 @@
+================================================================================
+  APPLE SIGN IN — COMPLETE SETUP GUIDE
+  Global Marketplace Lister
+================================================================================
+
+WHAT YOU NEED BEFORE STARTING
+  • An Apple Developer account (developer.apple.com — $99/year)
+  • Your live domain: kauf26.com
+  • About 20 minutes
+
+YOU WILL COLLECT THESE 4 VALUES AT THE END:
+  • APPLE_CLIENT_ID   — your Service ID (e.g. com.kauf26.app.service)
+  • APPLE_TEAM_ID     — your 10-character Team ID
+  • APPLE_KEY_ID      — the Key ID from the key you create
+  • APPLE_PRIVATE_KEY — the full contents of the .p8 key file, on one line
+
+================================================================================
+STEP 1 — FIND YOUR TEAM ID
+================================================================================
+
+1. Go to developer.apple.com and sign in.
+2. Click your account name in the top-right corner.
+3. You will see "Team ID: XXXXXXXXXX" — it is always 10 characters, letters and
+   numbers (e.g. A1B2C3D4E5).
+4. Write it down — this is your APPLE_TEAM_ID.
+
+================================================================================
+STEP 2 — CREATE AN APP ID (if you don't have one yet)
+================================================================================
+
+1. In the Apple Developer portal, go to:
+   Certificates, Identifiers & Profiles → Identifiers → click the + button.
+2. Select "App IDs" → Continue.
+3. Select "App" → Continue.
+4. Description: Global Lister
+5. Bundle ID (Explicit): com.kauf26.app
+6. Scroll down the Capabilities list and CHECK "Sign In with Apple".
+7. Click Continue → Register.
+
+NOTE: If you already have an App ID for this app, just edit it and make sure
+"Sign In with Apple" is enabled.
+
+================================================================================
+STEP 3 — CREATE A SERVICE ID (this is what the web app uses)
+================================================================================
+
+1. Go to: Certificates, Identifiers & Profiles → Identifiers → click + button.
+2. Select "Services IDs" → Continue.
+3. Description: Global Lister Web
+4. Identifier: com.kauf26.app.service
+   (This value becomes your APPLE_CLIENT_ID — write it down.)
+5. Click Continue → Register.
+6. Now click on the Service ID you just created to edit it.
+7. CHECK the box next to "Sign In with Apple" → click Configure.
+8. Primary App ID: select "com.kauf26.app" from the dropdown.
+9. Domains and Subdomains: add   kauf26.com
+10. Return URLs: add              https://kauf26.com/api/auth/apple/callback
+11. Click Next → Done → Continue → Save.
+
+================================================================================
+STEP 4 — CREATE A PRIVATE KEY
+================================================================================
+
+1. Go to: Certificates, Identifiers & Profiles → Keys → click + button.
+2. Key Name: Global Lister Sign In Key
+3. CHECK the box next to "Sign In with Apple" → click Configure.
+4. Primary App ID: select "com.kauf26.app".
+5. Click Save → Continue → Register.
+6. On the confirmation screen you will see the Key ID (e.g. ABC123DEFG).
+   Write it down — this is your APPLE_KEY_ID.
+7. Click "Download Key" — you get a file named AuthKey_XXXXXXXXXX.p8.
+   IMPORTANT: You can only download this file ONCE. Keep it safe.
+
+================================================================================
+STEP 5 — CONVERT THE .p8 FILE TO A SINGLE-LINE STRING
+================================================================================
+
+The .p8 file looks like this inside:
+
+  -----BEGIN PRIVATE KEY-----
+  MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg...
+  (several more lines)
+  -----END PRIVATE KEY-----
+
+To store it as an environment variable you must put it all on ONE line,
+replacing each line break with the two characters \n (backslash + n).
+
+HOW TO DO IT ON MAC:
+  1. Open Terminal.
+  2. Run this command (replace the filename with yours):
+       awk 'NF {sub(/\r/, ""); printf "%s\\n",$0;}' AuthKey_XXXXXXXXXX.p8
+  3. Copy the entire output — it will look like:
+       -----BEGIN PRIVATE KEY-----\nMIGHAgEAMBMGByqGSM49...\n-----END PRIVATE KEY-----\n
+  4. This single line is your APPLE_PRIVATE_KEY.
+
+HOW TO DO IT ON WINDOWS (PowerShell):
+  1. Open PowerShell.
+  2. Run:
+       (Get-Content AuthKey_XXXXXXXXXX.p8 -Raw).Replace("`r`n","\n").Replace("`n","\n")
+  3. Copy the output as your APPLE_PRIVATE_KEY.
+
+MANUAL METHOD (any OS):
+  Open the .p8 file in any text editor. Copy all the text. Paste it into a
+  text editor that lets you do find-and-replace. Replace every line break
+  (Enter/Return) with the literal two characters \n. The result should be
+  one long line starting with -----BEGIN PRIVATE KEY-----\n
+
+================================================================================
+STEP 6 — ENTER THE 4 VALUES IN REPLIT SECRETS
+================================================================================
+
+Go to your Replit project → Secrets tab → add these 4 secrets:
+
+  Secret name        Value
+  ──────────────────────────────────────────────────────────────────
+  APPLE_CLIENT_ID    com.kauf26.app.service   (your Service ID)
+  APPLE_TEAM_ID      your 10-char Team ID
+  APPLE_KEY_ID       your Key ID from Step 4
+  APPLE_PRIVATE_KEY  the single-line string from Step 5
+
+After saving all 4 secrets, restart the app. The server log will show:
+  [auth] Apple Sign In strategy registered
+
+================================================================================
+STEP 7 — FOR THE NATIVE iOS APP (App Store submission)
+================================================================================
+
+When you wrap the app as a native iOS app (via PWABuilder or Capacitor):
+  • You use the App ID "com.kauf26.app" (NOT the Service ID)
+  • Enable "Sign In with Apple" in Xcode under Signing & Capabilities
+  • No private key needed in the code — iOS handles Apple Sign In natively
+  • The same Apple Developer account and Team ID applies
+
+================================================================================
+CALLBACK URL REGISTERED WITH APPLE (for reference)
+================================================================================
+
+  https://kauf26.com/api/auth/apple/callback
+
+If your Replit dev URL is different, you may also add it during testing:
+  https://[your-replit-dev-domain]/api/auth/apple/callback
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+"Invalid redirect URI" error:
+  → Double-check the Return URL in your Service ID configuration exactly matches
+    https://kauf26.com/api/auth/apple/callback (no trailing slash)
+
+"Invalid client" error:
+  → Make sure APPLE_CLIENT_ID is the Service ID (com.kauf26.app.service),
+    NOT the App ID (com.kauf26.app)
+
+"Invalid key" error:
+  → Make sure the private key is stored as one line with \n between each line.
+    A common mistake is extra spaces or missing the header/footer lines.
+
+Apple only sends name and email on the VERY FIRST sign-in:
+  → This is by design. On subsequent logins Apple does not resend the user's
+    name or email. The app saves this data to the database on first login.
+
+================================================================================
+  END OF APPLE SIGN IN SETUP GUIDE
+================================================================================

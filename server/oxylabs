@@ -1,0 +1,27 @@
+// server/services/oxylabs.ts
+
+/**
+* Oxylabs Residential Proxy Manager
+* Essential for Vinted, Wallapop, and other EU-based marketplaces.
+*/
+export class OxylabsService {
+ private static readonly HOST = 'pr.oxylabs.io';
+ private static readonly PORT = '7777';
+
+ /**
+  * Generates a country-specific proxy URL.
+  * Default is US, but can be switched to FR or ES for European listings.
+  */
+ static getProxyUrl(countryCode: 'FR' | 'ES' | 'US' = 'US'): string {
+   const user = process.env.OXYLABS_USERNAME;
+   const pass = process.env.OXYLABS_PASSWORD;
+
+   if (!user || !pass) {
+     console.warn("Oxylabs credentials missing in .env - Proxies may fail.");
+     return '';
+   }
+
+   // This cc-[country] flag is the secret to getting local EU prices and listings
+   return `http://customer-${user}-cc-${countryCode}:${pass}@${this.HOST}:${this.PORT}`;
+ }
+}
