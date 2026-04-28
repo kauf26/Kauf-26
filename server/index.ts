@@ -1,21 +1,20 @@
-import express, { type Request, Response, NextFunction } from "express";
+import express from "express";
 import { registerRoutes } from "./routes.js";
 import { setupVite, serveStatic, log } from "./vite.js";
-import * as stripeService from "./stripeClient.js";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
-app.use((req: Request, res: Response, next: NextFunction) => {
+app.use((req, res, next) => {
  const start = Date.now();
  const path = req.path;
  let resBody: any;
 
  const originalResJson = res.json;
- res.json = function (bodyJson, ...args) {
-   resBody = bodyJson;
-   return originalResJson.apply(res, [bodyJson, ...args]);
+ res.json = function (body) {
+   resBody = body;
+   return originalResJson.apply(res, arguments as any);
  };
 
  res.on("finish", () => {
@@ -26,8 +25,8 @@ app.use((req: Request, res: Response, next: NextFunction) => {
        logLine += ` :: ${JSON.stringify(resBody)}`;
      }
 
-     if (logLine.length > 80) {
-       logLine = logLine.substring(0, 77) + "...";
+     if (logLine.length > 100) {
+       logLine = logLine.substring(0, 99) + "...";
      }
 
      log(logLine);
@@ -38,12 +37,13 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 });
 
 (async () => {
+ // Pass the express 'app' to registerRoutes
  const server = registerRoutes(app);
 
- app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+ // Global Error Handler
+ app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
    const status = err.status || err.statusCode || 500;
    const message = err.message || "Internal Server Error";
-
    res.status(status).json({ message });
    throw err;
  });
