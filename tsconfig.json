@@ -1,17 +1,21 @@
 {
   "compilerOptions": {
     "target": "ESNext",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "baseUrl": ".",
     "paths": {
-      "*": ["node_modules/*"]
+      "@db": ["./db"],
+      "@db/*": ["./db/*"],
+      "@shared/*": ["./shared/*"]
     },
     "strict": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "outDir": "./dist"
+    "outDir": "./dist",
+    "esModuleInterop": true
   },
   "include": ["server/**/*", "client/src/**/*", "shared/**/*"],
   "exclude": ["node_modules", "build", "dist"]
  }
+ 

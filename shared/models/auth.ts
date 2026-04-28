@@ -1,1 +1,1 @@
-export { users, sessions, type User, type UpsertUser } from "../schema";
+export { users, sessions, type User, type InsertUser } from "../schema";

@@ -1,9 +1,25 @@
 import Stripe from "stripe";
 
-// Using 'any' as a temporary bridge to clear the versioning squiggle
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "", {
+// Initialize Stripe with your secret key
+export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
  apiVersion: "2023-10-16" as any,
 });
+
+/**
+* Provides a synchronized way to process webhooks.
+* This is the function that was missing from your earlier screenshot.
+*/
+export async function getStripeSync() {
+ return {
+   processWebhook: async (payload: Buffer, sig: string) => {
+     return stripe.webhooks.constructEvent(
+       payload,
+       sig,
+       process.env.STRIPE_WEBHOOK_SECRET!
+     );
+   }
+ };
+}
 
 /**
 * Creates a checkout session for a user subscription.
@@ -15,7 +31,7 @@ export async function createSubscriptionCheckout(userId: string) {
      payment_method_types: ["card"],
      line_items: [
        {
-         price: "price_12345", // Replace with your actual Stripe Price ID
+         price: "price_12345", // Replace with your actual Stripe price ID
          quantity: 1,
        },
      ],
@@ -29,7 +45,8 @@ export async function createSubscriptionCheckout(userId: string) {
 
    return session;
  } catch (error) {
-   console.error("Stripe Session Error:", error);
+   console.error("Stripe Checkout Error:", error);
    throw error;
  }
 }
+
