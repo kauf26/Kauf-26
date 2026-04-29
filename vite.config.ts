@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+<<<<<<< HEAD
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
@@ -49,3 +50,25 @@ export default defineConfig({
     },
   },
 });
+=======
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export default defineConfig({
+ plugins: [react()],
+ resolve: {
+   alias: {
+     "@": path.resolve(__dirname, "src"),
+     "@shared": path.resolve(__dirname, "shared"),
+   },
+ },
+ root: path.resolve(__dirname),
+ build: {
+   outDir: path.resolve(__dirname, "dist", "public"),
+   emptyOutDir: true,
+ },
+});
+>>>>>>> 2054f48

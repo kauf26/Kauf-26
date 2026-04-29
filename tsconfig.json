@@ -1,4 +1,5 @@
 {
+<<<<<<< HEAD
   "include": [
     "client/src/**/*",
     "shared/**/*",
@@ -36,5 +37,25 @@
       "@shared/*": ["./shared/*"]
     }
   }
+=======
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@db": ["./db"],
+      "@db/*": ["./db/*"],
+      "@shared/*": ["./shared/*"]
+    },
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "./dist",
+    "esModuleInterop": true
+  },
+  "include": ["server/**/*", "client/src/**/*", "shared/**/*"],
+  "exclude": ["node_modules", "build", "dist"]
+>>>>>>> 2054f48
  }
  
