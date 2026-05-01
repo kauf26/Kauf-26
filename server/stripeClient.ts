@@ -1,16 +1,15 @@
 import Stripe from 'stripe';
 
+// Initializing with the latest 'dahlia' version.
+// Run 'npm install stripe@latest' in your terminal to ensure types match.
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
-// Add "as any" at the end to stop the red underline
-
-  apiVersion: '2026-04-22.dahlia' as any,
- });
-
+ apiVersion: '2026-04-22.dahlia' as any,
+});
 
 /**
 * Creates a "Per-Sale" Checkout Session.
 * Logic: Resellers pay a percentage fee ONLY after their trial ends.
-* * @param userId - Reseller ID
+* @param userId - Reseller ID
 * @param itemSalePrice - The amount the item sold for (e.g., $100.00)
 * @param userSalesCount - Total number of sales (to calculate volume tier)
 */
@@ -19,7 +18,6 @@ export async function createPerSaleCheckout(
  itemSalePrice: number,
  userSalesCount: number
 ) {
-
  // --- VOLUME PERCENTAGE LOGIC ---
  // Start with the standard rate and drop as they sell more
  let feePercentage = 0.025; // 2.5% for most users
@@ -27,7 +25,7 @@ export async function createPerSaleCheckout(
  if (userSalesCount >= 250) {
    feePercentage = 0.0175; // 1.75% for Power Resellers
  } else if (userSalesCount >= 50) {
-   feePercentage = 0.020;  // 2.0% for Mid-Tier Resellers
+   feePercentage = 0.020; // 2.0% for Mid-Tier Resellers
  }
 
  // Calculate fee in CENTS (Stripe requirement)
@@ -42,8 +40,8 @@ export async function createPerSaleCheckout(
          price_data: {
            currency: 'usd',
            product_data: {
-             name: `Kauf26 Marketplace Fee`,
-             description: `Processing fee (${(feePercentage * 100).toFixed(2)}%) for item sold at $${itemSalePrice.toFixed(2)}`,
+             name: 'Kauf26 Marketplace Fee',
+             description: `Processing fee (${(feePercentage * 100).toFixed(2)}%)`,
              tax_code: 'txcd_10103001', // SaaS - Business Use
            },
            unit_amount: calculatedFeeCents,
@@ -53,25 +51,51 @@ export async function createPerSaleCheckout(
      ],
      mode: 'payment', // One-time fee, NOT a subscription
 
-     // --- GLOBAL TAX ENGINE (FOR YOUR 26 MARKETPLACES) ---
+     // GLOBAL TAX ENGINE (FOR YOUR 26 MARKETPLACES)
      automatic_tax: { enabled: true },
      customer_update: { address: 'auto' },
      billing_address_collection: 'required',
 
-     // Your Redirect URLs
      success_url: `http://localhost:5000/success?session_id={CHECKOUT_SESSION_ID}`,
      cancel_url: `http://localhost:5000/cancel`,
-
-     metadata: {
-       userId: userId,
-       appliedRate: feePercentage.toString(),
-       salePrice: itemSalePrice.toString()
-     },
    });
 
    return session;
  } catch (error) {
-   console.error('Stripe Checkout Error:', error);
+   console.error("Stripe Checkout Error:", error);
+   throw error;
+ }
+}
+
+/**
+* Creates a payment hold for the 30-day escrow period.
+* Satisfies the export requirement in index.ts.
+*/
+export async function createHoldPayment(userId: string, amount: number) {
+ try {
+   const session = await stripe.checkout.sessions.create({
+     payment_method_types: ['card'],
+     line_items: [{
+       price_data: {
+         currency: 'usd',
+         product_data: {
+           name: 'Kauf26 Escrow Hold',
+           description: 'Funds held for 30-day escrow period'
+         },
+         unit_amount: Math.round(amount * 100),
+       },
+       quantity: 1,
+     }],
+     payment_intent_data: {
+       capture_method: 'manual', // Triggers the authorization hold instead of immediate charge
+     },
+     mode: 'payment',
+     success_url: `http://localhost:5000/success?session_id={CHECKOUT_SESSION_ID}`,
+     cancel_url: `http://localhost:5000/cancel`,
+   });
+   return session;
+ } catch (error) {
+   console.error("Stripe Escrow Hold Error:", error);
    throw error;
  }
 }
