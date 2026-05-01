@@ -52,7 +52,7 @@ app.use((req, res, next) => {
    }
  }
 
- const PORT = 5000;
+ const PORT = 2626;
  server.listen(PORT, "0.0.0.0", () => {
    safeLog(`Kauf26 Server running locally on port ${PORT}`);
  });
