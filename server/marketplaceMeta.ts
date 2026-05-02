@@ -22,7 +22,7 @@ export const marketplaceLocale: Record<string, { lang: string, currency: string 
   // --- REGIONAL & HOBBY ---
   mercadolibre: { lang: "es", currency: "USD" },
   cardmarket: { lang: "en", currency: "EUR" },
-  allegro: { lang: "en", currency: "PLN" },
+  allegro: { lang: "pl" , currency: "PLN" },
   gumtree: { lang: "en", currency: "GBP" },
   bonanza: { lang: "en", currency: "USD" },
   abebooks: { lang: "en", currency: "USD" },
