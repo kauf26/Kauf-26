@@ -1,13 +1,18 @@
+import 'dotenv/config';
 import Stripe from 'stripe';
 
-// Debug check to see if the environment variable is actually loading
-if (!process.env.STRIPE_SECRET_KEY) {
- console.error("CRITICAL ERROR: STRIPE_SECRET_KEY is missing from your .env file.");
+// 1. Get the key and check it immediately
+const stripeKey = process.env.STRIPE_SECRET_KEY;
+
+if (!stripeKey) {
+ throw new Error("STRIPE_SECRET_KEY is missing from your .env file.");
 }
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY as string, {
- apiVersion: '2025-01-27' as any, // Using a stable version to avoid 'dahlia' errors
+// 2. Initialize with the key we just verified
+export const stripe = new Stripe(stripeKey, {
+ apiVersion: '2025-01-27' as any,
 });
+
 
 /**
 * Creates a "Per-Sale" Checkout Session for Kauf26.
