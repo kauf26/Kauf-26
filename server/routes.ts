@@ -1,7 +1,7 @@
 import { type Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
-import * as StripeModule from "./stripeClient";
+import { storage } from "./storage.js";
+import * as StripeModule from "./stripeClient.js";
 
 /**
 * Register all Kauf26 API and system routes.
