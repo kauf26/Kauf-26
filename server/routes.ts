@@ -9,7 +9,7 @@ import * as StripeModule from "./stripeClient.js";
 * the updated Per-Sale and Escrow logic.
 */
 export async function registerRoutes(app: Express): Promise<Server> {
- const stripeClient = (StripeModule as any).stripeClient || (StripeModule as any).default || StripeModule;
+ const stripeClient = (StripeModule as any).stripeClient || (StripeModule as any).default;
 
  // 1. API Routes for Kauf26 Marketplace
  app.post("/api/create-checkout-session", async (req, res) => {
@@ -17,13 +17,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
      const { userId, itemSalePrice, userSalesCount } = req.body;
 
      // Ensure we have the required data for the volume-tier logic
-     if (!userId) return res.status(400).json({ message: "User ID is required" });
+     if (!userId) return res.status(400).json({ message: "User ID required" });
 
-     const session = await (StripeModule as any).createPerSaleCheckout(
+     const session = await (StripeModule as any).createPerSaleCheckoutSession({
        userId,
        itemSalePrice,
        userSalesCount
-     );
+     });
 
      res.json({ url: session.url, sessionId: session.id });
    } catch (error: any) {
@@ -36,7 +36,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
  app.post("/api/create-hold", async (req, res) => {
    try {
      const { userId, amount } = req.body;
-     const session = await (StripeModule as any).createHoldPayment(userId, amount);
+     const session = await (StripeModule as any).createHoldPaymentSession({
+       userId,
+       amount
+     });
      res.json({ url: session.url, sessionId: session.id });
    } catch (error: any) {
      console.error("Stripe Hold Error:", error);

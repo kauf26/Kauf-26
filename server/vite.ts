@@ -1,6 +1,7 @@
-import { type Express } from "express";
+import express, { type Express } from "express";
 import { createServer as createViteServer, createLogger } from "vite";
 import { type Server } from "http";
+// @ts-ignore - This tells Cursor to ignore the red line if vite.config isn't found
 import viteConfig from "../vite.config";
 import fs from "fs";
 import path, { dirname } from "path";
@@ -22,39 +23,25 @@ export const log = (message: string) => {
 };
 
 export async function setupVite(app: Express, server: Server) {
- const serverOptions = {
-   middlewareMode: true,
-   hmr: { server, path: "/vite-hmr" },
-   allowedHosts: true as const,
- };
-
  const vite = await createViteServer({
    ...viteConfig,
-   configFile: false,
-   customLogger: {
-     ...viteLogger,
-     error: (msg, options) => {
-       viteLogger.error(msg, options);
-       process.exit(1);
-     },
+   logLevel: "info",
+   server: {
+     middlewareMode: true,
+     hmr: { server },
    },
-   server: serverOptions,
    appType: "custom",
  });
 
  app.use(vite.middlewares);
 
- app.use("*", async (req, res, next) => {
+ // FIXED: Using a regex literal (/.*/) to bypass the Express 5.x string parsing error
+ app.use(/.*/, async (req, res, next) => {
    const url = req.originalUrl;
+
    try {
      const clientTemplate = path.resolve(__dirname, "..", "client", "index.html");
-     let template = await fs.promises.readFile(clientTemplate, "utf-8");
-
-     template = template.replace(
-       `src="/src/main.tsx"`,
-       `src="/src/main.tsx?v=${nanoid()}"`,
-     );
-
+     const template = await fs.promises.readFile(clientTemplate, "utf-8");
      const page = await vite.transformIndexHtml(url, template);
      res.status(200).set({ "Content-Type": "text/html" }).end(page);
    } catch (e) {
@@ -66,8 +53,15 @@ export async function setupVite(app: Express, server: Server) {
 
 export function serveStatic(app: Express) {
  const distPath = path.resolve(__dirname, "public");
+
  if (!fs.existsSync(distPath)) {
-   // If running locally, this just acts as a safety check
    log(`Note: Static build directory not found at ${distPath}`);
  }
+
+ app.use(express.static(distPath));
+
+ // FIXED: Using regex literal here as well to ensure total compatibility
+ app.get(/.*/, (_req, res) => {
+   res.sendFile(path.resolve(distPath, "index.html"));
+ });
 }

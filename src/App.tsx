@@ -23,21 +23,29 @@ import LoginPage from "./pages/login";
 function Router() {
  return (
    <Switch>
+     {/* The root path now explicitly loads the Welcome page */}
      <Route path="/" component={Welcome} />
+
+     {/* Dashboard and Main App Routes */}
      <Route path="/dashboard" component={Dashboard} />
      <Route path="/inventory" component={Inventory} />
      <Route path="/listings" component={Listings} />
      <Route path="/sales" component={Sales} />
      <Route path="/tools" component={Tools} />
+     <Route path="/create" component={Create} />
+     <Route path="/submit" component={Submit} />
+
+     {/* Account and Legal */}
+     <Route path="/login" component={LoginPage} />
+     <Route path="/pricing" component={PricingPage} />
+     <Route path="/settings" component={SettingsPage} />
      <Route path="/terms" component={Terms} />
      <Route path="/privacy" component={Privacy} />
-     <Route path="/submit" component={Submit} />
-     <Route path="/create" component={Create} />
-     <Route path="/settings" component={SettingsPage} />
-     <Route path="/pricing" component={PricingPage} />
-     <Route path="/login" component={LoginPage} />
-     {/* Default to Welcome page */}
-     <Route component={Welcome} />
+
+     {/* Fallback: Redirect any unknown routes back to Welcome */}
+     <Route>
+       <Welcome />
+     </Route>
    </Switch>
  );
 }
