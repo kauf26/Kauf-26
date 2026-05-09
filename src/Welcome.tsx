@@ -1,23 +1,41 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 
 const Welcome = () => {
+  const triggerCamera = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.capture = 'environment';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) console.log("Picture captured:", file.name);
+    };
+    input.click();
+  };
+  useEffect(() => {
+    // This triggers the camera automatically when the page loads
+    triggerCamera();
+  }, []);
+ 
  return (
    <div className="min-h-screen flex items-center justify-center bg-white p-4">
      <section className="max-w-md w-full text-center">
-       <h1 className="text-6xl font-bold text-gray-900 mb-2 tracking-tight">
-         Kauf26
-       </h1>
-       <p className="text-xl font-medium text-gray-500 mb-10 tracking-wide">
+
+     <h1 className="text-6xl font-black uppercase mb-2 bg-gradient-to-r from-[#40C9FF] via-[#E81CFF] to-[#7000FF] bg-clip-text text-transparent" style={{ fontFamily: 'Impact, Charcoal, sans-serif' }}>
+ Kauf26
+</h1>
+<p className="text-[14px] font-black tracking-[0.4em] uppercase mb-10 bg-gradient-to-r from-[#40C9FF] to-[#E81CFF] bg-clip-text text-transparent">
          Picture ▯ Post ▯ Sell
        </p>
 
        <div className="flex justify-center mb-12">
-         <div className="relative w-full max-w-[320px] aspect-square border-2 border-dashed border-gray-200 rounded-2xl flex items-center justify-center bg-gray-50">
-           <img
-             src="/kauf-logo.jpeg"
-             className="w-full h-full object-cover"
-             
-           />
+       <div className="relative w-full max-w-[320px] aspect-square border-2 border-dashed border-gray-200 flex flex-col items-center cursor-pointer" onClick={() => console.log("Camera sequence initiated via logo")}>
+       <img
+         src="/logo_new.png"
+         alt="K Logo"
+         className="w-full h-full object-cover"
+       />
+   <p className="mt-4 font-bold uppercase text-gray-700">Free 14 Day Trial</p>
          </div>
        </div>
 
