@@ -31,9 +31,10 @@ const Welcome = () => {
        <div className="flex justify-center mb-12">
        <div className="relative w-full max-w-[320px] aspect-square border-2 border-dashed border-gray-200 flex flex-col items-center cursor-pointer" onClick={() => console.log("Camera sequence initiated via logo")}>
        <img
-         src="/logo_new.png"
-         alt="K Logo"
-         className="w-full h-full object-cover"
+           src="/kauf26-logo.JPG"
+           alt="Kauf26 Logo"
+           className="w-full h-full object-contain cursor-pointer"
+           onClick={triggerCamera}
        />
    <p className="mt-4 font-bold uppercase text-gray-700">Free 14 Day Trial</p>
          </div>
