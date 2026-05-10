@@ -1,6 +1,9 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useLocation } from "wouter";
+
 
 const Welcome = () => {
+  const [, setLocation]=useLocation();
   const triggerCamera = () => {
     const input = document.createElement('input');
     input.type = 'file';
@@ -10,31 +13,27 @@ const Welcome = () => {
       const file = e.target.files?.[0];
       if (file) {
         console.log("Captured for Kauf-AI:", file.name);
-     
-        // 1. Create a preview (Optional, for your UI)
         const reader = new FileReader();
-        reader.onload = () => {
-          // You can set this to a state variable to show the user what they just took
-          // setImagePreview(reader.result as string);
-        };
+        reader.onload = async () => {
+          const formData = new FormData();
+          formData.append('image', file);
+          try {
+            const response = await fetch('http://localhost:5001/api/identify', {
+              method: 'POST',
+              body: formData,
+            });
+            const data = await response.json();
+            localStorage.setItem('kauf_draft_description', data.description);
+            localStorage.setItem('kauf_draft_image', reader.result as string);
+            setLocation("/product-draft");
+          } catch (err) {
+            console.error("Identification failed:", err);
+          }
+          
+        }
         reader.readAsDataURL(file);
      
-        // 2. Prepare to send to your Local Server
-        const formData = new FormData();
-        formData.append('image', file);
-     
-        try {
-          // This calls your local backend (we'll set this up next)
-          const response = await fetch('http://localhost:5001/api/identify', {
-            method: 'POST',
-            body: formData,
-          });
-          const data = await response.json();
-          console.log("Identification Results:", data.description);
-          // Redirect or update UI with the description
-        } catch (err) {
-          console.error("Capture Error:", err);
-        }
+
       }
      };
      

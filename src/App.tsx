@@ -6,7 +6,7 @@ import { Toaster } from "./components/ui/toaster";
 import { TooltipProvider } from "./components/ui/tooltip";
 
 // PAGE IMPORTS
-import Welcome from "./Welcome";
+import Welcome from "./welcome.tsx";
 import Dashboard from "./pages/dashboard";
 import Inventory from "./pages/inventory";
 import Listings from "./pages/listings";
