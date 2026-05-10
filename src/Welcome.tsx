@@ -25,7 +25,7 @@ const Welcome = () => {
      
         try {
           // This calls your local backend (we'll set this up next)
-          const response = await fetch('http://localhost:3001/api/identify', {
+          const response = await fetch('http://localhost:5001/api/identify', {
             method: 'POST',
             body: formData,
           });

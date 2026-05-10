@@ -6,7 +6,7 @@ import { fileURLToPath } from "url";
 import multer from 'multer';
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
-
+import { scrapeProduct } from './scrapers/oxylabs.js';
 // 1. Setup Environment and Helpers
 dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
@@ -48,9 +48,19 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
      ],
    });
 
-   res.json({ description: response.choices[0].message.content });
+   const searchQuery = response.choices[0].message.content || "";
+   console.log(`🚀 KAUFAI identified: ${searchQuery}`);
+
+   // Trigger the scraper using the AI's identification
+   const listings = await scrapeProduct(searchQuery);
+
+   res.json({
+     description: searchQuery,
+     listings: listings
+   });
+
  } catch (error) {
-   console.error("OpenAI Error:", error);
+   console.error("KAUFAI Error:", error);
    res.status(500).json({ error: "Identification failed" });
  }
 });
@@ -67,6 +77,6 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
 
  const PORT = 5001;
  server.listen(PORT, "0.0.0.0", () => {
-   console.log(`Kauf26 server running on port ${PORT}`);
+   console.log(`Kaufai server running on port ${PORT}`);
  });
 })();
