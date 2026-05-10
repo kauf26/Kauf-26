@@ -6,10 +6,38 @@ const Welcome = () => {
     input.type = 'file';
     input.accept = 'image/*';
     input.capture = 'environment';
-    input.onchange = (e) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (file) console.log("Picture captured:", file.name);
-    };
+    input.onchange = async (e: any) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        console.log("Captured for Kauf-AI:", file.name);
+     
+        // 1. Create a preview (Optional, for your UI)
+        const reader = new FileReader();
+        reader.onload = () => {
+          // You can set this to a state variable to show the user what they just took
+          // setImagePreview(reader.result as string);
+        };
+        reader.readAsDataURL(file);
+     
+        // 2. Prepare to send to your Local Server
+        const formData = new FormData();
+        formData.append('image', file);
+     
+        try {
+          // This calls your local backend (we'll set this up next)
+          const response = await fetch('http://localhost:3001/api/identify', {
+            method: 'POST',
+            body: formData,
+          });
+          const data = await response.json();
+          console.log("Identification Results:", data.description);
+          // Redirect or update UI with the description
+        } catch (err) {
+          console.error("Capture Error:", err);
+        }
+      }
+     };
+     
     input.click();
   };
   useEffect(() => {
