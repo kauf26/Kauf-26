@@ -1,3 +1,4 @@
+import type { ReactElement } from "react";
 import { useLocation } from "wouter";
 
 const SLIDES = [
@@ -370,7 +371,7 @@ export default function Screenshots() {
   const params = new URLSearchParams(window.location.search);
   const slide = params.get("slide") || "upload";
 
-  const components: Record<string, JSX.Element> = {
+  const components: Record<string, ReactElement> = {
     upload: <UploadSlide />,
     analyze: <AnalyzeSlide />,
     listings: <ListingsSlide />,

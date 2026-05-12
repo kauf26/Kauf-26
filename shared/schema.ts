@@ -23,6 +23,8 @@ export const products = pgTable("products", {
  basePrice: decimal("base_price", { precision: 10, scale: 2 }).notNull(),
  currency: text("currency").notNull().default("USD"),
  quantity: integer("quantity").notNull().default(1),
+ imageUrl: text("image_url"),
+ additionalImages: text("additional_images").array(),
  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
 });
 
