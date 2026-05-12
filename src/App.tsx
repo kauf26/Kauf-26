@@ -19,42 +19,34 @@ import Create from "./pages/create";
 import SettingsPage from "./pages/settings";
 import PricingPage from "./pages/pricing";
 import LoginPage from "./pages/login";
-
-function Router() {
- return (
-   <Switch>
-     {/* The root path now explicitly loads the Welcome page */}
-     <Route path="/" component={Welcome} />
-
-     {/* Dashboard and Main App Routes */}
-     <Route path="/dashboard" component={Dashboard} />
-     <Route path="/inventory" component={Inventory} />
-     <Route path="/listings" component={Listings} />
-     <Route path="/sales" component={Sales} />
-     <Route path="/tools" component={Tools} />
-     <Route path="/create" component={Create} />
-     <Route path="/submit" component={Submit} />
-
-     {/* Account and Legal */}
-     <Route path="/login" component={LoginPage} />
-     <Route path="/pricing" component={PricingPage} />
-     <Route path="/settings" component={SettingsPage} />
-     <Route path="/terms" component={Terms} />
-     <Route path="/privacy" component={Privacy} />
-
-     {/* Fallback: Redirect any unknown routes back to Welcome */}
-     <Route>
-       <Welcome />
-     </Route>
-   </Switch>
- );
-}
+import ProductDraftPage from './pages/product-draft';
 
 function App() {
  return (
    <QueryClientProvider client={queryClient}>
      <TooltipProvider>
-       <Router />
+       <Switch>
+         {/* Main Routes */}
+         <Route path="/" component={Welcome} />
+         <Route path="/dashboard" component={Dashboard} />
+         <Route path="/inventory" component={Inventory} />
+         <Route path="/listings" component={Listings} />
+         <Route path="/sales" component={Sales} />
+         <Route path="/tools" component={Tools} />
+         <Route path="/create" component={Create} />
+         <Route path="/product-draft" component={ProductDraftPage} />
+         <Route path="/submit" component={Submit} />
+
+         {/* Account and Legal */}
+         <Route path="/login" component={LoginPage} />
+         <Route path="/pricing" component={PricingPage} />
+         <Route path="/terms" component={Terms} />
+         <Route path="/privacy" component={Privacy} />
+         <Route path="/settings" component={SettingsPage} />
+
+         {/* Default Fallback (404) */}
+         <Route component={Welcome} />
+       </Switch>
        <Toaster />
      </TooltipProvider>
    </QueryClientProvider>
