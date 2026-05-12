@@ -1,80 +1,38 @@
-import React, { useEffect, useState } from 'react';
-import { useLocation } from "wouter";
-
+import React from "react";
 
 const Welcome = () => {
-  const [, setLocation]=useLocation();
   const triggerCamera = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = 'image/*';
-    input.capture = 'environment';
-    input.onchange = async (e: any) => {
-      const file = e.target.files?.[0];
-      if (file) {
-        console.log("Captured for Kauf-AI:", file.name);
-        const reader = new FileReader();
-        reader.onload = async () => {
-          const formData = new FormData();
-          formData.append('image', file);
-          try {
-            const response = await fetch('http://localhost:5001/api/identify', {
-              method: 'POST',
-              body: formData,
-            });
-            const data = await response.json();
-            localStorage.setItem('kauf_draft_description', data.description);
-            localStorage.setItem('kauf_draft_image', reader.result as string);
-            setLocation("/product-draft");
-          } catch (err) {
-            console.error("Identification failed:", err);
-          }
-          
-        }
-        reader.readAsDataURL(file);
-     
-
-      }
-     };
-     
-    input.click();
+    console.log("Camera triggered");
   };
-  useEffect(() => {
-    // This triggers the camera automatically when the page loads
-    triggerCamera();
-  }, []);
- 
- return (
-   <div className="min-h-screen flex items-center justify-center bg-white p-4">
-     <section className="max-w-md w-full text-center">
 
-     <h1 className="text-6xl uppercase mb-2 text-black" style={{ fontFamily: '"Bodoni 72", serif', fontWeight: '800' }}>
- Kauf-AI
-</h1>
-<p className="text-[14px] font-black tracking-[0.4em] uppercase mb-10 bg-gradient-to-r from-[#40C9FF] to-[#E81CFF] bg-clip-text text-transparent">
-         Picture ▯ Post ▯ Sell
-       </p>
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-white font-sans">
+      <section className="max-w-md w-full text-center px-4">
+        <h1 className="text-7xl mb-2 text-black leading-none font-serif font-black tracking-tight flex items-center justify-center">
+          KAUF <span className="font-sans px-2 text-5xl font-bold align-middle">–</span> A
+        </h1>
 
-       <div className="flex justify-center mb-12">
-       <div className="relative w-full max-w-[320px] aspect-square border-2 border-dashed border-gray-200 flex flex-col items-center cursor-pointer" onClick={() => console.log("Camera sequence initiated via logo")}>
-       <img
-           src="/kauf26-logo.JPG"
-         alt="Kauf26 Logo"
-         className="w-full h-full object-contain cursor-pointer"
-         onClick={triggerCamera}
-       />
-   <p className="mt-4 font-bold uppercase text-gray-700">Free 14 Day Trial</p>
-         </div>
-       </div>
+        <p className="text-[14px] font-black tracking-widest uppercase mb-8 bg-gradient-to-r from-blue-400 to-pink-500 bg-clip-text text-transparent">
+          Picture ▢ Post ▢ Sell
+        </p>
 
-       <div className="px-4 text-center">
-         <button onClick={() => console.log("Camera sequence initiated")}>
-           Get Started
-         </button>
-         <p>*Secure Escrow Protection Enabled</p>
-       </div>
-     </section>
-   </div>
- );
+        <div className="flex justify-center mb-12">
+          <div className="relative w-full max-w-[320px] aspect-square rounded-3xl overflow-hidden shadow-sm">
+            <img
+              src="/kauf-camera.png"
+              alt="KAUF camera logo"
+              className="w-full h-full object-cover cursor-pointer"
+              onClick={triggerCamera}
+            />
+          </div>
+        </div>
+
+        <p className="mt-4 font-bold uppercase text-gray-700 text-center tracking-wide">
+          14 DAY FREE TRIAL
+        </p>
+      </section>
+    </div>
+  );
 };
+
 export default Welcome;

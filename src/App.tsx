@@ -6,8 +6,7 @@ import { Toaster } from "./components/ui/toaster";
 import { TooltipProvider } from "./components/ui/tooltip";
 
 // PAGE IMPORTS
-// PAGE IMPORTS - Ensure the first letter matches the file name in your sidebar
-import Welcome from "./Welcome"; // Capital W to match Sidebar
+import Welcome from "./Welcome";
 import Dashboard from "./pages/dashboard";
 import Inventory from "./pages/inventory";
 import Listings from "./pages/listings";
