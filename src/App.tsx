@@ -6,7 +6,8 @@ import { Toaster } from "./components/ui/toaster";
 import { TooltipProvider } from "./components/ui/tooltip";
 
 // PAGE IMPORTS
-import Welcome from "./welcome.tsx";
+// PAGE IMPORTS - Ensure the first letter matches the file name in your sidebar
+import Welcome from "./Welcome"; // Capital W to match Sidebar
 import Dashboard from "./pages/dashboard";
 import Inventory from "./pages/inventory";
 import Listings from "./pages/listings";
@@ -19,7 +20,7 @@ import Create from "./pages/create";
 import SettingsPage from "./pages/settings";
 import PricingPage from "./pages/pricing";
 import LoginPage from "./pages/login";
-import ProductDraftPage from './pages/product-draft';
+import ProductDraftPage from "./pages/product-draft";
 
 function App() {
  return (
