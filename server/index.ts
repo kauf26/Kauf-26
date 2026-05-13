@@ -72,7 +72,7 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
 });
 
 // 4. Start Server
-const port = 5001;
+const port = 2626;
 app.listen(port, () => {
  console.log(`KAUF-AI server running on port ${port}`);
 });
