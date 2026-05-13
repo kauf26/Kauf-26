@@ -19,7 +19,7 @@ import Create from "./pages/create";
 import SettingsPage from "./pages/settings";
 import PricingPage from "./pages/pricing";
 import LoginPage from "./pages/login";
-import ProductDraftPage from "./pages/product-draft";
+import ProductDraftPage from "./pages/ProductDraft";
 
 function App() {
  return (
