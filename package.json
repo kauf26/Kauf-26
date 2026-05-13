@@ -88,7 +88,7 @@
     "react": "^19.2.0",
     "react-day-picker": "^9.11.1",
     "react-dom": "^19.2.0",
-    "react-grid-layout": "^2.2.2",
+    "react-grid-layout": "^2.2.3",
     "react-hook-form": "^7.66.0",
     "react-resizable-panels": "^2.1.9",
     "react-router-dom": "^7.15.0",
@@ -132,5 +132,9 @@
   },
   "optionalDependencies": {
     "bufferutil": "^4.0.8"
+  },
+  "overrides": {
+    "esbuild": "^0.25.12",
+    "postcss": "^8.5.14"
   }
 }

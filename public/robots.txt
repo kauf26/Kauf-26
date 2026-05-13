@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# Sitemaps help crawlers find your pages faster
+Sitemap: https://yourdomain.com/sitemap.xml
