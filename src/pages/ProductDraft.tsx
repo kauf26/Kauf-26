@@ -9,6 +9,13 @@ const ProductDraft: React.FC = () => {
    price: "0.00",
    category: "General"
  });
+ const PROHIBITED_KEYWORDS = ["gun", "drugs", "alcohol", "tobacco", "vape", "weapon"];
+
+ const isProhibited = PROHIBITED_KEYWORDS.some(keyword =>
+   product.title.toLowerCase().includes(keyword) ||
+   product.category.toLowerCase().includes(keyword)
+ );
+
 
 
  return (
@@ -60,11 +67,30 @@ const ProductDraft: React.FC = () => {
        </div>
      </div>
    </form>
- </div>
+     {/* --- THE STOP POINT ALERT & NAVIGATION --- */}
+     {isProhibited ? (
+       <div className="mt-6 p-6 bg-red-600 border-2 border-white rounded-xl shadow-lg text-white">
+         <h3 className="text-xl font-bold flex items-center gap-2">
+           <span>⛔</span> PROHIBITED ITEM ALERT
+         </h3>
+         <p className="mt-2 font-medium">
+           This item is flagged as prohibited for sale in international markets.
+           You cannot proceed with this listing.
+         </p>
+       </div>
+     ) : (
+       <button
+         type="button"
+         onClick={() => {
+           window.location.hash = "/marketplaces";
+         }}
+         className="mt-6 w-full py-4 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors"
+       >
+         Continue
+       </button>
+     )}
+   </div>
  );
 };
 
 export default ProductDraft;
-
-
-      

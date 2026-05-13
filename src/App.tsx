@@ -28,14 +28,15 @@ function App() {
        <Switch>
          {/* Main Routes */}
          <Route path="/" component={Welcome} />
-         <Route path="/dashboard" component={Dashboard} />
-         <Route path="/inventory" component={Inventory} />
-         <Route path="/listings" component={Listings} />
-         <Route path="/sales" component={Sales} />
-         <Route path="/tools" component={Tools} />
-         <Route path="/create" component={Create} />
          <Route path="/product-draft" component={ProductDraftPage} />
-         <Route path="/submit" component={Submit} />
+
+<Route path="/dashboard" component={Dashboard} />
+<Route path="/inventory" component={Inventory} />
+<Route path="/listings" component={Listings} />
+<Route path="/sales" component={Sales} />
+<Route path="/tools" component={Tools} />
+<Route path="/create" component={Create} />
+<Route path="/submit" component={Submit} />
 
          {/* Account and Legal */}
          <Route path="/login" component={LoginPage} />
