@@ -3,10 +3,12 @@ import { registerRoutes } from "./routes.js";
 import { setupVite, serveStatic } from "./vite.js";
 import path from "path";
 import { fileURLToPath } from "url";
-import multer from 'multer';
+import multer from "multer";
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
-import { scrapeProduct } from './scrapers/oxylabs.js';
+// Import the correct function name from your masterScraper
+import { fetchMasterProductData } from './scrapers/masterScraper.js';
+
 // 1. Setup Environment and Helpers
 dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
@@ -20,7 +22,7 @@ app.use(express.urlencoded({ extended: false }));
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const upload = multer({ storage: multer.memoryStorage() });
 
-// 3. The Identification Route for Kauf-AI
+// 3. The Identification Route for KAUF-AI
 app.post('/api/identify', upload.single('image'), async (req: Request, res: Response) => {
  try {
    if (!req.file) {
@@ -37,11 +39,11 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
          content: [
            {
              type: "text",
-             text: "Identify this raw object for a reselling app. Provide the exact model name and key specs as a single search query for marketplaces."
+             text: "Identify this raw object for a reselling app. Provide only the product name and model."
            },
            {
              type: "image_url",
-             image_url: { url: `data:image/jpeg;base64,${base64Image}` },
+             image_url: { url: `data:image/jpeg;base64,${base64Image}` }
            },
          ],
        },
@@ -51,32 +53,26 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
    const searchQuery = response.choices[0].message.content || "";
    console.log(`🚀 KAUFAI identified: ${searchQuery}`);
 
-   // Trigger the scraper using the AI's identification
-   const listings = await scrapeProduct(searchQuery);
+   // Trigger the master scraper using the correct function name
+   // This handles the Promise.any "race" internally
+   const listings = await fetchMasterProductData(searchQuery);
 
    res.json({
+     success: true,
      description: searchQuery,
-     listings: listings
+     listings: listings,
+     // Safely extract price from whatever scraper won the race
+     price: listings?.price || (Array.isArray(listings) ? listings[0]?.price : "N/A")
    });
 
  } catch (error) {
-   console.error("KAUFAI Error:", error);
-   res.status(500).json({ error: "Identification failed" });
+   console.error("KAUF-AI Error:", error);
+   res.status(500).json({ error: "Failed to identify or scrape product" });
  }
 });
 
-// 4. Server Initialization
-(async () => {
- const server = await registerRoutes(app);
-
- if (app.get("env") === "development") {
-   await setupVite(app, server);
- } else {
-   serveStatic(app);
- }
-
- const PORT = 5001;
- server.listen(PORT, "0.0.0.0", () => {
-   console.log(`Kaufai server running on port ${PORT}`);
- });
-})();
+// 4. Start Server
+const port = 5001;
+app.listen(port, () => {
+ console.log(`KAUF-AI server running on port ${port}`);
+});
