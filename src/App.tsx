@@ -5,8 +5,9 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "./components/ui/toaster";
 import { TooltipProvider } from "./components/ui/tooltip";
 
-// PAGE IMPORTS
+// Root `src/` (not `src/pages/`)
 import Welcome from "./Welcome";
+// PAGE IMPORTS (`src/pages/`)
 import Dashboard from "./pages/dashboard";
 import Inventory from "./pages/inventory";
 import Listings from "./pages/listings";
@@ -20,6 +21,7 @@ import SettingsPage from "./pages/settings";
 import PricingPage from "./pages/pricing";
 import LoginPage from "./pages/login";
 import ProductDraftPage from "./pages/ProductDraft";
+import { IdentificationResultsPage } from "./pages/IdentificationResults";
 
 function App() {
  return (
@@ -30,13 +32,17 @@ function App() {
          <Route path="/" component={Welcome} />
          <Route path="/product-draft" component={ProductDraftPage} />
 
-<Route path="/dashboard" component={Dashboard} />
-<Route path="/inventory" component={Inventory} />
-<Route path="/listings" component={Listings} />
-<Route path="/sales" component={Sales} />
-<Route path="/tools" component={Tools} />
-<Route path="/create" component={Create} />
-<Route path="/submit" component={Submit} />
+         <Route path="/identification-results">
+           {() => <IdentificationResultsPage />}
+         </Route>
+
+         <Route path="/dashboard" component={Dashboard} />
+         <Route path="/inventory" component={Inventory} />
+         <Route path="/listings" component={Listings} />
+         <Route path="/sales" component={Sales} />
+         <Route path="/tools" component={Tools} />
+         <Route path="/create" component={Create} />
+         <Route path="/submit" component={Submit} />
 
          {/* Account and Legal */}
          <Route path="/login" component={LoginPage} />
