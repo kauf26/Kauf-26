@@ -8,7 +8,9 @@ import OpenAI from 'openai';
 import dotenv from 'dotenv';
 // Import the correct function name from your masterScraper
 import { fetchMasterProductData } from './scrapers/masterScraper.js';
-
+import { db } from "./db";
+import { users } from "../shared/schema";
+import { eq } from "drizzle-orm";
 // 1. Setup Environment and Helpers
 dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
@@ -28,6 +30,35 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
    if (!req.file) {
      return res.status(400).json({ error: "No image uploaded" });
    }
+// 1. Get user data
+const userId = (req.user as any)?.id;
+if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+const [user] = await db.select().from(users).where(eq(users.id, userId));
+if (!user) return res.status(404).json({ error: "User not found" });
+
+// 2. 24-hour reset logic
+const now = new Date();
+const lastReset = user.lastImageResetAt ? new Date(user.lastImageResetAt) : new Date(0);
+if (now.getTime() - lastReset.getTime() > 24 * 60 * 60 * 1000) {
+  await db.update(users).set({ dailyImageCount: 0, lastImageResetAt: now }).where(eq(users.id, user.id));
+  user.dailyImageCount = 0;
+}
+
+// 3. Trial window check (14 days)
+const trialStart = user.trialStartedAt ? new Date(user.trialStartedAt) : new Date();
+const isTrialActive = now < new Date(trialStart.getTime() + (14 * 24 * 60 * 60 * 1000)) && user.isTrialActive;
+
+// 4. Enforce 20/25 limits
+if (isTrialActive && (user.dailyImageCount ?? 0) >= 20) {
+  return res.status(403).json({ error: "Trial limit reached: 20 images per day." });
+}
+if (!isTrialActive && (user.dailyImageCount ?? 0) >= 25) {
+  return res.status(403).json({ error: "Daily safety limit reached: 25 images." });
+}
+
+// 5. Increment counter
+await db.update(users).set({ dailyImageCount: (user.dailyImageCount ?? 0) + 1 }).where(eq(users.id, user.id));
 
    const base64Image = req.file.buffer.toString('base64');
 

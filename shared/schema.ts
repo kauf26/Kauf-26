@@ -12,6 +12,9 @@ export const users = pgTable("users", {
  // --- 14-DAY TRIAL FIELDS ---
  trialStartDate: timestamp("trial_start_date").defaultNow().notNull(),
  isTrialActive: boolean("is_trial_active").default(true).notNull(),
+ trialStartedAt: timestamp("trial_started_at").defaultNow().notNull(),
+dailyImageCount: integer("daily_image_count").default(0).notNull(),
+lastImageResetAt: timestamp("last_image_reset_at").defaultNow().notNull(),
 });
 
 export const products = pgTable("products", {
