@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, ArrowLeft, BadgeCheck, Info, Plus, X } from "lucide-react";
+import IdentificationResults from "./IdentificationResults";
 
 interface AnalysisResult {
   imageUrl: string;
@@ -207,6 +208,25 @@ export default function Create() {
   return (
     <div className="min-h-screen bg-background">
       <div className="container max-w-2xl mx-auto py-6 px-4">
+      {analysis && (
+ <IdentificationResults
+   productData={{
+     capturedImage: analysis?.imageUrl || "",
+     modelName: analysis?.title || "",
+     brand: "Identified Item",
+     year: "2026",
+     condition: condition || "new",
+     refNumber: "AUTO-GEN",
+     material: "Detected",
+     aiDescription: analysis?.description || ""
+   }}
+   marketPrices={{
+     allegroAvg: Number(price) || 0,
+     ebayAvg: (Number(price) * 1.1) || 0,
+     recommendedPrice: Number(price) || 0
+   }}
+ />
+)}
 
         <button
           onClick={() => { sessionStorage.removeItem("pendingAnalysis"); setLocation("/"); }}
