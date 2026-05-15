@@ -1,17 +1,115 @@
-import React, { useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import React, { useState, useEffect } from "react";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Textarea } from "../components/ui/textarea";
+
+type ProductDraftState = {
+  isExactMatch: boolean;
+  title: string;
+  brand: string;
+  description: string;
+  price: string;
+  category: string;
+  condition: string;
+};
+
+const DEFAULT_PRODUCT: ProductDraftState = {
+  isExactMatch: true,
+  title: "Draft Product Title",
+  brand: "Brand Name",
+  description: "Detailed product description goes here...",
+  price: "0.00",
+  category: "General",
+  condition: "New",
+};
+
+function getInitialProduct(): ProductDraftState {
+  try {
+    const raw = sessionStorage.getItem("pending_kauf26_draft");
+    if (!raw) return DEFAULT_PRODUCT;
+    const data = JSON.parse(raw) as Record<string, unknown>;
+    if (!data || typeof data !== "object") return DEFAULT_PRODUCT;
+
+    const title =
+      typeof data.modelName === "string"
+        ? data.modelName
+        : typeof data.title === "string"
+          ? data.title
+          : DEFAULT_PRODUCT.title;
+    const description =
+      typeof data.aiDescription === "string"
+        ? data.aiDescription
+        : typeof data.description === "string"
+          ? data.description
+          : DEFAULT_PRODUCT.description;
+    const price =
+      data.recommendedPrice != null && data.recommendedPrice !== ""
+        ? String(data.recommendedPrice)
+        : typeof data.price === "string"
+          ? data.price
+          : DEFAULT_PRODUCT.price;
+
+    const category =
+      typeof data.category === "string"
+        ? data.category
+        : DEFAULT_PRODUCT.category;
+    const condition =
+      typeof data.condition === "string"
+        ? data.condition
+        : DEFAULT_PRODUCT.condition;
+
+    return {
+      isExactMatch:
+        typeof data.isExactMatch === "boolean"
+          ? data.isExactMatch
+          : DEFAULT_PRODUCT.isExactMatch,
+      title,
+      brand:
+        typeof data.brand === "string" ? data.brand : DEFAULT_PRODUCT.brand,
+      description,
+      price,
+      category,
+      condition,
+    };
+  } catch {
+    return DEFAULT_PRODUCT;
+  }
+}
 
 const ProductDraft: React.FC = () => {
- const [product, setProduct] = useState({
-   isExactMatch: true,
-   title: "Draft Product Title",
-   brand: "Brand Name",
-   description: "Detailed product description goes here...",
-   price: "0.00",
-   category: "General",
- });
+ const [product, setProduct] = useState<ProductDraftState>(() =>
+   getInitialProduct()
+ );
+
+ useEffect(() => {
+   const saved = sessionStorage.getItem("pending_kauf26_draft");
+   if (!saved) return;
+   try {
+     const data = JSON.parse(saved) as {
+       modelName?: string;
+       brand?: string;
+       aiDescription?: string;
+       recommendedPrice?: string | number;
+       category?: string;
+       condition?: string;
+     };
+     if (!data || typeof data !== "object") return;
+     setProduct({
+       isExactMatch: true,
+       title: data.modelName || "",
+       brand: data.brand || "",
+       description: data.aiDescription || "",
+       price: `${data.recommendedPrice || "0.00"}`,
+       category: data.category || "General",
+       condition:
+         typeof data.condition === "string"
+           ? data.condition
+           : DEFAULT_PRODUCT.condition,
+     });
+   } catch {
+     /* invalid JSON — keep initial state from useState */
+   }
+ }, []);
 
  const PROHIBITED_KEYWORDS = [
    "gun", "drugs", "alcohol", "tobacco", "vape", "weapon",
@@ -20,7 +118,8 @@ const ProductDraft: React.FC = () => {
  const isProhibited = PROHIBITED_KEYWORDS.some(
    (keyword) =>
      product.title.toLowerCase().includes(keyword) ||
-     product.category.toLowerCase().includes(keyword)
+     product.category.toLowerCase().includes(keyword) ||
+     product.condition.toLowerCase().includes(keyword)
  );
 
  return (
@@ -57,8 +156,8 @@ const ProductDraft: React.FC = () => {
          />
        </div>
 
-       <div className="flex gap-4">
-         <div className="flex-1 space-y-2">
+       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+         <div className="space-y-2">
            <Label htmlFor="product-price" className="text-gray-700">Suggested Price</Label>
            <Input
              id="product-price"
@@ -68,13 +167,23 @@ const ProductDraft: React.FC = () => {
              className="w-full"
            />
          </div>
-         <div className="flex-1 space-y-2">
+         <div className="space-y-2">
            <Label htmlFor="product-category" className="text-gray-700">Category</Label>
            <Input
              id="product-category"
              type="text"
              value={product.category}
              onChange={(e) => setProduct({ ...product, category: e.target.value })}
+             className="w-full"
+           />
+         </div>
+         <div className="space-y-2">
+           <Label htmlFor="product-condition" className="text-gray-700">Condition</Label>
+           <Input
+             id="product-condition"
+             type="text"
+             value={product.condition}
+             onChange={(e) => setProduct({ ...product, condition: e.target.value })}
              className="w-full"
            />
          </div>
