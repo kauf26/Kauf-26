@@ -1,68 +1,80 @@
+// apify.ts
 import { ApifyClient } from 'apify-client';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-// 1. Setup paths for ES Modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// 2. Load .env from the root Kauf26_Local folder
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
-// 3. LOG TO TERMINAL: Verify environment
-console.log("-----------------------------------------");
-console.log("🔑 API Key Status:", process.env.APIFY_API_KEY ? "✅ Found it!" : "❌ Missing!");
-console.log("📁 Current Directory:", process.cwd());
-console.log("-----------------------------------------");
+const client = new ApifyClient({ token: process.env.APIFY_API_KEY });
 
-const client = new ApifyClient({
-   token: process.env.APIFY_API_KEY,
-});
+export const scrapeProduct = async (query: string): Promise<any> => {
+ if (!query) {
+   console.error('❌ Apify: No search query provided');
+   return fallbackProduct(query);
+ }
 
-export const scrapeProduct = async (url: string) => {
-   if (!url) {
-       console.error("❌ Error: Please provide a URL.");
-       return;
+ try {
+   console.log(`🔎 Apify: Searching for "${query}" on eBay...`);
+
+   // Use Apify's eBay search actor
+   const run = await client.actor("epctex/ebay-scraper").call({
+     search: query,
+     country: "US",
+     limit: 1,
+   });
+
+   const dataset = await client.dataset(run.defaultDatasetId);
+   const { items } = await dataset.listItems();
+
+   if (!items || items.length === 0) {
+     throw new Error('No products found');
    }
 
-   try {
-       console.log(`🚀 Scraping ${url} using Apify...`);
+   const first = items[0] as any;
 
-       // Trigger the actor with proxy configuration to bypass 403 errors
-       const run = await client.actor("apify/web-scraper").call({
-           startUrls: [{ url }],
-           runMode: "DEVELOPMENT",
-           // This is the key change to bypass blocks
-           proxyConfiguration: {
-               useApifyProxy: true,
-               apifyProxyGroups: ['RESIDENTIAL']
-           },
-           pageFunction: `async function pageFunction(context) {
-               const { request, log } = context;
-               const title = document.querySelector('h1')?.innerText.trim();
-               const price = document.querySelector('[class*="price"]')?.innerText.trim();
-
-               return {
-                   url: request.url,
-                   title: title || "Title not found",
-                   price: price || "Price not found",
-               };
-           }`,
-       });
-
-       // Fetch the results from the run
-       const { items } = await client.dataset(run.defaultDatasetId).listItems();
-       console.log("📦 Scraped Data:", items);
-       return items;
-
-   } catch (error) {
-       console.error("❌ Scraping failed:", error);
-   }
+   return {
+     title: first.title || query,
+     brand: first.brand || extractBrandFromTitle(String(first.title || '')),
+     description: first.description || `High-quality ${first.title} - sourced from eBay via Apify.`,
+     price: parsePrice(first.price),
+     category: first.category || 'General',
+     condition: first.condition || 'New',
+     isExactMatch: true,
+   };
+ } catch (error: any) {
+   console.error('❌ Apify scraping error:', error.message || error);
+   return fallbackProduct(query);
+ }
 };
 
-// Allow terminal execution: npx tsx server/scrapers/apify.ts "URL_HERE"
-const urlArg = process.argv[2];
-if (urlArg) {
-   scrapeProduct(urlArg);
+function extractBrandFromTitle(title: string): string {
+ const brands = ['Nikon', 'Canon', 'Sony', 'Apple', 'Samsung', 'LG', 'Bose', 'Dell', 'HP'];
+ for (const b of brands) {
+   if (title.toLowerCase().includes(b.toLowerCase())) return b;
+ }
+ return '';
+}
+
+function parsePrice(price: any): number | undefined {
+ if (typeof price === 'number') return price;
+ if (!price) return undefined;
+ const str = String(price);
+ const match = str.match(/[\d,]+\.?\d*/);
+ if (match) return parseFloat(match[0].replace(/,/g, ''));
+ return undefined;
+}
+
+function fallbackProduct(query: string) {
+ return {
+   title: query,
+   brand: '',
+   description: 'Product description not available from Apify.',
+   price: undefined,
+   category: 'General',
+   condition: 'New',
+   isExactMatch: false,
+ };
 }

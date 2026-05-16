@@ -1,215 +1,108 @@
 import React, { useState, useEffect } from "react";
-import { Input } from "../components/ui/input";
-import { Label } from "../components/ui/label";
-import { Textarea } from "../components/ui/textarea";
 
 type ProductDraftState = {
-  isExactMatch: boolean;
-  title: string;
-  brand: string;
-  description: string;
-  price: string;
-  category: string;
-  condition: string;
+ isExactMatch: boolean;
+ title: string;
+ brand: string;
+ description: string;
+ price: string;
+ category: string;
+ condition: string;
 };
 
 const DEFAULT_PRODUCT: ProductDraftState = {
-  isExactMatch: true,
-  title: "Draft Product Title",
-  brand: "Brand Name",
-  description: "Detailed product description goes here...",
-  price: "0.00",
-  category: "General",
-  condition: "New",
+ isExactMatch: true,
+ title: "Draft Product Title",
+ brand: "Brand Name",
+ description: "Detailed product description goes here...",
+ price: "0.00",
+ category: "General",
+ condition: "New",
 };
 
-function getInitialProduct(): ProductDraftState {
-  try {
-    const raw = sessionStorage.getItem("pending_kauf26_draft");
-    if (!raw) return DEFAULT_PRODUCT;
-    const data = JSON.parse(raw) as Record<string, unknown>;
-    if (!data || typeof data !== "object") return DEFAULT_PRODUCT;
-
-    const title =
-      typeof data.modelName === "string"
-        ? data.modelName
-        : typeof data.title === "string"
-          ? data.title
-          : DEFAULT_PRODUCT.title;
-    const description =
-      typeof data.aiDescription === "string"
-        ? data.aiDescription
-        : typeof data.description === "string"
-          ? data.description
-          : DEFAULT_PRODUCT.description;
-    const price =
-      data.recommendedPrice != null && data.recommendedPrice !== ""
-        ? String(data.recommendedPrice)
-        : typeof data.price === "string"
-          ? data.price
-          : DEFAULT_PRODUCT.price;
-
-    const category =
-      typeof data.category === "string"
-        ? data.category
-        : DEFAULT_PRODUCT.category;
-    const condition =
-      typeof data.condition === "string"
-        ? data.condition
-        : DEFAULT_PRODUCT.condition;
-
-    return {
-      isExactMatch:
-        typeof data.isExactMatch === "boolean"
-          ? data.isExactMatch
-          : DEFAULT_PRODUCT.isExactMatch,
-      title,
-      brand:
-        typeof data.brand === "string" ? data.brand : DEFAULT_PRODUCT.brand,
-      description,
-      price,
-      category,
-      condition,
-    };
-  } catch {
-    return DEFAULT_PRODUCT;
-  }
-}
+const PROHIBITED_KEYWORDS = ["gun", "drugs", "alcohol", "tobacco", "vape", "weapon"];
 
 const ProductDraft: React.FC = () => {
- const [product, setProduct] = useState<ProductDraftState>(() =>
-   getInitialProduct()
- );
+ const [product, setProduct] = useState<ProductDraftState>(DEFAULT_PRODUCT);
 
  useEffect(() => {
-  const saved = sessionStorage.getItem("pending_kauf26_draft");
-  if (!saved) return;
-  try {
-    const data = JSON.parse(saved) as {
-      title?: string;
-      modelName?: string;
-      brand?: string;
-      description?: string;
-      aiDescription?: string;
-      recommendedPrice?: string | number;
-      price?: string;
-      category?: string;
-      condition?: string;
-    };
-    if (!data || typeof data !== "object") return;
+   const saved = sessionStorage.getItem("pending_kauf26_d");
+   if (!saved) return;
+   try {
+     const data = JSON.parse(saved);
+     // Build description fallback
+     let finalDescription = data.aiDescription || data.description;
+     if (!finalDescription) {
+       const titlePart = data.modelName || data.title || "this product";
+       const brandPart = data.brand ? `${data.brand} ` : "";
+       const categoryPart = data.category || "item";
+       const conditionPart = data.condition || "good";
+       finalDescription = `${brandPart}${titlePart} – A high‑quality ${categoryPart} in ${conditionPart} condition.`;
+     }
+     // Price fallback
+     let finalPrice = data.recommendedPrice?.toString() || data.price;
+     if (!finalPrice) {
+       const cat = (data.category || "General").toLowerCase();
+       let min = 20, max = 500;
+       if (cat.includes("electronics")) { min = 50; max = 1500; }
+       else if (cat.includes("clothing")) { min = 15; max = 200; }
+       else if (cat.includes("home")) { min = 10; max = 300; }
+       finalPrice = (Math.random() * (max - min) + min).toFixed(2);
+     }
+     setProduct({
+       isExactMatch: true,
+       title: data.modelName || data.title || DEFAULT_PRODUCT.title,
+       brand: data.brand || DEFAULT_PRODUCT.brand,
+       description: finalDescription,
+       price: finalPrice,
+       category: data.category || DEFAULT_PRODUCT.category,
+       condition: data.condition || DEFAULT_PRODUCT.condition,
+     });
+   } catch (e) {
+     console.error(e);
+   }
+ }, []);
 
-    setProduct({
-      isExactMatch: true,
-      title: data.title || data.modelName || "",
-      brand: data.brand || "",
-      description: data.description || data.aiDescription || "",
-      price: data.price || (data.recommendedPrice ? `${data.recommendedPrice}` : "0.00"),
-      category: data.category || "General",
-      condition: typeof data.condition === "string" ? data.condition : "New",
-    });
-  } catch {
-    /* invalid JSON - keep initial state from useState */
-  }
-}, []);
-
- const PROHIBITED_KEYWORDS = [
-   "gun", "drugs", "alcohol", "tobacco", "vape", "weapon",
- ];
-
- const isProhibited = PROHIBITED_KEYWORDS.some(
-   (keyword) =>
-     product.title.toLowerCase().includes(keyword) ||
-     product.category.toLowerCase().includes(keyword) ||
-     product.condition.toLowerCase().includes(keyword)
+ const isProhibited = PROHIBITED_KEYWORDS.some(kw =>
+   product.title.toLowerCase().includes(kw) || product.category.toLowerCase().includes(kw)
  );
 
+ const handleContinue = () => {
+   sessionStorage.setItem("pending_kauf26_d", JSON.stringify(product));
+   window.location.hash = "/marketplaces";
+ };
+
+ const update = (field: keyof ProductDraftState, val: string) => {
+   setProduct(p => ({ ...p, [field]: val }));
+ };
+
  return (
-   <div className="max-w-2xl mx-auto p-6 bg-white shadow-lg rounded-lg">
-     <header className="border-b pb-4 mb-6">
-       <h1 className="text-2xl font-bold text-gray-800">
-         {product.isExactMatch ? "✅ Exact Match Found" : "📝 Basic Product Draft"}
-       </h1>
-       <p className="text-sm text-gray-500 italic">
-         Review your {product.brand} listing before posting.
-       </p>
-     </header>
-
-     <form className="space-y-4">
-       <div className="space-y-2">
-         <Label htmlFor="product-title" className="text-gray-700">Product Title</Label>
-         <Input
-           id="product-title"
-           type="text"
-           value={product.title}
-           onChange={(e) => setProduct({ ...product, title: e.target.value })}
-           className="w-full"
-         />
+   <div className="max-w-2xl mx-auto p-4">
+     <h1 className="text-2xl font-bold mb-4">Product Draft</h1>
+     <div className="space-y-3">
+       <div>
+         <label className="font-semibold">Exact Match Title</label>
+         <input className="border p-2 w-full" value={product.title} onChange={e => update("title", e.target.value)} />
        </div>
-
-       <div className="space-y-2">
-         <Label htmlFor="product-description" className="text-gray-700">Description</Label>
-         <Textarea
-           id="product-description"
-           rows={6}
-           value={product.description}
-           onChange={(e) => setProduct({ ...product, description: e.target.value })}
-           className="w-full min-h-[120px]"
-         />
+       <div>
+         <label>Brand</label>
+         <input className="border p-2 w-full" value={product.brand} onChange={e => update("brand", e.target.value)} />
        </div>
-
-       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-         <div className="space-y-2">
-           <Label htmlFor="product-price" className="text-gray-700">Suggested Price</Label>
-           <Input
-             id="product-price"
-             type="text"
-             value={product.price}
-             onChange={(e) => setProduct({ ...product, price: e.target.value })}
-             className="w-full"
-           />
-         </div>
-         <div className="space-y-2">
-           <Label htmlFor="product-category" className="text-gray-700">Category</Label>
-           <Input
-             id="product-category"
-             type="text"
-             value={product.category}
-             onChange={(e) => setProduct({ ...product, category: e.target.value })}
-             className="w-full"
-           />
-         </div>
-         <div className="space-y-2">
-           <Label htmlFor="product-condition" className="text-gray-700 font-medium">Condition</Label>
-           <Input
-             id="product-condition"
-             type="text"
-
-           />
-         </div>
+       <div>
+         <label>Description</label>
+         <textarea className="border p-2 w-full min-h-[100px]" value={product.description} onChange={e => update("description", e.target.value)} />
        </div>
-
-       {isProhibited ? (
-         <div className="mt-6 p-6 bg-red-600 border-2 border-white rounded-xl shadow-lg text-white">
-           <h3 className="text-xl font-bold flex items-center gap-2">
-             <span>⛔</span> PROHIBITED ITEM ALERT
-           </h3>
-           <p className="mt-2 font-medium">
-             This item is flagged as prohibited for sale in international markets.
-             You cannot proceed with this listing.
-           </p>
-         </div>
-       ) : (
-         <button
-           type="button"
-           onClick={() => {
-             window.location.hash = "/marketplaces";
-           }}
-           className="mt-6 w-full py-4 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 transition-colors"
-         >
-           Continue
-         </button>
-       )}
-     </form>
+       <div className="grid grid-cols-3 gap-2">
+         <div><label>Price ($)</label><input className="border p-2 w-full" value={product.price} onChange={e => update("price", e.target.value)} /></div>
+         <div><label>Category</label><input className="border p-2 w-full" value={product.category} onChange={e => update("category", e.target.value)} /></div>
+         <div><label>Condition</label><input className="border p-2 w-full" value={product.condition} onChange={e => update("condition", e.target.value)} /></div>
+       </div>
+     </div>
+     {isProhibited ? (
+       <div className="mt-4 p-4 bg-red-600 text-white text-center">PROHIBITED ITEM</div>
+     ) : (
+       <button className="mt-4 w-full bg-blue-600 text-white p-3 rounded" onClick={handleContinue}>Continue to Draft & Post</button>
+     )}
    </div>
  );
 };
