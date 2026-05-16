@@ -82,34 +82,35 @@ const ProductDraft: React.FC = () => {
  );
 
  useEffect(() => {
-   const saved = sessionStorage.getItem("pending_kauf26_draft");
-   if (!saved) return;
-   try {
-     const data = JSON.parse(saved) as {
-       modelName?: string;
-       brand?: string;
-       aiDescription?: string;
-       recommendedPrice?: string | number;
-       category?: string;
-       condition?: string;
-     };
-     if (!data || typeof data !== "object") return;
-     setProduct({
-       isExactMatch: true,
-       title: data.modelName || "",
-       brand: data.brand || "",
-       description: data.aiDescription || "",
-       price: `${data.recommendedPrice || "0.00"}`,
-       category: data.category || "General",
-       condition:
-         typeof data.condition === "string"
-           ? data.condition
-           : DEFAULT_PRODUCT.condition,
-     });
-   } catch {
-     /* invalid JSON — keep initial state from useState */
-   }
- }, []);
+  const saved = sessionStorage.getItem("pending_kauf26_draft");
+  if (!saved) return;
+  try {
+    const data = JSON.parse(saved) as {
+      title?: string;
+      modelName?: string;
+      brand?: string;
+      description?: string;
+      aiDescription?: string;
+      recommendedPrice?: string | number;
+      price?: string;
+      category?: string;
+      condition?: string;
+    };
+    if (!data || typeof data !== "object") return;
+
+    setProduct({
+      isExactMatch: true,
+      title: data.title || data.modelName || "",
+      brand: data.brand || "",
+      description: data.description || data.aiDescription || "",
+      price: data.price || (data.recommendedPrice ? `${data.recommendedPrice}` : "0.00"),
+      category: data.category || "General",
+      condition: typeof data.condition === "string" ? data.condition : "New",
+    });
+  } catch {
+    /* invalid JSON - keep initial state from useState */
+  }
+}, []);
 
  const PROHIBITED_KEYWORDS = [
    "gun", "drugs", "alcohol", "tobacco", "vape", "weapon",
@@ -178,13 +179,11 @@ const ProductDraft: React.FC = () => {
            />
          </div>
          <div className="space-y-2">
-           <Label htmlFor="product-condition" className="text-gray-700">Condition</Label>
+           <Label htmlFor="product-condition" className="text-gray-700 font-medium">Condition</Label>
            <Input
              id="product-condition"
              type="text"
-             value={product.condition}
-             onChange={(e) => setProduct({ ...product, condition: e.target.value })}
-             className="w-full"
+
            />
          </div>
        </div>

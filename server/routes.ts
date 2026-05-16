@@ -44,10 +44,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
    } catch (error: any) {
      console.error("Stripe Hold Error:", error);
      res.status(500).json({ message: error.message || "Internal Server Error" });
-   }
- });
-
- // Create and return the HTTP server
- const httpServer = createServer(app);
- return httpServer;
-}
+    }
+  });
+ 
+  // 3. Manual Scraper Data Push Route
+  app.post("/api/products/save", async (req, res) => {
+    try {
+      const { title, description, imageUrl, price, source } = req.body;
+ 
+      if (!title || !price) {
+        return res.status(400).json({ message: "Product title and price are required." });
+      }
+ 
+      const savedProduct = await storage.saveProduct({
+        title,
+        description: description || '',
+        imageUrl: imageUrl || '',
+        price: typeof price === 'string' ? parseFloat(price) : price,
+        source: source || 'scraped'
+      });
+ 
+      return res.json({ success: true, product: savedProduct });
+    } catch (error: any) {
+      console.error("Save Product Error:", error);
+      return res.status(500).json({ message: error.message || "Internal Server Error" });
+    }
+  });
+ 
+  // Create and return the HTTP server
+  const httpServer = createServer(app);
+  return httpServer;
+ }
+ 

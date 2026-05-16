@@ -14,6 +14,7 @@ export interface IStorage {
  createUser(user: InsertUser): Promise<User>;
  deleteUser(sub: string): Promise<void>;
  createProduct(product: InsertProduct): Promise<Product>;
+ saveProduct(product: any): Promise<any>; // 
  getCommissionRate(): Promise<number>;
  getDailyProductLimitLockoutBody(): Promise<any>;
  updateSaleFeePaid(saleId: number, isPaid: boolean): Promise<void>;
@@ -53,6 +54,23 @@ export class DatabaseStorage implements IStorage {
    const [product] = await db.insert(products).values(insertProduct).returning();
    return product;
  }
+ async saveProduct(insertData: any): Promise<any> {
+  const [newProduct] = await db
+    .insert(products)
+    .values({
+      name: insertData.title, // Maps 'title' from the scraper to 'name' in your schema
+      description: insertData.description || '',
+      imageUrl: insertData.imageUrl || '',
+      basePrice: insertData.price.toString(), // Maps to your 'basePrice' decimal field
+      currency: 'USD', // Satisfies .notNull() with a default fallback
+      subcategory: insertData.source || 'scraped', // Satisfies your required subcategory field
+      category: 'Scraped Items', // Optional: provides a baseline classification
+    })
+    .returning();
+
+  return newProduct;
+}
+
 
  /**
   * Kauf26 Revenue Model: 3% Commission
