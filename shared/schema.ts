@@ -167,3 +167,18 @@ export type CatalogItem = typeof catalogItems.$inferSelect;
 export type InsertCatalogItem = z.infer<typeof insertCatalogItemSchema>;
 export type MarketplaceSettings = typeof marketplaceSettings.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
+export const publishJobs = pgTable("publish_jobs", {
+  id: serial("id").primaryKey(),
+  productData: jsonb("product_data").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+ });
+ 
+ export const publishTasks = pgTable("publish_tasks", {
+  id: serial("id").primaryKey(),
+  jobId: integer("job_id").references(() => publishJobs.id, { onDelete: "cascade" }),
+  marketplaceId: text("marketplace_id").notNull(),
+  status: text("status").default("pending"),
+  attempts: integer("attempts").default(0),
+  errorMessage: text("error_message"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+ });

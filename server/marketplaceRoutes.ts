@@ -1,5 +1,7 @@
 import express from 'express';
-import { pool } from './db'; // your Postgres pool
+import { db } from './db'; // Adjust path if your initialized drizzle db instance is elsewhere
+import { publishJobs, publishTasks } from '../shared/schema';
+import { eq } from 'drizzle-orm';
 
 const router = express.Router();
 
@@ -11,57 +13,72 @@ router.post('/publish', async (req, res) => {
    return res.status(400).json({ error: 'No target marketplaces provided.' });
  }
 
- const client = await pool.connect();
  try {
-   await client.query('BEGIN');
+   // 1. Insert the master job using Drizzle
+   const [newJob] = await db.insert(publishJobs)
+     .values({
+       productData: productData,
+     })
+     .returning();
 
-   // Insert master job
-   const jobResult = await client.query(
-     `INSERT INTO publish_jobs (product_data) VALUES ($1) RETURNING id`,
-     [JSON.stringify(productData)]
-   );
-   const jobId = jobResult.rows[0].id;
+   // 2. Insert individual tasks for each selected marketplace
+   const taskValues = marketplaceIds.map((id) => ({
+     jobId: newJob.id,
+     marketplaceId: id,
+     status: 'pending',
+     attempts: 0,
+   }));
 
-   // Insert individual tasks for each marketplace
-   for (const marketplaceId of marketplaceIds) {
-     await client.query(
-       `INSERT INTO publish_tasks (job_id, marketplace_id, status, attempts)
-        VALUES ($1, $2, 'pending', 0)`,
-       [jobId, marketplaceId]
-     );
-   }
-
-   await client.query('COMMIT');
+   await db.insert(publishTasks).values(taskValues);
 
    return res.status(202).json({
      success: true,
      message: 'Publishing tasks queued.',
-     jobId,
+     jobId: newJob.id,
    });
  } catch (error: any) {
-   await client.query('ROLLBACK');
    console.error('Queue error:', error);
-   return res.status(500).json({ error: 'Database error while queuing tasks.' });
- } finally {
-   client.release();
+   return res.status(500).json({ error: 'Database error while queueing tasks.' });
  }
 });
 
 // GET /api/marketplaces/status/:jobId
 router.get('/status/:jobId', async (req, res) => {
- const { jobId } = req.params;
+ const jobId = parseInt(req.params.jobId);
 
  try {
-   const result = await pool.query(
-     `SELECT marketplace_id, status, error_message
-      FROM publish_tasks
-      WHERE job_id = $1`,
-     [jobId]
-   );
+   // Fetch all tasks associated with this job
+   const tasks = await db.select()
+     .from(publishTasks)
+     .where(eq(publishTasks.jobId, jobId));
+
+   if (tasks.length === 0) {
+     return res.status(404).json({ error: 'Job not found.' });
+   }
+
+   // Transform raw rows into the exact nested format your frontend expects
+   const marketplaces: Record<string, string> = {};
+   let allCompleted = true;
+   let anyProcessingOrPending = false;
+
+   tasks.forEach((task) => {
+     marketplaces[task.marketplaceId] = task.status || 'pending';
+
+     if (task.status !== 'completed' && task.status !== 'failed') {
+       anyProcessingOrPending = true;
+     }
+   });
+
+   // Determine the global parent status
+   let parentStatus = 'processing';
+   if (!anyProcessingOrPending) {
+     parentStatus = 'completed';
+   }
 
    return res.json({
-     success: true,
-     tasks: result.rows,
+     jobId,
+     status: parentStatus,
+     marketplaces,
    });
  } catch (error: any) {
    console.error('Status fetch error:', error);
