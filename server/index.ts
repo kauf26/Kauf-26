@@ -11,6 +11,7 @@ import { fetchMasterProductData } from './scrapers/masterScraper.js';
 import { db } from "./db";
 import { users } from "../shared/schema";
 import { eq } from "drizzle-orm";
+import marketplaceRoutes from "./marketplaceRoutes";
 // 1. Setup Environment and Helpers
 dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
