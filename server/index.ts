@@ -12,6 +12,8 @@ import { db } from "./db";
 import { users } from "../shared/schema";
 import { eq } from "drizzle-orm";
 import marketplaceRoutes from "./marketplaceRoutes";
+import { productRoutes } from "./productsRoutes";
+
 // 1. Setup Environment and Helpers
 dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
@@ -21,16 +23,19 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Register our product draft endpoints
+app.use(productRoutes);
+
 // 2. Initialize AI and File Handling
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const upload = multer({ storage: multer.memoryStorage() });
 
 // 3. The Identification Route for KAUF-AI
 app.post('/api/identify', upload.single('image'), async (req: Request, res: Response) => {
- try {
-   if (!req.file) {
-     return res.status(400).json({ error: "No image uploaded" });
-   }
+try {
+  if (!req.file) {
+    return res.status(400).json({ error: "No image uploaded" });
+  }
 // 1. Get user data
 const userId = (req.user as any)?.id;
 if (!userId) return res.status(401).json({ error: "Unauthorized" });
@@ -42,8 +47,8 @@ if (!user) return res.status(404).json({ error: "User not found" });
 const now = new Date();
 const lastReset = user.lastImageResetAt ? new Date(user.lastImageResetAt) : new Date(0);
 if (now.getTime() - lastReset.getTime() > 24 * 60 * 60 * 1000) {
-  await db.update(users).set({ dailyImageCount: 0, lastImageResetAt: now }).where(eq(users.id, user.id));
-  user.dailyImageCount = 0;
+ await db.update(users).set({ dailyImageCount: 0, lastImageResetAt: now }).where(eq(users.id, user.id));
+ user.dailyImageCount = 0;
 }
 
 // 3. Trial window check (14 days)
@@ -52,59 +57,59 @@ const isTrialActive = now < new Date(trialStart.getTime() + (14 * 24 * 60 * 60 *
 
 // 4. Enforce 20/25 limits
 if (isTrialActive && (user.dailyImageCount ?? 0) >= 20) {
-  return res.status(403).json({ error: "Trial limit reached: 20 images per day." });
+ return res.status(403).json({ error: "Trial limit reached: 20 images per day." });
 }
 if (!isTrialActive && (user.dailyImageCount ?? 0) >= 25) {
-  return res.status(403).json({ error: "Daily safety limit reached: 25 images." });
+ return res.status(403).json({ error: "Daily safety limit reached: 25 images." });
 }
 
 // 5. Increment counter
 await db.update(users).set({ dailyImageCount: (user.dailyImageCount ?? 0) + 1 }).where(eq(users.id, user.id));
 
-   const base64Image = req.file.buffer.toString('base64');
+  const base64Image = req.file.buffer.toString('base64');
 
-   const response = await openai.chat.completions.create({
-     model: "gpt-4o",
-     messages: [
-       {
-         role: "user",
-         content: [
-           {
-             type: "text",
-             text: "Identify this raw object for a reselling app. Provide only the product name and model."
-           },
-           {
-             type: "image_url",
-             image_url: { url: `data:image/jpeg;base64,${base64Image}` }
-           },
-         ],
-       },
-     ],
-   });
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o",
+    messages: [
+      {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: "Identify this raw object for a reselling app. Provide only the product name and model."
+          },
+          {
+            type: "image_url",
+            image_url: { url: `data:image/jpeg;base64,${base64Image}` }
+          },
+        ],
+      },
+    ],
+  });
 
-   const searchQuery = response.choices[0].message.content || "";
-   console.log(`🚀 KAUFAI identified: ${searchQuery}`);
+  const searchQuery = response.choices[0].message.content || "";
+  console.log(`🚀 KAUFAI identified: ${searchQuery}`);
 
-   // Trigger the master scraper using the correct function name
-   // This handles the Promise.any "race" internally
-   const listings = await fetchMasterProductData(searchQuery);
+  // Trigger the master scraper using the correct function name
+  // This handles the Promise.any "race" internally
+  const listings = await fetchMasterProductData(searchQuery);
 
-   res.json({
-     success: true,
-     description: searchQuery,
-     listings: listings,
-     // Safely extract price from whatever scraper won the race
-     price: listings?.price || (Array.isArray(listings) ? listings[0]?.price : "N/A")
-   });
+  res.json({
+    success: true,
+    description: searchQuery,
+    listings: listings,
+    // Safely extract price from whatever scraper won the race
+    price: listings?.price || (Array.isArray(listings) ? listings[0]?.price : "N/A")
+  });
 
- } catch (error) {
-   console.error("KAUF-AI Error:", error);
-   res.status(500).json({ error: "Failed to identify or scrape product" });
- }
+} catch (error) {
+  console.error("KAUF-AI Error:", error);
+  res.status(500).json({ error: "Failed to identify or scrape product" });
+}
 });
 
 // 4. Start Server
 const port = 2626;
 app.listen(port, () => {
- console.log(`KAUF-AI server running on port ${port}`);
+console.log(`KAUF-AI server running on port ${port}`);
 });
