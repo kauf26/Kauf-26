@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, ArrowLeft, BadgeCheck, Info, Plus, X } from "lucide-react";
 import IdentificationResults from "./IdentificationResults";
+import { useProductDraft } from "../ProductDraftContext";
 
 interface AnalysisResult {
   imageUrl: string;
@@ -52,6 +53,7 @@ const globalMarketplaces = [
 ];
 
 export default function Create() {
+  const { setDraft } = useProductDraft();
   const [, setLocation] = useLocation();
   const { toast } = useToast();
 
