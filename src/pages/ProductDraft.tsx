@@ -70,7 +70,7 @@ const isProhibited = PROHIBITED_KEYWORDS.some(kw =>
 );
 
 const handleContinue = async () => {
-  // Construct clean layout package payload to cleanly feed step 3 (create.tsx)
+  // Construct clean layout package payload
   const finalData = {
     capturedImage: product.capturedImage,
     modelName: product.title,
@@ -85,9 +85,10 @@ const handleContinue = async () => {
     allegroAvg: parseFloat(product.allegroAverage) || 0,
     ebayAvg: parseFloat(product.ebayAverage) || 0,
   };
-
+ 
+  // Save to sessionStorage so SelectMarketPlaces can read it
   sessionStorage.setItem("pendingAnalysis", JSON.stringify(finalData));
-
+ 
   try {
     await fetch("/api/drafts", {
       method: "POST",
@@ -101,10 +102,10 @@ const handleContinue = async () => {
   } catch (err) {
     console.error("Draft sync failed (non-critical):", err);
   }
-
-  // Move to step 3 review dashboard
-  setLocation("/create");
-};
+ 
+  // Navigate to the marketplace selector
+  setLocation("/select-marketplaces");
+ };
 
 const update = (field: keyof ProductDraftState, val: string) => {
   setProduct(p => ({ ...p, [field]: val }));

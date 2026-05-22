@@ -1,5 +1,5 @@
 import { useState, useEffect, Fragment } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation } from "wouter";
 
 type Marketplace =
 | "ebay" | "amazon" | "walmart" | "wish" | "reverb"
@@ -35,7 +35,7 @@ const GLOBAL_MARKETS = [
 ];
 
 export default function SelectMarketplaces() {
-const navigate = useNavigate();
+  const [, setLocation] = useLocation();
 const [draft, setDraft] = useState<ProductDraft | null>(null);
 const [selected, setSelected] = useState<Marketplace[]>(["ebay"]);
 
@@ -96,7 +96,7 @@ if (!draft) {
 return (
   <div className="max-w-6xl mx-auto p-6 space-y-6 text-zinc-100">
     <div className="flex justify-between items-center">
-      <button onClick={() => navigate(-1)} className="text-zinc-400 hover:text-white transition-colors">
+    <button onClick={() => setLocation("/product-draft")} className="text-zinc-400 hover:text-zinc-100">
         ← Back
       </button>
       <span className="text-xs text-zinc-500 tracking-wider">MARKETPLACE SELECTOR</span>
@@ -154,10 +154,13 @@ return (
         </div>
 
         <button
-          onClick={() => {
-            console.log("Publishing data payload:", { product: draft });
-            alert("Publishing payload successfully!");
-          }}
+       onClick={() => {
+        // 1. Save selection to storage for the next page
+        sessionStorage.setItem("selectedMarkets", JSON.stringify(selected));
+       
+        // 2. Navigate to the next stage (e.g., /create)
+        setLocation("/create");
+       }}
           disabled={selected.length === 0}
           className="w-full bg-emerald-600 hover:..." >
           Publish to Channels
