@@ -8,3 +8,6 @@ server/public
 vite.config.ts.*
 *.tar.gz
 node_modules
+node_modules/
+.env
+.DS_Store
