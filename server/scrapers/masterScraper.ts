@@ -10,19 +10,26 @@ export type ScrapedProduct = {
  price?: number;
  category?: string;
  condition?: string;
+ modelNumber?: string;
+ material?: string;
+ allegroAverage?: number;
+ ebayAverage?: number;
  isExactMatch?: boolean;
 };
 
-type DraftStorage = {
- modelName: string;
- title?: string;
+// The structure that ProductDraft.tsx expects
+type DraftForUI = {
+ title: string;
  brand: string;
- aiDescription?: string;
+ price: string;
  description: string;
- recommendedPrice?: string | number;
- price?: string;
  category: string;
  condition: string;
+ modelNumber: string;
+ material: string;
+ allegroAverage: string;
+ ebayAverage: string;
+ capturedImage: string;
  isExactMatch: boolean;
 };
 
@@ -34,6 +41,10 @@ const normalizeResponse = (raw: any): ScrapedProduct => {
    price: typeof raw.price === 'number' ? raw.price : undefined,
    category: raw.category || "General",
    condition: raw.condition || "New",
+   modelNumber: raw.modelNumber || "",
+   material: raw.material || "",
+   allegroAverage: raw.allegroAverage,
+   ebayAverage: raw.ebayAverage,
    isExactMatch: raw.isExactMatch !== false,
  };
 };
@@ -65,27 +76,31 @@ export const fetchMasterProductData = async (query: string): Promise<ScrapedProd
  }
 };
 
-export const saveToDraftStorage = (product: ScrapedProduct): void => {
- const draft: DraftStorage = {
-   modelName: product.title,
+// Save exactly what ProductDraft expects
+export const saveToDraftStorage = (product: ScrapedProduct, capturedImage: string = ""): void => {
+ const draft: DraftForUI = {
    title: product.title,
    brand: product.brand || '',
-   aiDescription: product.description,
+   price: product.price?.toString() || '0.00',
    description: product.description || '',
-   recommendedPrice: product.price,
-   price: product.price?.toString(),
    category: product.category || 'General',
    condition: product.condition || 'New',
+   modelNumber: product.modelNumber || '',
+   material: product.material || '',
+   allegroAverage: product.allegroAverage?.toString() || '0.00',
+   ebayAverage: product.ebayAverage?.toString() || '0.00',
+   capturedImage: capturedImage,
    isExactMatch: product.isExactMatch ?? true,
  };
- sessionStorage.setItem('pending_kauf26_d', JSON.stringify(draft));
- console.log('💾 Scraped data saved to sessionStorage (key: pending_kauf26_d)');
+ // KEY MUST MATCH ProductDraft.tsx
+ sessionStorage.setItem('pendingAnalysis', JSON.stringify(draft));
+ console.log('💾 Scraped data saved to sessionStorage (key: pendingAnalysis)');
  console.log('Saved data:', draft);
 };
 
-export const scrapeAndGoToDraft = async (query: string, shouldNavigate: boolean = true): Promise<void> => {
+export const scrapeAndGoToDraft = async (query: string, capturedImage?: string, shouldNavigate: boolean = true): Promise<void> => {
  const scraped = await fetchMasterProductData(query);
- saveToDraftStorage(scraped);
+ saveToDraftStorage(scraped, capturedImage || "");
  if (shouldNavigate && typeof window !== 'undefined') {
    window.location.hash = '/product-draft';
  }

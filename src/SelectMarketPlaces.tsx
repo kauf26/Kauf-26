@@ -1,11 +1,16 @@
 import { useState, useEffect, Fragment } from "react";
 import { useLocation } from "wouter";
+import ToggleSwitch from './ToggleSwitch';
 
 type Marketplace =
-| "ebay" | "amazon" | "walmart" | "wish" | "reverb"
-| "offerup" | "etsy" | "shopify" | "woocommerce"
-| "aliexpress" | "mercadolibre" | "rakuten"
-| "bigcommerce" | "prestashop";
+ | "ebay" | "amazon" | "walmart" | "wish" | "reverb"
+ | "offerup" | "etsy" | "shopify" | "woocommerce"
+ | "aliexpress" | "mercadolibre" | "rakuten"
+ | "bigcommerce" | "prestashop"
+ | "allegro" | "bol" | "cdiscount" | "zalando"
+ | "mercadolibre_br" | "mercadolibre_ar"
+ | "lazada" | "shopee" | "flipkart"
+ | "gmarket" | "coupang" | "daraz";
 
 type ProductDraft = {
 capturedImage?: string;
@@ -15,24 +20,36 @@ price?: string;
 };
 
 const US_MARKETS = [
-{ id: "ebay" as const, name: "eBay US", currency: "USD" },
-{ id: "amazon" as const, name: "Amazon US", currency: "USD" },
-{ id: "walmart" as const, name: "Walmart", currency: "USD" },
-{ id: "etsy" as const, name: "Etsy", currency: "USD" },
-{ id: "offerup" as const, name: "OfferUp", currency: "USD" },
-{ id: "reverb" as const, name: "Reverb", currency: "USD" },
-{ id: "shopify" as const, name: "Shopify", currency: "USD" },
-{ id: "woocommerce" as const, name: "WooCommerce", currency: "USD" },
-{ id: "bigcommerce" as const, name: "BigCommerce", currency: "USD" }
-];
+  { id: "ebay" as const, name: "eBay US", currency: "USD" },
+  { id: "amazon" as const, name: "Amazon US", currency: "USD" },
+  { id: "walmart" as const, name: "Walmart", currency: "USD" },
+  { id: "etsy" as const, name: "Etsy", currency: "USD" },
+  { id: "offerup" as const, name: "OfferUp", currency: "USD" },
+  { id: "reverb" as const, name: "Reverb", currency: "USD" },
+  { id: "shopify" as const, name: "Shopify", currency: "USD" },
+  { id: "woocommerce" as const, name: "WooCommerce", currency: "USD" },
+  { id: "bigcommerce" as const, name: "BigCommerce", currency: "USD" }
+ ] as const;
 
 const GLOBAL_MARKETS = [
-{ id: "prestashop" as const, name: "PrestaShop", currency: "EUR" },
-{ id: "aliexpress" as const, name: "AliExpress", currency: "USD" },
-{ id: "mercadolibre" as const, name: "MercadoLibre", currency: "MXN" },
-{ id: "rakuten" as const, name: "Rakuten", currency: "JPY" },
-{ id: "wish" as const, name: "Wish Global", currency: "USD" }
-];
+  { id: "prestashop" as const, name: "PrestaShop", currency: "EUR" },
+  { id: "aliexpress" as const, name: "AliExpress", currency: "USD" },
+  { id: "mercadolibre" as const, name: "MercadoLibre", currency: "MXN" },
+  { id: "mercadolibre_br" as const, name: "MercadoLibre BR", currency: "BRL" },
+  { id: "mercadolibre_ar" as const, name: "MercadoLibre AR", currency: "ARS" },
+  { id: "rakuten" as const, name: "Rakuten", currency: "JPY" },
+  { id: "wish" as const, name: "Wish Global", currency: "USD" },
+  { id: "allegro" as const, name: "Allegro", currency: "PLN" },
+  { id: "bol" as const, name: "Bol.com", currency: "EUR" },
+  { id: "cdiscount" as const, name: "Cdiscount", currency: "EUR" },
+  { id: "zalando" as const, name: "Zalando", currency: "EUR" },
+  { id: "lazada" as const, name: "Lazada", currency: "USD" },
+  { id: "shopee" as const, name: "Shopee", currency: "USD" },
+  { id: "flipkart" as const, name: "Flipkart", currency: "INR" },
+  { id: "gmarket" as const, name: "Gmarket", currency: "KRW" },
+  { id: "coupang" as const, name: "Coupang", currency: "KRW" },
+  { id: "daraz" as const, name: "Daraz", currency: "USD" }
+ ] as const;
 
 export default function SelectMarketplaces() {
   const [, setLocation] = useLocation();
@@ -63,26 +80,32 @@ const updateField = (field: keyof ProductDraft, value: string) => {
   setDraft({ ...draft, [field]: value });
 };
 
-const renderMarketList = (markets: typeof US_MARKETS | typeof GLOBAL_MARKETS) => {
+const renderMarketList = (markets: readonly { id: Marketplace; name: string; currency: string }[]) => {
   return (
     <div className="space-y-2">
       {markets.map((m) => {
         const isSelected = selected.includes(m.id);
         return (
-          <Fragment key={m.id}>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-medium text-zinc-200">{m.name}</div>
-                <div className="text-xs text-zinc-500 uppercase">{m.id}</div>
+          <div
+            key={m.id}
+            onClick={() => toggle(m.id)}
+            className={`flex items-center justify-between gap-3 p-2 rounded-md cursor-pointer transition-colors ${
+              isSelected ? "bg-zinc-800" : "hover:bg-zinc-800/50"
+            }`}
+          >
+            <div>
+              <div className={`text-sm font-medium ${isSelected ? "text-white" : "text-zinc-200"}`}>
+                {m.name}
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs bg-zinc-900 border border-zinc-800 px-1.5 py-0.5 rounded text-zinc-400">
-                  {m.currency || "USD"}
-                </span>
-                {isSelected && <span className="text-emerald-400 text-xs">✓ Selected</span>}
-              </div>
+              <div className="text-xs text-zinc-500 uppercase">{m.id}</div>
             </div>
-          </Fragment>
+            <div className="flex items-center gap-2">
+              <span className="text-xs bg-zinc-950 border border-zinc-800 px-1.5 py-0.5 rounded text-zinc-400">
+                {m.currency}
+              </span>
+              {isSelected && <span className="text-emerald-400 text-xs font-bold">✓</span>}
+            </div>
+          </div>
         );
       })}
     </div>
