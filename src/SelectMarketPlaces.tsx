@@ -89,26 +89,28 @@ const renderMarketList = (markets: readonly { id: Marketplace; name: string; cur
           <div
             key={m.id}
             onClick={() => toggle(m.id)}
-            className={`flex items-center justify-between gap-3 p-2 rounded-md cursor-pointer transition-colors ${
-              isSelected ? "bg-zinc-800" : "hover:bg-zinc-800/50"
+            className={`flex items-center justify-between gap-3 p-2 rounded-md cursor-pointer transition-colors border ${
+              isSelected
+                ? "bg-emerald-900/20 border-emerald-500/50"
+                : "bg-red-900/20 border-red-500/50 hover:bg-red-900/30"
             }`}
           >
-            <div>
-              <div className={`text-sm font-medium ${isSelected ? "text-white" : "text-zinc-200"}`}>
-                {m.name}
-              </div>
-              <div className="text-xs text-zinc-500 uppercase">{m.id}</div>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs bg-zinc-950 border border-zinc-800 px-1.5 py-0.5 rounded text-zinc-400">
-                {m.currency}
-              </span>
-              {isSelected && <span className="text-emerald-400 text-xs font-bold">✓</span>}
-            </div>
-          </div>
-        );
-      })}
-    </div>
+     <div>
+             <div className={`text-sm font-medium ${isSelected ? "text-emerald-400" : "text-red-200"}`}>
+               {m.name}
+             </div>
+             <div className="text-xs text-zinc-500 uppercase">{m.id}</div>
+           </div>
+           <div className="flex items-center gap-2">
+             <span className="text-xs bg-zinc-950 border border-zinc-800 px-1.5 py-0.5 rounded text-zinc-400">
+               {m.currency}
+             </span>
+             {isSelected && <span className="text-emerald-400 text-xs font-bold">✓</span>}
+           </div>
+         </div>
+       );
+     })}
+   </div>
   );
 };
 
