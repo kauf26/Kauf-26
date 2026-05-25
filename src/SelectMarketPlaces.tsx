@@ -3,14 +3,14 @@ import { useLocation } from "wouter";
 import ToggleSwitch from './ToggleSwitch';
 
 type Marketplace =
- | "ebay" | "amazon" | "walmart" | "wish" | "reverb"
- | "offerup" | "etsy" | "shopify" | "woocommerce"
- | "aliexpress" | "mercadolibre" | "rakuten"
- | "bigcommerce" | "prestashop"
- | "allegro" | "bol" | "cdiscount" | "zalando"
- | "mercadolibre_br" | "mercadolibre_ar"
- | "lazada" | "shopee" | "flipkart"
- | "gmarket" | "coupang" | "daraz";
+| "ebay" | "amazon" | "walmart" | "wish" | "reverb"
+| "offerup" | "etsy" | "shopify" | "woocommerce"
+| "aliexpress" | "mercadolibre" | "rakuten"
+| "bigcommerce" | "prestashop"
+| "allegro" | "bol" | "cdiscount" | "zalando"
+| "mercadolibre_br" | "mercadolibre_ar"
+| "lazada" | "shopee" | "flipkart"
+| "gmarket" | "coupang" | "daraz" | "depop";
 
 type ProductDraft = {
 capturedImage?: string;
@@ -28,15 +28,16 @@ const US_MARKETS = [
   { id: "reverb" as const, name: "Reverb", currency: "USD" },
   { id: "shopify" as const, name: "Shopify", currency: "USD" },
   { id: "woocommerce" as const, name: "WooCommerce", currency: "USD" },
-  { id: "bigcommerce" as const, name: "BigCommerce", currency: "USD" }
+  { id: "bigcommerce" as const, name: "BigCommerce", currency: "USD" },
+  { id: "depop" as const, name: "Depop", currency: "USD" }, // Added Depop here
  ] as const;
-
-const GLOBAL_MARKETS = [
+ 
+ const GLOBAL_MARKETS = [
   { id: "prestashop" as const, name: "PrestaShop", currency: "EUR" },
   { id: "aliexpress" as const, name: "AliExpress", currency: "USD" },
-  { id: "mercadolibre" as const, name: "MercadoLibre", currency: "MXN" },
-  { id: "mercadolibre_br" as const, name: "MercadoLibre BR", currency: "BRL" },
-  { id: "mercadolibre_ar" as const, name: "MercadoLibre AR", currency: "ARS" },
+  { id: "mercadolibre" as const, name: "MercadoLibre", currency: "USD" },
+  { id: "mercadolibre_br" as const, name: "MercadoLibre BR", currency: "USD" },
+  { id: "mercadolibre_ar" as const, name: "MercadoLibre AR", currency: "USD" },
   { id: "rakuten" as const, name: "Rakuten", currency: "JPY" },
   { id: "wish" as const, name: "Wish Global", currency: "USD" },
   { id: "allegro" as const, name: "Allegro", currency: "PLN" },
