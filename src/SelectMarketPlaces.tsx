@@ -20,36 +20,35 @@ price?: string;
 };
 
 const US_MARKETS = [
-  { id: "ebay" as const, name: "eBay US", currency: "USD" },
-  { id: "amazon" as const, name: "Amazon US", currency: "USD" },
-  { id: "walmart" as const, name: "Walmart", currency: "USD" },
-  { id: "etsy" as const, name: "Etsy", currency: "USD" },
-  { id: "offerup" as const, name: "OfferUp", currency: "USD" },
-  { id: "reverb" as const, name: "Reverb", currency: "USD" },
-  { id: "shopify" as const, name: "Shopify", currency: "USD" },
-  { id: "woocommerce" as const, name: "WooCommerce", currency: "USD" },
-  { id: "bigcommerce" as const, name: "BigCommerce", currency: "USD" },
-  { id: "depop" as const, name: "Depop", currency: "USD" }, // Added Depop here
+  { id: "ebay", name: "eBay", currency: "USD" },
+  { id: "amazon", name: "Amazon", currency: "USD" },
+  { id: "mercari", name: "Mercari", currency: "USD" },
+  { id: "mercari-jp", name: "Mercari JP", currency: "JPY" },
+  { id: "stockx", name: "StockX", currency: "USD" },
+  { id: "grailed", name: "Grailed", currency: "USD" },
+  { id: "whatnot", name: "Whatnot", currency: "USD" },
+  { id: "depop", name: "Depop", currency: "USD" },
+  { id: "discogs", name: "Discogs", currency: "USD" },
+  { id: "poshmark", name: "Poshmark", currency: "USD" },
  ] as const;
  
  const GLOBAL_MARKETS = [
-  { id: "prestashop" as const, name: "PrestaShop", currency: "EUR" },
-  { id: "aliexpress" as const, name: "AliExpress", currency: "USD" },
-  { id: "mercadolibre" as const, name: "MercadoLibre", currency: "USD" },
-  { id: "mercadolibre_br" as const, name: "MercadoLibre BR", currency: "USD" },
-  { id: "mercadolibre_ar" as const, name: "MercadoLibre AR", currency: "USD" },
-  { id: "rakuten" as const, name: "Rakuten", currency: "JPY" },
-  { id: "wish" as const, name: "Wish Global", currency: "USD" },
-  { id: "allegro" as const, name: "Allegro", currency: "PLN" },
-  { id: "bol" as const, name: "Bol.com", currency: "EUR" },
-  { id: "cdiscount" as const, name: "Cdiscount", currency: "EUR" },
-  { id: "zalando" as const, name: "Zalando", currency: "EUR" },
-  { id: "lazada" as const, name: "Lazada", currency: "USD" },
-  { id: "shopee" as const, name: "Shopee", currency: "USD" },
-  { id: "flipkart" as const, name: "Flipkart", currency: "INR" },
-  { id: "gmarket" as const, name: "Gmarket", currency: "KRW" },
-  { id: "coupang" as const, name: "Coupang", currency: "KRW" },
-  { id: "daraz" as const, name: "Daraz", currency: "USD" }
+  { id: "etsy", name: "Etsy", currency: "USD" },
+  { id: "shopify", name: "Shopify", currency: "USD" },
+  { id: "woocommerce", name: "WooCommerce", currency: "USD" },
+  { id: "squarespace", name: "Squarespace", currency: "USD" },
+  { id: "wix", name: "Wix eCommerce", currency: "USD" },
+  { id: "prestashop", name: "PrestaShop", currency: "EUR" },
+  { id: "mercadolibre", name: "Mercado Libre", currency: "USD" },
+  { id: "pinterest", name: "Pinterest", currency: "USD" },
+  { id: "tiktokshop", name: "TikTok Shop", currency: "USD" },
+  { id: "vinted", name: "Vinted", currency: "EUR" },
+  { id: "shopee", name: "Shopee", currency: "USD" },
+  { id: "falabella", name: "Falabella", currency: "USD" },
+  { id: "bolcom", name: "Bol.com", currency: "EUR" },
+  { id: "allegro", name: "Allegro", currency: "PLN" },
+  { id: "cdiscount", name: "Cdiscount", currency: "EUR" },
+  { id: "kidizen", name: "Kidizen", currency: "USD" },
  ] as const;
 
 export default function SelectMarketplaces() {
@@ -167,14 +166,14 @@ return (
           <div className="text-xs font-semibold uppercase mb-2 flex gap-1 tracking-wider text-zinc-400">
             <span>🇺🇸</span> US-Based Marketplaces
           </div>
-          {renderMarketList(US_MARKETS)}
+          {renderMarketList(US_MARKETS as any)}
         </div>
 
         <div className="border-t border-zinc-800 pt-4">
           <div className="text-xs font-semibold uppercase mb-2 flex gap-1 tracking-wider text-zinc-400">
             <span>🌐</span> International Channels
           </div>
-          {renderMarketList(GLOBAL_MARKETS)}
+          {renderMarketList(GLOBAL_MARKETS as any)}
         </div>
 
         <button

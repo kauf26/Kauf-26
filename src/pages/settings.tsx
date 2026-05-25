@@ -240,18 +240,7 @@ const MARKETPLACES: MarketplaceDef[] = [
     ],
   },
   {
-    id: "tcgplayer",
-    name: "TCGplayer",
-    color: "text-blue-400",
-    country: "🇺🇸 United States",
-    signupUrl: "https://store.tcgplayer.com/sellerwizard",
-    devUrl: "https://docs.tcgplayer.com",
-    fields: [
-      { key: "publicKey", label: "Public Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", helpUrl: "https://docs.tcgplayer.com/docs/getting-started" },
-      { key: "privateKey", label: "Private Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
-    ],
-  },
-  {
+
     id: "discogs",
     name: "Discogs",
     color: "text-yellow-500",
