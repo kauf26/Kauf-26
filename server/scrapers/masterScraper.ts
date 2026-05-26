@@ -2,7 +2,7 @@
 import { scrapeProduct as scrapeOxylabs } from './oxylabs.js';
 import { scrapeProduct as scrapeApify } from './apify.js';
 import { scrapeProduct as scrapeRapidAPI } from './rapidapi.js';
-
+import { extractProductData as openai } from './openai.js';
 // Truncate text to a maximum number of words
 const truncateToWords = (text: string, maxWords: number = 50): string => {
  if (!text) return "";
