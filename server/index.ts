@@ -10,17 +10,16 @@ import { productRoutes } from "./productsRoutes";
 
 dotenv.config();
 
-// Define the interface with flexible types for prices
 interface ScrapedProduct {
-  brand?: string;
-  year?: string;
-  condition?: string;
-  material?: string;
-  refNumber?: string;
-  description?: string;
-  price?: string | number;   // Allow both string and number
-  ebayPrice?: string | number; // Allow both string and number
- }
+ brand?: string;
+ year?: string;
+ condition?: string;
+ material?: string;
+ refNumber?: string;
+ description?: string;
+ price?: string | number;
+ ebayPrice?: string | number;
+}
 
 const app = express();
 app.use(express.json());
@@ -31,55 +30,81 @@ app.use("/api", productRoutes);
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const upload = multer({ storage: multer.memoryStorage() });
 
+// -------------------- IDENTIFY ROUTE (image -> scrape) --------------------
 app.post('/api/identify', upload.single('image'), async (req: Request, res: Response) => {
-try {
-  if (!req.file) return res.status(400).json({ error: "No image" });
+ try {
+   if (!req.file) {
+     return res.status(400).json({ error: "No image uploaded" });
+   }
 
-  const base64Image = req.file.buffer.toString('base64');
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [{ role: "user", content: [{ type: "text", text: "Identify product name" }, { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}` } }] }],
-  });
+   const base64Image = req.file.buffer.toString('base64');
+   const response = await openai.chat.completions.create({
+     model: "gpt-4o",
+     messages: [{
+       role: "user",
+       content: [
+         { type: "text", text: "Identify the product name from this image" },
+         { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}` } }
+       ]
+     }],
+   });
 
-  const searchQuery = response.choices[0].message.content || "";
-  // Tell TypeScript that fetchMasterProductData returns our ScrapedProduct interface
-  const listings: ScrapedProduct = await fetchMasterProductData(searchQuery);
+   const searchQuery = response.choices[0].message.content || "";
+   const listings: ScrapedProduct = await fetchMasterProductData(searchQuery);
 
-  res.json({
-    success: true,
-    productData: {
-      capturedImage: `data:${req.file.mimetype};base64,${base64Image}`,
-      modelName: searchQuery,
-      brand: listings.brand || "Not Found",
-      year: listings.year || new Date().getFullYear().toString(),
-      condition: listings.condition || "Used",
-      material: listings.material || "Not specified",
-      refNumber: listings.refNumber || "AUTO-GEN",
-      aiDescription: listings.description || `KAUF-AI identified this as: ${searchQuery}`
-    },
-    marketPrices: {
-      allegroAvg: listings.price || "0.00",
-      ebayAvg: listings.ebayPrice || "0.00",
-      recommendedPrice: listings.price || "0.00"
-    }
-  });
-} catch (error) {
-  console.error("Identification Error:", error);
-  res.status(500).json({ error: "Scraping failed" });
-}
+   // Return the scraped data + image preview
+   res.json({
+     success: true,
+     productData: {
+       capturedImage: `data:${req.file.mimetype};base64,${base64Image}`,
+       modelName: searchQuery,
+       brand: listings.brand || "Not Found",
+       year: listings.year || new Date().getFullYear().toString(),
+       condition: listings.condition || "Used",
+       material: listings.material || "Not specified",
+       refNumber: listings.refNumber || "AUTO-GEN",
+       aiDescription: listings.description || `KAUF-AI identified this as: ${searchQuery}`
+     },
+     marketPrices: {
+       allegroAvg: listings.price || "0.00",
+       ebayAvg: listings.ebayPrice || "0.00",
+       recommendedPrice: listings.price || "0.00"
+     }
+   });
+ } catch (error) {
+   console.error("Identification Error:", error);
+   res.status(500).json({ error: "Scraping or identification failed" });
+ }
 });
 
+// -------------------- DRAFTS ROUTE (save/publish scraped data) --------------------
+app.post("/api/drafts", async (req: Request, res: Response) => {
+ try {
+   const draftData = req.body;
+   console.log("✔️ Received draft data:", draftData);
+
+   // TODO: Add your database save logic here
+   // Example: await db.drafts.create(draftData);
+
+   res.status(200).json({ success: true, message: "Draft saved successfully!" });
+ } catch (error) {
+   console.error("❌ Error saving draft:", error);
+   res.status(500).json({ error: "Failed to save draft" });
+ }
+});
+
+// -------------------- SERVER SETUP --------------------
 const server = createServer(app);
 
 (async () => {
-await registerRoutes(app);
-if (app.get("env") === "development") {
-  await setupVite(app, server);
-} else {
-  serveStatic(app);
-}
-const port = 5173;
-server.listen(port, "0.0.0.0", () => {
-  console.log(`🚀 Unified Kauf26 engine running on port ${port}`);
-});
+ await registerRoutes(app);
+ if (app.get("env") === "development") {
+   await setupVite(app, server);
+ } else {
+   serveStatic(app);
+ }
+ const port = 5173;
+ server.listen(port, "0.0.0.0", () => {
+   console.log(`🚀 Unified Kauf26 engine running on port ${port}`);
+ });
 })();

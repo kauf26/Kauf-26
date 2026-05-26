@@ -14,34 +14,35 @@ type Marketplace = {
 // Sample marketplace data - replace with your real API data later
 const allMarketplaces: Marketplace[] = [
 
-   // Local Platforms
-   { id: "ebay", name: "eBay", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
-   { id: "amazon", name: "Amazon", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
-   { id: "mercari", name: "Mercari", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
-   { id: "mercari-jp", name: "Mercari JP", currency: "JPY", country: "🇯🇵", region: "Global", status: "idle" },
-   { id: "stockx", name: "StockX", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
-   { id: "grailed", name: "Grailed", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
-   { id: "whatnot", name: "Whatnot", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
-   { id: "depop", name: "Depop", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
-   { id: "discogs", name: "Discogs", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
-   { id: "poshmark", name: "Poshmark", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
-   { id: "etsy", name: "Etsy", currency: "USD", country: "🇺🇸", region: "Global", status: "idle" },
-   { id: "shopify", name: "Shopify", currency: "USD", country: "🇨🇦", region: "Global", status: "idle" },
-   { id: "woocommerce", name: "WooCommerce", currency: "USD", country: "🇺🇸", region: "Global", status: "idle" },
-   { id: "squarespace", name: "Squarespace", currency: "USD", country: "🇺🇸", region: "Global", status: "idle" },
-   { id: "wix", name: "Wix eCommerce", currency: "USD", country: "🇮🇱", region: "Global", status: "idle" },
-   { id: "prestashop", name: "PrestaShop", currency: "EUR", country: "🇫🇷", region: "Global", status: "idle" },
-   { id: "mercadolibre", name: "Mercado Libre", currency: "USD", country: "🇲🇽", region: "Global", status: "idle" },
-   { id: "pinterest", name: "Pinterest", currency: "USD", country: "🇺🇸", region: "Global", status: "idle" },
-   { id: "tiktokshop", name: "TikTok Shop", currency: "USD", country: "🌏", region: "Global", status: "idle" },
-   { id: "vinted", name: "Vinted", currency: "EUR", country: "🇱🇹", region: "Global", status: "idle" },
-   { id: "shopee", name: "Shopee", currency: "USD", country: "🇸🇬", region: "Global", status: "idle" },
-   { id: "falabella", name: "Falabella", currency: "USD", country: "🇨🇱", region: "Global", status: "idle" },
-   { id: "bolcom", name: "Bol.com", currency: "EUR", country: "🇳🇱", region: "Global", status: "idle" },
-   { id: "allegro", name: "Allegro", currency: "PLN", country: "🇵🇱", region: "Global", status: "idle" },
-   { id: "cdiscount", name: "Cdiscount", currency: "EUR", country: "🇫🇷", region: "Global", status: "idle" },
-   { id: "kidizen", name: "Kidizen", currency: "USD", country: "🇺🇸", region: "Global", status: "idle" }
- ];
+    // Local Platforms
+    { id: "ebay", name: "eBay", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
+    { id: "amazon", name: "Amazon", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
+    { id: "mercari", name: "Mercari US", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
+    { id: "mercari-jp", name: "Mercari Japan", currency: "JPY", country: "🇯🇵", region: "Global", status: "idle" },
+    { id: "stockx", name: "StockX", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
+    { id: "grailed", name: "Grailed", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
+    { id: "whatnot", name: "Whatnot", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
+    { id: "tcgplayer", name: "TCGplayer", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
+    { id: "discogs", name: "Discogs", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
+    { id: "poshmark", name: "Poshmark", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
+    { id: "gumtree", name: "Gumtree", currency: "AUD", country: "🇦🇺", region: "Global", status: "idle" },
+    // Global Platforms
+    { id: "etsy", name: "Etsy", currency: "USD", country: "🇺🇸", region: "Global", status: "idle" },
+    { id: "shopify", name: "Shopify", currency: "USD", country: "🇨🇦", region: "Global", status: "idle" },
+    { id: "woocommerce", name: "WooCommerce", currency: "USD", country: "🇺🇸", region: "Global", status: "idle" },
+    { id: "squarespace", name: "Squarespace", currency: "USD", country: "🇺🇸", region: "Global", status: "idle" },
+    { id: "wix", name: "Wix eCommerce", currency: "USD", country: "🇮🇱", region: "Global", status: "idle" },
+    { id: "prestashop", name: "PrestaShop", currency: "EUR", country: "🇫🇷", region: "Global", status: "idle" },
+    { id: "mercadolibre", name: "Mercado Libre", currency: "USD", country: "🇲🇽", region: "Global", status: "idle" },
+    { id: "pinterest", name: "Pinterest", currency: "USD", country: "🇺🇸", region: "Global", status: "idle" },
+    { id: "tiktokshop", name: "TikTok Shop", currency: "USD", country: "🌏", region: "Global", status: "idle" },
+    { id: "wallapop", name: "Wallapop", currency: "EUR", country: "🇪🇸", region: "Global", status: "idle" },
+    { id: "vinted", name: "Vinted", currency: "EUR", country: "🇪🇺", region: "Global", status: "idle" },
+    { id: "shopee", name: "Shopee", currency: "BRL", country: "🇧🇷", region: "Global", status: "idle" },
+    { id: "olx", name: "OLX", currency: "BRL", country: "🇧🇷", region: "Global", status: "idle" },
+    { id: "falabella", name: "Falabella", currency: "USD", country: "🇨🇱", region: "Global", status: "idle" },
+    { id: "bolcom", name: "Bol.com", currency: "EUR", country: "🇳🇱", region: "Global", status: "idle" }
+];
 
 export default function MarketplacePublish() {
  const { draft } = useProductDraft();
@@ -159,13 +160,30 @@ export default function MarketplacePublish() {
       {/* Optional: Publish button */}
       <div style={{ marginTop: '32px', textAlign: 'center' }}>
         <button
-          onClick={() => {
-            const selectedNames = allMarketplaces
-              .filter(mp => selectedIds.has(mp.id))
-              .map(mp => mp.name);
-            alert(`Publishing to:\n${selectedNames.join('\n') || 'None'}`);
-            // Here you would call your actual publish API with pending_kauf26_draft and selectedIds
-          }}
+         onClick={async () => {
+          const selectedNames = allMarketplaces
+            .filter(mp => selectedIds.has(mp.id))
+            .map(mp => mp.name);
+
+          try {
+            const res = await fetch("/api/drafts", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                  selectedMarketplaces: [...selectedIds],
+                  // Add other draft fields here if needed
+              })
+            });
+
+            if (res.ok) {
+                alert(`Success! Published to:\n${selectedNames.join('\n')}`);
+            } else {
+                alert("Failed to save draft.");
+            }
+          } catch (err) {
+            console.error("Fetch error:", err);
+          }
+        }}
           style={{
             backgroundColor: '#3b82f6',
             color: 'white',
