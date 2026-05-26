@@ -1,7 +1,15 @@
 // masterScraper.ts
 import { scrapeProduct as scrapeOxylabs } from './oxylabs.js';
-import { scrapeProduct as scrapeApify } from './apify';
-import { scrapeProduct as scrapeRapidAPI } from './rapidapi';
+import { scrapeProduct as scrapeApify } from './apify.js';
+import { scrapeProduct as scrapeRapidAPI } from './rapidapi.js';
+
+// Truncate text to a maximum number of words
+const truncateToWords = (text: string, maxWords: number = 50): string => {
+ if (!text) return "";
+ const words = text.split(/\s+/).filter(w => w.length > 0);
+ if (words.length <= maxWords) return text;
+ return words.slice(0, maxWords).join(" ") + "...";
+};
 
 export type ScrapedProduct = {
  title: string;
@@ -17,8 +25,8 @@ export type ScrapedProduct = {
  isExactMatch?: boolean;
 };
 
-// The structure that ProductDraft.tsx expects
-type DraftForUI = {
+// The structure that IdentificationResults and ProductDraft expect
+export type DraftForUI = {
  title: string;
  brand: string;
  price: string;
@@ -34,10 +42,11 @@ type DraftForUI = {
 };
 
 const normalizeResponse = (raw: any): ScrapedProduct => {
+ const rawDescription = raw.description || "";
  return {
    title: raw.title || "Unknown Product",
    brand: raw.brand || "",
-   description: raw.description || "",
+   description: truncateToWords(rawDescription, 40),
    price: typeof raw.price === 'number' ? raw.price : undefined,
    category: raw.category || "General",
    condition: raw.condition || "New",
@@ -59,6 +68,7 @@ export const fetchMasterProductData = async (query: string): Promise<ScrapedProd
  ];
 
  try {
+   // Returns the first successful response
    const firstResult = await Promise.any(tasks);
    console.log(`✅ Master Scraper succeeded: ${firstResult.title}`);
    return firstResult;
@@ -67,7 +77,7 @@ export const fetchMasterProductData = async (query: string): Promise<ScrapedProd
    return {
      title: query || 'Manual Entry Required',
      brand: '',
-     description: 'Unable to auto-generate description at this time.',
+     description: 'Product detected but details could not be auto-generated.',
      price: undefined,
      category: 'General',
      condition: 'New',
@@ -76,8 +86,7 @@ export const fetchMasterProductData = async (query: string): Promise<ScrapedProd
  }
 };
 
-// Save exactly what ProductDraft expects
-export const saveToDraftStorage = (product: ScrapedProduct, capturedImage: string = ""): void => {
+export const saveToDraftStorage = (product: ScrapedProduct, capturedImage: string = ""): DraftForUI => {
  const draft: DraftForUI = {
    title: product.title,
    brand: product.brand || '',
@@ -92,16 +101,8 @@ export const saveToDraftStorage = (product: ScrapedProduct, capturedImage: strin
    capturedImage: capturedImage,
    isExactMatch: product.isExactMatch ?? true,
  };
- // KEY MUST MATCH ProductDraft.tsx
- sessionStorage.setItem('pendingAnalysis', JSON.stringify(draft));
- console.log('💾 Scraped data saved to sessionStorage (key: pendingAnalysis)');
- console.log('Saved data:', draft);
-};
 
-export const scrapeAndGoToDraft = async (query: string, capturedImage?: string, shouldNavigate: boolean = true): Promise<void> => {
- const scraped = await fetchMasterProductData(query);
- saveToDraftStorage(scraped, capturedImage || "");
- if (shouldNavigate && typeof window !== 'undefined') {
-   window.location.hash = '/product-draft';
- }
+ sessionStorage.setItem('pendingAnalysis', JSON.stringify(draft));
+ console.log('💾 Data saved to sessionStorage', draft);
+ return draft;
 };

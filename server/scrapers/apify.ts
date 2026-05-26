@@ -1,80 +1,60 @@
-// apify.ts
+// server/scrapers/apify.ts
 import { ApifyClient } from 'apify-client';
 import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(process.cwd(), '.env') });
+dotenv.config();
 
 const client = new ApifyClient({ token: process.env.APIFY_API_KEY });
 
+// Enforce 50-word limit
+const truncateDescription = (text: string, query: string): string => {
+ if (!text) return `A general listing for ${query}.`;
+ const words = text.split(/\s+/);
+ return words.length > 50 ? words.slice(0, 50).join(" ") + "..." : text;
+};
+
 export const scrapeProduct = async (query: string): Promise<any> => {
- if (!query) {
-   console.error('❌ Apify: No search query provided');
-   return fallbackProduct(query);
- }
-
  try {
-   console.log(`🔎 Apify: Searching for "${query}" on eBay...`);
-
-   // Use Apify's eBay search actor
    const run = await client.actor("epctex/ebay-scraper").call({
      search: query,
      country: "US",
      limit: 1,
-   });
+   }, { timeout: 30000 });
 
-   const dataset = await client.dataset(run.defaultDatasetId);
-   const { items } = await dataset.listItems();
+   const { items } = await client.dataset(run.defaultDatasetId).listItems({ limit: 1 });
 
-   if (!items || items.length === 0) {
-     throw new Error('No products found');
-   }
+   if (!items || items.length === 0) return getGeneralDescription(query);
 
    const first = items[0] as any;
 
    return {
      title: first.title || query,
-     brand: first.brand || extractBrandFromTitle(String(first.title || '')),
-     description: first.description || `High-quality ${first.title} - sourced from eBay via Apify.`,
+     brand: first.brand || "",
+     description: truncateDescription(first.description || "", query),
      price: parsePrice(first.price),
      category: first.category || 'General',
      condition: first.condition || 'New',
      isExactMatch: true,
    };
- } catch (error: any) {
-   console.error('❌ Apify scraping error:', error.message || error);
-   return fallbackProduct(query);
+ } catch (error) {
+   console.error('❌ Apify Error:', error);
+   return getGeneralDescription(query);
  }
 };
 
-function extractBrandFromTitle(title: string): string {
- const brands = ['Nikon', 'Canon', 'Sony', 'Apple', 'Samsung', 'LG', 'Bose', 'Dell', 'HP'];
- for (const b of brands) {
-   if (title.toLowerCase().includes(b.toLowerCase())) return b;
- }
- return '';
-}
-
-function parsePrice(price: any): number | undefined {
- if (typeof price === 'number') return price;
- if (!price) return undefined;
- const str = String(price);
- const match = str.match(/[\d,]+\.?\d*/);
- if (match) return parseFloat(match[0].replace(/,/g, ''));
- return undefined;
-}
-
-function fallbackProduct(query: string) {
+function getGeneralDescription(query: string) {
  return {
    title: query,
-   brand: '',
-   description: 'Product description not available from Apify.',
+   brand: 'N/A',
+   description: `A general item matching the search criteria for "${query}". Please review the details manually.`,
    price: undefined,
    category: 'General',
    condition: 'New',
    isExactMatch: false,
  };
+}
+
+function parsePrice(price: any): number | undefined {
+ const str = String(price).replace(/[^0-9.]/g, '');
+ const parsed = parseFloat(str);
+ return isNaN(parsed) ? undefined : parsed;
 }
