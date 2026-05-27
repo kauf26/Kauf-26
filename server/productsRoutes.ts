@@ -7,7 +7,7 @@ const router = express.Router();
 
 // --- 1. SAVE OR UPDATE A DRAFT (POST) ---
 router.post("/drafts", async (req, res) => {
- console.log("[DEBUG] Payload received:", JSON.stringify(req.body, null, 2));
+ console.log("[KAUF26] Draft received in productsRoutes:", req.body);
 
  try {
    const { id, title, sku, status, images, attributes } = req.body;
