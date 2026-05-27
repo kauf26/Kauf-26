@@ -1,30 +1,27 @@
 import { type Express } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage.js";
-import * as StripeModule from "./stripeClient.js";
+import { storage } from "./storage";
+import * as StripeModule from "./stripeClient";
 
-/**
-* Register all Kauf26 API and system routes.
-* This version satisfies the 'Express' type requirements and includes
-* the updated Per-Sale and Escrow logic.
-*/
 export async function registerRoutes(app: Express): Promise<Server> {
+ app.use((req, res, next) => {
+   console.log(`Incoming request: ${req.method} ${req.url}`);
+   next();
+ });
+
+ console.log("🚀 Registering API routes...");
  const stripeClient = (StripeModule as any).stripeClient || (StripeModule as any).default;
 
  // 1. API Routes for Kauf26 Marketplace
  app.post("/api/create-checkout-session", async (req, res) => {
    try {
      const { userId, itemSalePrice, userSalesCount } = req.body;
-
-     // Ensure we have the required data for the volume-tier logic
      if (!userId) return res.status(400).json({ message: "User ID required" });
-
      const session = await (StripeModule as any).createPerSaleCheckoutSession({
        userId,
        itemSalePrice,
        userSalesCount
      });
-
      res.json({ url: session.url, sessionId: session.id });
    } catch (error: any) {
      console.error("Stripe Checkout Error:", error);
@@ -51,11 +48,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
  app.post("/api/products/save", async (req, res) => {
    try {
      const { title, description, imageUrl, price, source } = req.body;
-
      if (!title || !price) {
        return res.status(400).json({ message: "Product title and price are required." });
      }
-
      const savedProduct = await storage.saveProduct({
        title,
        description: description || '',
@@ -63,7 +58,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
        price: typeof price === 'string' ? parseFloat(price) : price,
        source: source || 'scraped'
      });
-
      return res.json({ success: true, product: savedProduct });
    } catch (error: any) {
      console.error("Save Product Error:", error);
@@ -71,38 +65,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
    }
  });
 
- // 4. Missing Draft Processing & Scraping Route
- app.post("/api/drafts", async (req, res) => {
-   try {
-     const { capturedImage, modelName, brand, year, condition, category } = req.body;
+ // NOTE: /api/drafts is now handled by productRoutes.ts (mounted at /api)
+ // The duplicate route has been removed from here.
 
-     console.log("Received product draft data for scraping:", { modelName, brand, year });
-
-     // Build out the response object matching the ProductDraft interface
-     const processedDraft = {
-       id: Date.now(),
-       capturedImage: capturedImage || '',
-       modelName: modelName || '',
-       brand: brand || '',
-       year: year ? Number(year) : 2026,
-       condition: condition || '',
-       category: category || '',
-       allegroAvg: 0, // Scraper pipelines will populate these values
-       ebayAvg: 0
-     };
-
-     // TODO: Wire up your local scraping modules here to process the brand/model name
-     // and save the returned draft row into your local PostgreSQL instance:
-     // await storage.saveDraft(processedDraft);
-
-     return res.json(processedDraft);
-   } catch (error: any) {
-     console.error("Draft Processing Error:", error);
-     return res.status(500).json({ message: error.message || "Internal Server Error" });
-   }
- });
-
- // Create and return the HTTP server
+ // Create and return the HTTP server (though index.ts creates its own, this is still required by registerRoutes signature)
  const httpServer = createServer(app);
  return httpServer;
 }

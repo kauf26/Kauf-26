@@ -7,7 +7,6 @@ const router = express.Router();
 
 // --- 1. SAVE OR UPDATE A DRAFT (POST) ---
 router.post("/drafts", async (req, res) => {
- // DEBUG LOG: This will print the data sent from your frontend to your terminal
  console.log("[DEBUG] Payload received:", JSON.stringify(req.body, null, 2));
 
  try {

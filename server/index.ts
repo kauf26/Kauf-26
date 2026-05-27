@@ -1,12 +1,12 @@
 import express, { type Request, Response } from "express";
 import { createServer } from "http";
-import { registerRoutes } from "./routes.js";
-import { setupVite, serveStatic } from "./vite.js";
+import { registerRoutes } from "./routes";
+import { setupVite, serveStatic } from "./vite";
 import multer from "multer";
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
-import { fetchMasterProductData } from './scrapers/masterScraper.js';
-import { productRoutes } from "./productsRoutes";
+import { fetchMasterProductData } from './scrapers/masterScraper';
+import { productRoutes } from "./productsRoutes";   // ✅ fixed import (added 's')
 
 dotenv.config();
 
@@ -25,6 +25,7 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Mount product routes (handles POST /api/drafts and GET /api/drafts)
 app.use("/api", productRoutes);
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -52,7 +53,6 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
    const searchQuery = response.choices[0].message.content || "";
    const listings: ScrapedProduct = await fetchMasterProductData(searchQuery);
 
-   // Return the scraped data + image preview
    res.json({
      success: true,
      productData: {
@@ -77,26 +77,11 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
  }
 });
 
-// -------------------- DRAFTS ROUTE (save/publish scraped data) --------------------
-app.post("/api/drafts", async (req: Request, res: Response) => {
- try {
-   const draftData = req.body;
-   console.log("✔️ Received draft data:", draftData);
-
-   // TODO: Add your database save logic here
-   // Example: await db.drafts.create(draftData);
-
-   res.status(200).json({ success: true, message: "Draft saved successfully!" });
- } catch (error) {
-   console.error("❌ Error saving draft:", error);
-   res.status(500).json({ error: "Failed to save draft" });
- }
-});
-
 // -------------------- SERVER SETUP --------------------
 const server = createServer(app);
 
 (async () => {
+ console.log("DEBUG: About to call registerRoutes");
  await registerRoutes(app);
  if (app.get("env") === "development") {
    await setupVite(app, server);
