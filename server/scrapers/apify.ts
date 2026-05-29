@@ -14,7 +14,7 @@ const truncateDescription = (text: string, query: string): string => {
 
 export const scrapeProduct = async (query: string): Promise<any> => {
  try {
-   const run = await client.actor("epctex/ebay-scraper").call({
+  const run = await client.actor("YOUR_NEW_ACTOR_ID").call({
      search: query,
      country: "US",
      limit: 1,

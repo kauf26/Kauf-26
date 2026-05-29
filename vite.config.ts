@@ -11,8 +11,16 @@ export default defineConfig({
    },
  },
  base: '/',
+ // ADD THIS SERVER BLOCK HERE
  server: {
    port: 5173,
    strictPort: true,
- }
+   proxy: {
+     '/api': {
+       target: 'http://localhost:3000',
+       changeOrigin: true,
+       secure: false,
+     },
+   },
+ },
 });

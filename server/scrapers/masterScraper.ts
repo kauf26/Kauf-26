@@ -1,108 +1,60 @@
-// masterScraper.ts
-import { scrapeProduct as scrapeOxylabs } from './oxylabs.js';
-import { scrapeProduct as scrapeApify } from './apify.js';
-import { scrapeProduct as scrapeRapidAPI } from './rapidapi.js';
-import { extractProductData as openai } from './openai.js';
-// Truncate text to a maximum number of words
-const truncateToWords = (text: string, maxWords: number = 50): string => {
- if (!text) return "";
- const words = text.split(/\s+/).filter(w => w.length > 0);
- if (words.length <= maxWords) return text;
- return words.slice(0, maxWords).join(" ") + "...";
+// server/scrapers/apify.ts
+import { ApifyClient } from 'apify-client';
+import dotenv from 'dotenv';
+dotenv.config();
+
+const client = new ApifyClient({ token: process.env.APIFY_API_KEY });
+
+// Enforce 50-word limit
+const truncateDescription = (text: string, query: string): string => {
+ if (!text) return `A general listing for ${query}.`;
+ const words = text.split(/\s+/);
+ return words.length > 50 ? words.slice(0, 50).join(" ") + "..." : text;
 };
 
-export type ScrapedProduct = {
- title: string;
- brand?: string;
- description?: string;
- price?: number;
- category?: string;
- condition?: string;
- modelNumber?: string;
- material?: string;
- allegroAverage?: number;
- ebayAverage?: number;
- isExactMatch?: boolean;
-};
-
-// The structure that IdentificationResults and ProductDraft expect
-export type DraftForUI = {
- title: string;
- brand: string;
- price: string;
- description: string;
- category: string;
- condition: string;
- modelNumber: string;
- material: string;
- allegroAverage: string;
- ebayAverage: string;
- capturedImage: string;
- isExactMatch: boolean;
-};
-
-const normalizeResponse = (raw: any): ScrapedProduct => {
- const rawDescription = raw.description || "";
- return {
-   title: raw.title || "Unknown Product",
-   brand: raw.brand || "",
-   description: truncateToWords(rawDescription, 40),
-   price: typeof raw.price === 'number' ? raw.price : undefined,
-   category: raw.category || "General",
-   condition: raw.condition || "New",
-   modelNumber: raw.modelNumber || "",
-   material: raw.material || "",
-   allegroAverage: raw.allegroAverage,
-   ebayAverage: raw.ebayAverage,
-   isExactMatch: raw.isExactMatch !== false,
- };
-};
-
-export const fetchMasterProductData = async (query: string): Promise<ScrapedProduct> => {
- console.log(`🔍 Master Scraper started for: "${query}"`);
-
- const tasks = [
-   scrapeOxylabs(query).then(normalizeResponse),
-   scrapeApify(query).then(normalizeResponse),
-   scrapeRapidAPI(query).then(normalizeResponse),
- ];
-
+export const scrapeProduct = async (query: string): Promise<any> => {
  try {
-   // Returns the first successful response
-   const firstResult = await Promise.any(tasks);
-   console.log(`✅ Master Scraper succeeded: ${firstResult.title}`);
-   return firstResult;
- } catch (error) {
-   console.error('❌ All scrapers failed:', error);
+   const run = await client.actor("epctex/ebay-scraper").call({
+     search: query,
+     country: "US",
+     limit: 1,
+   }, { timeout: 30000 });
+
+   const { items } = await client.dataset(run.defaultDatasetId).listItems({ limit: 1 });
+
+   if (!items || items.length === 0) return getGeneralDescription(query);
+
+   const first = items[0] as any;
+
    return {
-     title: query || 'Manual Entry Required',
-     brand: '',
-     description: 'Product detected but details could not be auto-generated.',
-     price: undefined,
-     category: 'General',
-     condition: 'New',
-     isExactMatch: false,
+     title: first.title || query,
+     brand: first.brand || "",
+     description: truncateDescription(first.description || "", query),
+     price: parsePrice(first.price),
+     category: first.category || 'General',
+     condition: first.condition || 'New',
+     isExactMatch: true,
    };
+ } catch (error) {
+   console.error('❌ Apify Error:', error);
+   return getGeneralDescription(query);
  }
 };
 
-export const saveToDraftStorage = (product: ScrapedProduct, capturedImage: string = ""): DraftForUI => {
- const draft: DraftForUI = {
-   title: product.title,
-   brand: product.brand || '',
-   price: product.price?.toString() || '0.00',
-   description: product.description || '',
-   category: product.category || 'General',
-   condition: product.condition || 'New',
-   modelNumber: product.modelNumber || '',
-   material: product.material || '',
-   allegroAverage: product.allegroAverage?.toString() || '0.00',
-   ebayAverage: product.ebayAverage?.toString() || '0.00',
-   capturedImage: capturedImage,
-   isExactMatch: product.isExactMatch ?? true,
+function getGeneralDescription(query: string) {
+ return {
+   title: query,
+   brand: 'N/A',
+   description: `A general item matching the search criteria for "${query}". Please review the details manually.`,
+   price: undefined,
+   category: 'General',
+   condition: 'New',
+   isExactMatch: false,
  };
+}
 
- sessionStorage.setItem('pendingAnalysis', JSON.stringify(draft));
- console.log('💾 Data saved to sessionStorage', draft);
- return draft;
-};
+function parsePrice(price: any): number | undefined {
+ const str = String(price).replace(/[^0-9.]/g, '');
+ const parsed = parseFloat(str);
+ return isNaN(parsed) ? undefined : parsed;
+}

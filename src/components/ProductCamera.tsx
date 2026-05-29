@@ -1,7 +1,12 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { fetchMasterProductData, saveToDraftStorage } from './masterScraperBridge';
 
-const ProductCamera: React.FC = () => {
+interface ProductCameraProps {
+ onScrapeSuccess?: (result: any) => void;
+}
+
+const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
 const navigate = useNavigate();
 const videoRef = useRef<HTMLVideoElement>(null);
 const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -40,49 +45,93 @@ const resetCamera = () => {
   startCamera();
 };
 
+const sendImageToScraper = async (imageBase64: string, productTitle?: string) => {
+  // Convert base64 to a Blob so it can be sent as FormData
+  const response = await fetch(imageBase64);
+  const blob = await response.blob();
+ 
+  const formData = new FormData();
+  formData.append('image', blob, 'camera-capture.jpg');
+  formData.append('title', productTitle || "Camera Captured Product");
+ 
+  const res = await fetch('/api/identify', {
+    method: 'POST',
+    body: formData
+  });
+ 
+  if (!res.ok) {
+    throw new Error('Failed to process image with scraper');
+  }
+ 
+  return res.json();
+ };
+
 const identifyProduct = async () => {
   if (!capturedImage) return;
   setIsLoading(true);
   setError(null);
 
   try {
-    const res = await fetch(capturedImage);
-    const blob = await res.blob();
-    const formData = new FormData();
-    formData.append('image', blob, 'product.jpg');
+    const productQuery = prompt("Enter product name to search for:", "Apple Watch Series 8");
+    if (!productQuery) {
+      setError("Product name is required for search.");
+      return;
+    }
 
-    const response = await fetch('/api/identify', { method: 'POST', body: formData });
-    if (!response.ok) throw new Error('AI scraping engine identification failed.');
+    const scrapedData = await fetchMasterProductData(productQuery);
+    const draftData = await saveToDraftStorage(scrapedData);
 
-    const data = await response.json();
+    console.log("✅ Product identified and saved:", draftData);
 
-    // Preserving all fields returned from the backend scraper or providing safe fallbacks
-    const productData = {
-      capturedImage: data.capturedImage || capturedImage,
-      title: data.title || 'Identified Product Reference',
-      brand: data.brand || 'Detected Brand',
-      category: data.category || 'Watches',
-      condition: data.condition || 'New',
-      modelNumber: data.modelNumber || 'Detected Model',
-      material: data.material || 'Detected Material',
-      description: data.description || 'No product description found.',
-      price: data.recommendedPrice || '0.00',
-      allegroAverage: data.allegroAverage || '0.00',
-      ebayAverage: data.ebayAverage || '0.00'
-    };
+    const imageResult = await sendImageToScraper(capturedImage, productQuery);
+    console.log("✅ Camera image also sent to scraper:", imageResult);
 
-    // Save the full payload into memory
-    sessionStorage.setItem('pendingAnalysis', JSON.stringify(productData));
-
-    // Route to Step 2 (The Draft and Specifications page) instead of skipping to the end
     navigate('/product-draft');
   } catch (err) {
-    setError('Failed to query image parameters. Please retry.');
+    setError('Failed to identify product. Please try again.');
     console.error(err);
   } finally {
     setIsLoading(false);
   }
 };
+
+const directImageScrape = async () => {
+  if (!capturedImage) return;
+  setIsLoading(true);
+  setError(null);
+
+  try {
+    console.log("📸 Sending camera image directly to scraper...");
+    const result = await sendImageToScraper(capturedImage, "Live Camera Scan");
+    console.log("✅ Scraper result:", result);
+
+    if (result.draft) {
+      alert(`✅ Product scraped! Draft ID: ${result.draft.id}`);
+
+      if (onScrapeSuccess) {
+        onScrapeSuccess(result);
+      } else {
+        navigate('/product-draft');
+      }
+    }
+  } catch (err) {
+    setError('Failed to process image with scraper.');
+    console.error(err);
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+ // Automated flow triggers
+ useEffect(() => {
+  startCamera();
+}, []);
+
+useEffect(() => {
+  if (capturedImage) {
+    directImageScrape();
+  }
+}, [capturedImage]);
 
 return (
   <div className="max-w-2xl mx-auto p-6 bg-zinc-900 border border-zinc-800 rounded-lg text-white space-y-4">
@@ -107,12 +156,17 @@ return (
     ) : (
       <div className="space-y-4">
         <img src={capturedImage} alt="Captured preview" className="w-full rounded border border-zinc-700" />
-        <div className="flex gap-4">
-          <button onClick={resetCamera} className="flex-1 py-4 bg-zinc-800 rounded font-semibold hover:bg-zinc-700 transition-colors">
-            Retake
-          </button>
-          <button onClick={identifyProduct} disabled={isLoading} className="flex-1 py-4 bg-blue-600 rounded font-semibold hover:bg-blue-500 disabled:opacity-40 transition-colors">
-            {isLoading ? 'Identifying...' : 'Identify Product'}
+        <div className="flex flex-col gap-3">
+          <div className="flex gap-4">
+            <button onClick={resetCamera} className="flex-1 py-4 bg-zinc-800 rounded font-semibold hover:bg-zinc-700 transition-colors">
+              Retake
+            </button>
+            <button onClick={identifyProduct} disabled={isLoading} className="flex-1 py-4 bg-blue-600 rounded font-semibold hover:bg-blue-500 disabled:opacity-40 transition-colors">
+              {isLoading ? 'Identifying...' : 'Text Search'}
+            </button>
+          </div>
+          <button onClick={directImageScrape} disabled={isLoading} className="w-full py-4 bg-purple-600 rounded font-semibold hover:bg-purple-500 disabled:opacity-40 transition-colors">
+            {isLoading ? 'Scraping...' : '📸 Camera → Scraper'}
           </button>
         </div>
       </div>
