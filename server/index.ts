@@ -5,7 +5,8 @@ import { setupVite, serveStatic } from "./vite";
 import multer from "multer";
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
-import { fetchMasterProductData } from './scrapers/masterScraper';
+import { scrapeProduct as fetchMasterProductData } from './scrapers/masterScraper';
+
 import { productRoutes } from "./productsRoutes";
 
 dotenv.config();
