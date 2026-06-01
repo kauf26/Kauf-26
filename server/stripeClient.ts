@@ -1,41 +1,51 @@
 import 'dotenv/config';
 import Stripe from 'stripe';
 
-// 1. Get the key and check it immediately
-const stripeKey = process.env.STRIPE_SECRET_KEY;
-
-if (!stripeKey) {
- throw new Error("STRIPE_SECRET_KEY is missing from your .env file.");
-}
-
-// 2. Initialize with the key we just verified
-export const stripe = new Stripe(stripeKey, {
- apiVersion: '2025-01-27' as any,
-});
-
+let stripeInstance: Stripe | null = null;
 
 /**
-* Creates a "Per-Sale" Checkout Session for Kauf26.
-* Logic: Resellers pay a percentage fee after their 14-day trial.
-*/
+ * Returns a configured Stripe client. Initializes on first use so the server
+ * can boot when STRIPE_SECRET_KEY is temporarily missing (e.g. local scrape dev).
+ */
+export function getStripe(): Stripe {
+ if (!stripeInstance) {
+   const stripeKey = process.env.STRIPE_SECRET_KEY;
+   if (!stripeKey) {
+     throw new Error(
+       'STRIPE_SECRET_KEY is missing from your .env file. Add it to use Stripe checkout or webhooks.'
+     );
+   }
+   stripeInstance = new Stripe(stripeKey, {
+     apiVersion: '2025-01-27' as any,
+   });
+ }
+ return stripeInstance;
+}
+
+/** True when Stripe can be initialized without throwing. */
+export function isStripeConfigured(): boolean {
+ return Boolean(process.env.STRIPE_SECRET_KEY?.trim());
+}
+
+/**
+ * Creates a "Per-Sale" Checkout Session for Kauf26.
+ * Logic: Resellers pay a percentage fee after their 14-day trial.
+ */
 export async function createPerSaleCheckout(
  userId: string,
  itemSalePrice: number,
  userSalesCount: number
 ) {
- // --- VOLUME PERCENTAGE LOGIC ---
- // Base commission rate is 3% as per your updated revenue model
  let feePercentage = 0.030;
 
- // Volume discounts for power resellers
  if (userSalesCount >= 250) {
-   feePercentage = 0.020; // Drops to 2% for high volume
+   feePercentage = 0.020;
  } else if (userSalesCount >= 50) {
-   feePercentage = 0.025; // Drops to 2.5% for mid tier
+   feePercentage = 0.025;
  }
 
- // Calculate fee in CENTS (Stripe requires integers)
  const calculatedFeeCents = Math.round(itemSalePrice * feePercentage * 100);
+ const stripe = getStripe();
 
  try {
    const session = await stripe.checkout.sessions.create({

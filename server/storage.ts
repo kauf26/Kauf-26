@@ -1,10 +1,10 @@
-import { users, products, type User, type InsertUser, type Product, type InsertProduct } from "@shared/schema";
-import { db, pool } from "./db";
+import { users, products, type User, type InsertUser, type InsertProduct, type Product } from "@shared/schema";
+import { db, pool } from "./db.js";
 import * as drizzle from "drizzle-orm";
 const eq = (drizzle as any).eq;
 import session from "express-session";
 import connectPg from "connect-pg-simple";
-import { ConfigService } from "./remoteConfig";
+import { ConfigService } from "./remoteConfig.js";
 
 const PostgresSessionStore = connectPg(session);
 
@@ -25,11 +25,11 @@ export class DatabaseStorage implements IStorage {
  sessionStore: session.Store;
 
  constructor() {
-   this.sessionStore = new PostgresSessionStore({
-     pool,
-     createTableIfMissing: true,
-   });
- }
+  this.sessionStore = new PostgresSessionStore({
+    pool,
+    createTableIfMissing: true,
+  });
+}
 
  async getUser(id: number): Promise<User | undefined> {
    const [user] = await db.select().from(users).where(eq(users.id, id));

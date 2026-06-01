@@ -1,4 +1,4 @@
-import * as stripeClient from './stripeClient';
+import { getStripe } from './stripeClient';
 import { storage } from './storage';
 import { Stripe } from 'stripe';
 
@@ -20,12 +20,7 @@ export class WebhookHandlers {
     throw new Error('STRIPE WEBHOOK ERROR: Missing STRIPE_WEBHOOK_SECRET');
    }
    
-   // Access the initialized stripe instance.
-   // If your stripeClient.ts does: 'export const stripe = new Stripe(...)'
-   // Then you need to access the .stripe property of the imported module.
-   const stripeInstance = (stripeClient as any).stripe || stripeClient;
-   
-   return stripeInstance.webhooks.constructEvent(
+   return getStripe().webhooks.constructEvent(
     payload,
     signature,
     secret
