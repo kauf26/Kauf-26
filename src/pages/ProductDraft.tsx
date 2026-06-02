@@ -45,24 +45,26 @@ useEffect(() => {
   if (!saved) return;
   try {
     const data = JSON.parse(saved);
-    setProduct({
-      isExactMatch: data.isExactMatch ?? true,
-      title: data.title || DEFAULT_PRODUCT.title,
-      brand: data.brand || DEFAULT_PRODUCT.brand,
-      description: data.description || DEFAULT_PRODUCT.description,
-      price: data.price || DEFAULT_PRODUCT.price,
-      category: data.category || DEFAULT_PRODUCT.category,
-      condition: data.condition || DEFAULT_PRODUCT.condition,
-      modelNumber: data.modelNumber || DEFAULT_PRODUCT.modelNumber,
-      material: data.material || DEFAULT_PRODUCT.material,
-      allegroAverage: data.allegroAverage || DEFAULT_PRODUCT.allegroAverage,
-      ebayAverage: data.ebayAverage || DEFAULT_PRODUCT.ebayAverage,
-      capturedImage: data.capturedImage || ""
-    });
+    setProduct(p => ({
+      ...p,
+      isExactMatch: data.isExactMatch ?? p.isExactMatch,
+      title: data.modelName || data.title || p.title,
+      brand: data.brand || p.brand,
+      description: data.aiDescription || data.description || p.description,
+      price: String(data.recommendedPrice || data.price || p.price),
+      category: data.category || p.category,
+      condition: data.condition || p.condition,
+      modelNumber: data.refNumber || data.modelNumber || p.modelNumber,
+      material: data.material || p.material,
+      allegroAverage: String(data.allegroAvg || data.allegroAverage || p.allegroAverage),
+      ebayAverage: String(data.ebayAvg || data.ebayAverage || p.ebayAverage),
+      capturedImage: data.capturedImage || p.capturedImage
+    }));
   } catch (e) {
     console.error("Error parsing product draft data:", e);
   }
 }, []);
+
 
 const isProhibited = PROHIBITED_KEYWORDS.some(kw =>
   product.title.toLowerCase().includes(kw) || product.category.toLowerCase().includes(kw)

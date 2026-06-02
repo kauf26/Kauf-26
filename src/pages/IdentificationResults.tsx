@@ -1,6 +1,7 @@
 import React from "react";
 import { useLocation as useWouterLocation } from "wouter";
 import { useLocation as useRouterLocation } from "react-router-dom";
+import { savePendingAnalysis } from "@/lib/pendingAnalysis";
 
 interface IdentificationResultsProps {
   productData: {
@@ -20,14 +21,12 @@ interface IdentificationResultsProps {
   };
 }
 
-// Presentational component (no navigation logic inside)
 const IdentificationResults: React.FC<IdentificationResultsProps> = ({
   productData,
   marketPrices,
 }) => {
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8 pb-24 text-gray-900">
-      {/* Top Section: Visual Match */}
       <section className="mb-8 rounded-2xl bg-white p-6 shadow-sm border border-gray-100">
         <div className="flex flex-col md:flex-row gap-6 items-center">
           <div className="w-full md:w-1/3 aspect-square bg-gray-200 rounded-xl overflow-hidden">
@@ -48,7 +47,6 @@ const IdentificationResults: React.FC<IdentificationResultsProps> = ({
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Middle Section: Specs & AI Description */}
         <section className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
           <h2 className="text-xl font-semibold mb-4 border-b pb-2 text-blue-600">Technical Specs</h2>
           <div className="grid grid-cols-2 gap-4 text-sm">
@@ -59,14 +57,10 @@ const IdentificationResults: React.FC<IdentificationResultsProps> = ({
             <div className="text-gray-500">Material</div>
             <div className="font-medium text-right">{productData.material}</div>
           </div>
-
           <h2 className="text-xl font-semibold mt-8 mb-4 border-b pb-2 text-blue-600">Market Description</h2>
-          <p className="text-gray-700 leading-relaxed italic text-sm">
-            "{productData.aiDescription}"
-          </p>
+          <p className="text-gray-700 leading-relaxed italic text-sm">"{productData.aiDescription}"</p>
         </section>
 
-        {/* Right Section: Marketplace Intelligence */}
         <section className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
           <h2 className="text-xl font-semibold mb-4 border-b pb-2 text-blue-600">Marketplace Values</h2>
           <div className="space-y-4">
@@ -78,7 +72,6 @@ const IdentificationResults: React.FC<IdentificationResultsProps> = ({
               <span className="font-bold text-orange-800">eBay Average</span>
               <span className="text-xl font-black text-orange-900">${marketPrices.ebayAvg}</span>
             </div>
-
             <div className="mt-8 p-4 bg-gray-900 text-white rounded-xl text-center">
               <p className="text-xs uppercase tracking-widest text-gray-400">Suggested Listing Price</p>
               <p className="text-4xl font-black mt-1">${marketPrices.recommendedPrice}</p>
@@ -90,7 +83,6 @@ const IdentificationResults: React.FC<IdentificationResultsProps> = ({
   );
 };
 
-// Helper to map scraper payload to props
 type WelcomeScrapedPayload = {
   title?: string;
   description?: string;
@@ -117,9 +109,7 @@ const DEFAULT_MARKET_PRICES: IdentificationResultsProps["marketPrices"] = {
   recommendedPrice: 0,
 };
 
-function mapWelcomeScrapedToProps(
-  scraped: WelcomeScrapedPayload
-): IdentificationResultsProps {
+function mapWelcomeScrapedToProps(scraped: WelcomeScrapedPayload): IdentificationResultsProps {
   const priceNum = Number(scraped.price) || 0;
   return {
     productData: {
@@ -140,9 +130,7 @@ function mapWelcomeScrapedToProps(
   };
 }
 
-function propsFromRouterState(
-  state: unknown
-): IdentificationResultsProps | null {
+function propsFromRouterState(state: unknown): IdentificationResultsProps | null {
   if (!state || typeof state !== "object") return null;
   const s = state as Record<string, unknown>;
 
@@ -150,10 +138,7 @@ function propsFromRouterState(
     const pd = s.productData as Record<string, unknown>;
     if ("capturedImage" in pd && typeof pd.capturedImage === "string") {
       return {
-        productData: {
-          ...DEFAULT_PRODUCT_DATA,
-          ...pd,
-        } as IdentificationResultsProps["productData"],
+        productData: { ...DEFAULT_PRODUCT_DATA, ...pd } as IdentificationResultsProps["productData"],
         marketPrices: {
           ...DEFAULT_MARKET_PRICES,
           ...(typeof s.marketPrices === "object" && s.marketPrices !== null
@@ -174,25 +159,20 @@ function propsFromRouterState(
       },
     };
   }
-
   return null;
 }
 
-// Standalone route component with proper navigation
 export const IdentificationResultsPage: React.FC = () => {
   const { state } = useRouterLocation();
   const [, setLocation] = useWouterLocation();
 
-  // 1. Try to read from router state
   let resolved = propsFromRouterState(state);
 
-  // 2. Backup: look in sessionStorage (key used by home.tsx)
   if (!resolved) {
     const backupData = sessionStorage.getItem('pendingAnalysis');
     if (backupData) {
       try {
         const parsed = JSON.parse(backupData);
-        // Adapt the shape from your /api/products/analyze response
         resolved = {
           productData: {
             capturedImage: parsed.imageUrl || "",
@@ -210,29 +190,35 @@ export const IdentificationResultsPage: React.FC = () => {
             recommendedPrice: parsed.suggestedPrice || 0
           }
         };
-      } catch (e) {
-        console.error("Error parsing sessionStorage backup:", e);
-      }
+      } catch (e) { console.error("Error parsing session backup:", e); }
     }
   }
 
-  // 3. Absolute fallback
   const finalProps = resolved ?? {
     productData: DEFAULT_PRODUCT_DATA,
     marketPrices: DEFAULT_MARKET_PRICES,
   };
 
-  // Handler to move to draft page
-  const handleContinue = () => {
-    // Store combined data for the draft page using a consistent key
-    const draftPayload = {
-      ...finalProps.productData,
-      ...finalProps.marketPrices,
-      timestamp: new Date().toISOString()
-    };
-    sessionStorage.setItem('pendingAnalysis', JSON.stringify(draftPayload));
-    // Use wouter navigation, NOT window.location.hash
-    setLocation('/product-draft');
+  const handleContinue = async () => {
+    try {
+      const response = await fetch("/api/catalog/scrape", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: finalProps.productData.modelName })
+      });
+      const scrapedData = response.ok ? await response.json() : {};
+      savePendingAnalysis({
+        ...finalProps.productData,
+        ...finalProps.marketPrices,
+        ...scrapedData,
+        timestamp: new Date().toISOString()
+      });
+      setLocation("/product-draft");
+    } catch (error) {
+      console.error("Scrape failed:", error);
+      savePendingAnalysis({ ...finalProps.productData, ...finalProps.marketPrices });
+      setLocation("/product-draft");
+    }
   };
 
   return (
@@ -241,7 +227,6 @@ export const IdentificationResultsPage: React.FC = () => {
         productData={finalProps.productData}
         marketPrices={finalProps.marketPrices}
       />
-      {/* Fixed footer button – now using wouter navigation */}
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 flex justify-center z-50">
         <button
           onClick={handleContinue}
@@ -254,4 +239,4 @@ export const IdentificationResultsPage: React.FC = () => {
   );
 };
 
-export default IdentificationResults;
+export default IdentificationResultsPage;

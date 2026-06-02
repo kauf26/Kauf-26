@@ -3,24 +3,24 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 
 export default defineConfig({
- plugins: [react()],
- resolve: {
-   alias: {
-     "@": path.resolve(__dirname, "./src"),
-     "@shared": path.resolve(__dirname, "./shared"),
-   },
- },
- base: '/',
- // ADD THIS SERVER BLOCK HERE
- server: {
-   port: 5173,
-   strictPort: true,
-   proxy: {
-     '/api': {
-       target: 'http://localhost:3000',
-       changeOrigin: true,
-       secure: false,
-     },
-   },
- },
+  plugins: [react()],
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "./src"),
+      "@shared": path.resolve(__dirname, "./shared"),
+    },
+  },
+  base: '/',
+  server: {
+    port: 5173,
+    strictPort: true,
+    proxy: {
+      // This proxies any request starting with /api to your backend engine
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
+  },
 });

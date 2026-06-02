@@ -3,16 +3,18 @@
   "version": "1.0.0",
   "license": "MIT",
   "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "server": "tsx watch server/index.ts",
-    "build": "tsc && vite build",
-    "start": "node dist/index.js",
-    "db:push": "drizzle-kit push",
-    "lint": "eslint .",
-    "test": "vitest",
-    "preview": "vite preview"
-  },
+"scripts": {
+  "dev": "vite",
+  "server": "tsx watch server/index.ts",
+  "dev:all": "concurrently \"npm run dev\" \"npm run server\"",
+  "build": "tsc && vite build",
+  "start": "node dist/index.js",
+  "db:push": "drizzle-kit push",
+  "lint": "eslint .",
+  "test": "vitest",
+  "preview": "vite preview"
+},
+
   "dependencies": {
     "@ai-sdk/openai": "^1.0.0",
     "@auth/drizzle-adapter": "^1.1.0",
@@ -125,6 +127,7 @@
     "@types/ws": "^8.5.13",
     "@vitejs/plugin-react": "^5.2.0",
     "autoprefixer": "^10.4.21",
+    "concurrently": "^10.0.3",
     "drizzle-kit": "^0.31.4",
     "esbuild": "^0.25.12",
     "postcss": "^8.5.14",
