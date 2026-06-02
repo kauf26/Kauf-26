@@ -1,15 +1,13 @@
+import "dotenv/config";
 import express, { type Request, Response } from "express";
 import { createServer } from "http";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic } from "./vite";
 import multer from "multer";
-import OpenAI from 'openai';
-import dotenv from 'dotenv';
-import { scrapeProduct as fetchMasterProductData } from './scrapers/masterScraper';
-
+import OpenAI from "openai";
+import { scrapeProduct as fetchMasterProductData } from "./scrapers/masterScraper";
 import { productRoutes } from "./productsRoutes";
 
-dotenv.config();
 
 interface ScrapedProduct {
  brand?: string;
@@ -150,10 +148,14 @@ const server = createServer(app);
  server.listen(PORT, "0.0.0.0", () => {
    console.log(`🚀 Unified Kauf26 engine running on port ${PORT}`);
    console.log(`📋 API endpoints available:`);
-   console.log(`   - POST /api/identify (upload image → scrape → save draft)`);
-   console.log(`   - GET /api/drafts (view all drafts)`);
-   console.log(`   - POST /api/drafts (save draft manually)`);
-   console.log(`   - GET /api/drafts/ready-for-posting (view ready drafts)`);
-   console.log(`   - POST /api/drafts/:id/post-to-marketplaces (post to marketplaces)`);
+   console.log(`   - POST /api/identify (multipart image → OpenAI → scrape → draft)`);
+   console.log(`   - POST /api/catalog/scrape (JSON { query } → masterScraper)`);
+   console.log(`   - GET  /api/health`);
+   console.log(`   - GET/POST /api/drafts (productsRoutes → PostgreSQL)`);
+   console.log(`   - GET  /api/drafts/ready-for-posting`);
+   console.log(`   - POST /api/drafts/:id/post-to-marketplaces`);
+   console.log(`   - POST /api/products/save`);
+   console.log(`   - POST /api/create-checkout-session`);
+   console.log(`   - POST /api/create-hold`);
  });
 })();

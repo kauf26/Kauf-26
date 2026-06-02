@@ -1,10 +1,9 @@
-// No more failing imports here!
-
-export const fetchMasterProductData = async (imageData: string) => {
+/** Text search query (product name/model) — matches POST /api/catalog/scrape in server/routes.ts */
+export const fetchMasterProductData = async (query: string) => {
     const response = await fetch('/api/catalog/scrape', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ imageData })
+      body: JSON.stringify({ query }),
     });
    
     if (!response.ok) {
