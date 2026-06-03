@@ -113,25 +113,10 @@ type IdentifyApiResponse = {
   priceReliable?: boolean;
 };
 
-function shouldPromptBeforeDraft(result: IdentifyApiResponse): boolean {
-  if (result.isExactMatch === true) return false;
-
-  const matchConf =
-    result.matchConfidence ?? result.confidence ?? result.product?.matchConfidence;
-  if (matchConf === 'low') return true;
-  if (result.timedOut === true) return true;
-
-  const brand = String(result.product?.brand ?? '').trim();
-  if (!brand) return true;
-
-  const price = parseFloat(String(result.product?.price ?? 0)) || 0;
-  const reliable =
-    result.priceReliable === true || result.product?.priceReliable === true;
-  if (!reliable && price > 0 && price < 100) return true;
-
-  if (result.verificationWarning) return true;
-
-  return false;
+function isExactMatchResult(result: IdentifyApiResponse): boolean {
+  return (
+    result.isExactMatch === true || result.product?.isExactMatch === true
+  );
 }
 
 function persistPendingAnalysisFromIdentify(result: IdentifyApiResponse) {
@@ -144,6 +129,7 @@ function persistPendingAnalysisFromIdentify(result: IdentifyApiResponse) {
     p.matchType ??
     ((result.isExactMatch ?? p.isExactMatch) ? 'exact' : 'generic');
   const isExactMatch = matchType === 'exact';
+  const warning = result.verificationWarning?.trim();
   saveListingSession({
     title: p.title ?? '',
     description: p.description ?? '',
@@ -179,6 +165,11 @@ function persistPendingAnalysisFromIdentify(result: IdentifyApiResponse) {
   if (result.draftId != null) {
     sessionStorage.setItem('identifyDraftId', String(result.draftId));
   }
+  if (warning) {
+    sessionStorage.setItem('identifyVerificationWarning', warning);
+  } else {
+    sessionStorage.removeItem('identifyVerificationWarning');
+  }
 }
 
 interface ProductCameraProps {
@@ -194,9 +185,9 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pendingBestGuess, setPendingBestGuess] =
-    useState<IdentifyApiResponse | null>(null);
-  const [showNoExactMatchPrompt, setShowNoExactMatchPrompt] = useState(false);
+  /** 0 = first identify, 1 = second (max 2 attempts) */
+  const [attemptCount, setAttemptCount] = useState<0 | 1>(0);
+  const [showSecondSearchPrompt, setShowSecondSearchPrompt] = useState(false);
 
   const stopStream = () => {
     const active = streamRef.current;
@@ -222,11 +213,15 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
     }
   };
 
-  const sendImageToScraper = async (imageDataUrl: string) => {
+  const sendImageToScraper = async (
+    imageDataUrl: string,
+    attempt: 0 | 1
+  ) => {
     const blob = await dataUrlToBlob(imageDataUrl);
 
     const formData = new FormData();
     formData.append('image', blob, 'camera-capture.jpg');
+    formData.append('attempt', String(attempt));
 
     const res = await fetch('/api/identify', {
       method: 'POST',
@@ -245,32 +240,49 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
     return res.json() as Promise<IdentifyApiResponse>;
   };
 
+  const goToDraft = (result: IdentifyApiResponse) => {
+    persistPendingAnalysisFromIdentify(result);
+    if (result.draftId != null) {
+      console.log('Draft saved with ID:', result.draftId);
+    }
+    onScrapeSuccess?.(result);
+    navigate('/product-draft');
+  };
+
   const identify = async () => {
     if (!capturedImage) return;
     setIsLoading(true);
     setError(null);
-    setShowNoExactMatchPrompt(false);
-    setPendingBestGuess(null);
+    setShowSecondSearchPrompt(false);
 
     try {
-      console.log('📸 Sending camera image to /api/identify...');
-      const result = await sendImageToScraper(capturedImage);
+      const attempt = attemptCount;
+      if (attempt === 1) {
+        console.log(
+          '[Identify] Second attempt – allowing fallback to generic'
+        );
+      }
+      console.log(
+        `📸 Sending camera image to /api/identify (attempt ${attempt + 1}/2)...`
+      );
+      const result = await sendImageToScraper(capturedImage, attempt);
       console.log('✅ Identify result:', result);
 
-      if (shouldPromptBeforeDraft(result)) {
-        setPendingBestGuess(result);
-        setShowNoExactMatchPrompt(true);
+      if (isExactMatchResult(result)) {
+        goToDraft(result);
         return;
       }
 
-      persistPendingAnalysisFromIdentify(result);
-
-      if (result.draftId != null) {
-        console.log('Draft saved with ID:', result.draftId);
+      if (attempt === 0) {
+        setShowSecondSearchPrompt(true);
+        return;
       }
 
-      onScrapeSuccess?.(result);
-      navigate('/product-draft');
+      goToDraft({
+        ...result,
+        verificationWarning:
+          'No exact match found – using best guess. You can edit before posting.',
+      });
     } catch (err) {
       setError(
         err instanceof Error
@@ -283,26 +295,18 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
     }
   };
 
-  const continueWithBestGuess = () => {
-    if (!pendingBestGuess?.product) return;
-    persistPendingAnalysisFromIdentify(pendingBestGuess);
-    if (pendingBestGuess.draftId != null) {
-      sessionStorage.setItem(
-        'identifyDraftId',
-        String(pendingBestGuess.draftId)
-      );
-    }
-    onScrapeSuccess?.(pendingBestGuess);
-    setShowNoExactMatchPrompt(false);
-    setPendingBestGuess(null);
-    navigate('/product-draft');
+  const takeAnotherPhoto = () => {
+    setAttemptCount(1);
+    setShowSecondSearchPrompt(false);
+    setCapturedImage(null);
+    setError(null);
+    startCamera();
   };
 
   const capturePhoto = async () => {
     if (!videoRef.current || !canvasRef.current || isLoading) return;
     setError(null);
-    setShowNoExactMatchPrompt(false);
-    setPendingBestGuess(null);
+    setShowSecondSearchPrompt(false);
 
     try {
       captureVideoFrame(videoRef.current, canvasRef.current);
@@ -317,10 +321,10 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
   };
 
   const retake = () => {
+    setAttemptCount(0);
     setCapturedImage(null);
     setError(null);
-    setShowNoExactMatchPrompt(false);
-    setPendingBestGuess(null);
+    setShowSecondSearchPrompt(false);
     startCamera();
   };
 
@@ -373,32 +377,19 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
             className="w-full rounded border border-zinc-700"
           />
 
-          {showNoExactMatchPrompt && (
+          {showSecondSearchPrompt && (
             <div className="rounded border border-amber-800/60 bg-amber-950/30 p-4 space-y-3">
               <p className="text-sm text-amber-200/90">
-                We couldn&apos;t find an exact match for this product. Please
-                retake the photo with better lighting or try again.
+                We&apos;re having a hard time finding this product. Please take
+                another photo to allow a second search.
               </p>
-              <p className="text-xs text-amber-400/80">
-                Continuing with our best guess may be inaccurate (wrong brand or
-                price).
-              </p>
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={retake}
-                  className="flex-1 py-3 bg-zinc-800 rounded font-semibold hover:bg-zinc-700 transition-colors"
-                >
-                  Retake photo
-                </button>
-                <button
-                  type="button"
-                  onClick={continueWithBestGuess}
-                  className="flex-1 py-3 bg-amber-700 rounded font-semibold hover:bg-amber-600 transition-colors"
-                >
-                  Continue with best guess
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={takeAnotherPhoto}
+                className="w-full py-3 bg-blue-600 rounded font-semibold hover:bg-blue-500 transition-colors"
+              >
+                Take another photo
+              </button>
             </div>
           )}
 
@@ -409,7 +400,7 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
             </p>
           )}
 
-          {!showNoExactMatchPrompt && (
+          {!showSecondSearchPrompt && (
             <div className="flex gap-4">
               <button
                 onClick={retake}

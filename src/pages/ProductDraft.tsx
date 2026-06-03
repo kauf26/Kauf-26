@@ -113,8 +113,14 @@ const ProductDraft: React.FC = () => {
 const [, setLocation] = useLocation();
 const { toast } = useToast();
 const [product, setProduct] = useState<ProductDraftState>(DEFAULT_PRODUCT);
+const [verificationWarning, setVerificationWarning] = useState<string | null>(
+  null
+);
 
 useEffect(() => {
+  const warning = sessionStorage.getItem("identifyVerificationWarning");
+  setVerificationWarning(warning?.trim() || null);
+
   const saved = sessionStorage.getItem("pendingAnalysis");
   if (!saved) return;
 
@@ -223,6 +229,14 @@ const update = (field: keyof ProductDraftState, val: string) => {
 
 return (
   <div className="max-w-3xl mx-auto p-6 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-100 space-y-6 my-6">
+    {verificationWarning && (
+      <div
+        className="rounded-lg border border-amber-700/50 bg-amber-950/40 px-4 py-3"
+        role="status"
+      >
+        <p className="text-sm text-amber-200/90">{verificationWarning}</p>
+      </div>
+    )}
     {product.matchType === "exact" ? (
       <div
         className="rounded-lg border border-emerald-700/50 bg-emerald-950/40 px-4 py-3 flex items-center gap-2"

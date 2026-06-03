@@ -439,13 +439,25 @@ app.post(
   upload.single("image"),
   async (req: Request, res: Response) => {
  const identifyStart = Date.now();
+ const identifyAttempt = Math.min(
+   1,
+   Math.max(0, Number((req.body as { attempt?: string })?.attempt ?? 0))
+ );
+ if (identifyAttempt >= 1) {
+   console.log("[Identify] Second attempt – allowing fallback to generic");
+ }
  const logStep = (label: string, since: number) => {
    console.log(`[Identify] ${label}: ${Date.now() - since}ms`);
    return Date.now();
  };
  let step = identifyStart;
  try {
-   console.log("📸 [1/5] Image received. File size:", req.file?.size);
+   console.log(
+     "📸 [1/5] Image received. File size:",
+     req.file?.size,
+     "attempt:",
+     identifyAttempt
+   );
 
    if (!req.file) {
      console.log("❌ No file in request");
