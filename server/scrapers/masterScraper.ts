@@ -3,8 +3,9 @@ import {
   inferPriceFromDescription,
 } from "./openai";
 import { scrapeProduct as scrapeApify } from "./apify";
-import { scrapeProduct as scrapeOxylabs } from "./oxylabs";
-import { scrapeProduct as scrapeRapidAPI } from "./rapidapi";
+// Temporarily disabled — placeholders without valid API keys pollute results
+// import { scrapeProduct as scrapeOxylabs } from "./oxylabs";
+// import { scrapeProduct as scrapeRapidAPI } from "./rapidapi";
 import type { VisionMatchContext } from "./listingUtils";
 import dotenv from "dotenv";
 dotenv.config();
@@ -145,7 +146,12 @@ export const scrapeProduct = async (
   console.log(`[MasterScraper] Initiating search for: ${query}`);
   const vision = options?.vision;
 
-  const scrapers = [scrapeApify, scrapeOxylabs, scrapeRapidAPI];
+  // Only Apify until Oxylabs/RapidAPI keys are configured
+  const scrapers = [
+    scrapeApify,
+    // scrapeOxylabs,
+    // scrapeRapidAPI,
+  ];
   const results = await Promise.allSettled(
     scrapers.map((s) => s(query, vision))
   );

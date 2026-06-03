@@ -32,25 +32,16 @@ function getActorId(): string {
   return id;
 }
 
-/**
- * Maps our search intent to the E-commerce Scraping Tool input schema.
- * @see https://apify.com/apify/e-commerce-scraping-tool/input-schema
- */
+/** Actor input for apify/e-commerce-scraping-tool */
 function buildActorInput(query: string): Record<string, unknown> {
-  const countryCode = (process.env.APIFY_COUNTRY_CODE ?? "us").toLowerCase();
-
   return {
-    searchEngineKeyword: query,
-    SearchEngineSearchKeyword: query,
-    countryCode,
-    scrapeProductsFromSearchEngine: true,
-    scrapeModeSearchEngine: "Products",
-    maxSearchEngineResults: SCRAPE_LISTING_LIMIT,
-    maxSearchEngineProducts: SCRAPE_LISTING_LIMIT,
-    additionalPropertiesSearchEngine: true,
-    scrapeMode: "AUTO",
+    search: query,
+    limit: SCRAPE_LISTING_LIMIT,
+    scrapeMode: "auto",
   };
 }
+
+const LOG_SAMPLE_ITEMS = 3;
 
 function extractBrand(raw: Record<string, unknown>): string {
   const brand = raw.brand;
@@ -151,17 +142,33 @@ export const scrapeProduct = async (
     }
 
     const input = buildActorInput(query);
-    console.log(
-      `[Apify] Running ${actorId} for "${query}" (limit ${SCRAPE_LISTING_LIMIT})`
-    );
+    console.log(`[Apify] Actor: ${actorId}`);
+    console.log("[Apify] Input sent to actor:", JSON.stringify(input, null, 2));
 
     const run = await client.actor(actorId).call(input, {
       waitSecs: RUN_TIMEOUT_SECS,
     });
 
+    console.log("[Apify] Run finished:", {
+      id: run.id,
+      status: run.status,
+      defaultDatasetId: run.defaultDatasetId,
+    });
+
     const { items: datasetItems } = await client
       .dataset(run.defaultDatasetId)
       .listItems({ limit: SCRAPE_LISTING_LIMIT });
+
+    console.log(
+      `[Apify] Dataset item count: ${datasetItems?.length ?? 0}`
+    );
+    if (datasetItems?.length) {
+      const sampleN = Math.min(LOG_SAMPLE_ITEMS, datasetItems.length);
+      console.log(
+        `[Apify] Raw dataset items (first ${sampleN}):`,
+        JSON.stringify(datasetItems.slice(0, LOG_SAMPLE_ITEMS), null, 2)
+      );
+    }
 
     let runDetail: Record<string, unknown> | null = null;
     try {
@@ -174,9 +181,26 @@ export const scrapeProduct = async (
     }
 
     const rawItems = collectRawItems(datasetItems ?? [], runDetail);
+    console.log(`[Apify] Collected raw item count: ${rawItems.length}`);
+    if (rawItems.length > 0) {
+      const rawSampleN = Math.min(LOG_SAMPLE_ITEMS, rawItems.length);
+      console.log(
+        `[Apify] Raw items before normalization (first ${rawSampleN}):`,
+        JSON.stringify(rawItems.slice(0, LOG_SAMPLE_ITEMS), null, 2)
+      );
+    }
+
     const listings = rawItems
       .map(normalizeApifyItem)
       .filter((row) => (row.title ?? "").length > 0);
+
+    if (listings.length > 0) {
+      const normSampleN = Math.min(LOG_SAMPLE_ITEMS, listings.length);
+      console.log(
+        `[Apify] Normalized listings before aggregation (first ${normSampleN}):`,
+        JSON.stringify(listings.slice(0, LOG_SAMPLE_ITEMS), null, 2)
+      );
+    }
 
     if (listings.length === 0) {
       console.warn("[Apify] No parseable items — falling back to generic");
@@ -188,6 +212,10 @@ export const scrapeProduct = async (
     );
 
     const aggregated = aggregateListings(listings, query, context);
+    console.log(
+      "[Apify] Aggregated result:",
+      JSON.stringify(aggregated, null, 2)
+    );
     if (!aggregated) return getGeneralDescription(query);
 
     return {
