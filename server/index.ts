@@ -52,34 +52,46 @@ type ScrapedListing = ScrapedProduct & {
 const VISION_IDENTIFY_PROMPT = `You are a product identification expert analyzing a product photo for a resale listing.
 
 CRITICAL:
-- Identify ONLY the main physical product in focus (phone, watch, shoes, bag, etc.).
-- IGNORE text on stickers, labels, packaging, posters, or background objects.
-- Do NOT use incidental text (band names, slogans, unrelated brands) as the product title.
-- Use a specific model name in title (e.g. "iPhone 12 Pro"), NOT generic phrases like "Smartphone with Orange Case".
+- Identify ONLY the main physical product in focus (hat, shirt, phone, watch, shoes, bag, etc.).
+- IGNORE background clutter, posters, and text not printed on the product itself.
+- USE text/logos printed ON the product (bar names, sports teams, brand marks) for brand and title when relevant.
+- Use a specific descriptive title (e.g. "iPhone 12 Pro", "The Shack Baseball Cap"), NOT vague phrases like "Smartphone with Orange Case".
 
 Return ONLY valid JSON:
 {
-  "title": "specific product name (e.g. iPhone 12 Pro, Samsung Galaxy S21)",
-  "brand": "brand if visible or reasonably inferred, else empty string",
-  "category": "best marketplace category for this item (e.g. Electronics, Shoes, Cameras, Clothing — any accurate label)",
+  "title": "specific product name",
+  "brand": "brand or venue/team name from product text if visible, else empty string",
+  "category": "best marketplace category (e.g. Electronics, Clothing, Accessories, Shoes, Watches)",
   "condition": "one of: New, Used, Like New",
-  "price": estimated USD resale price as a number; use 0 only if truly unknown,
-  "description": "1-2 sentences describing only the main product, include brand/model if known"
+  "price": estimated USD resale price as a number; use 0 if unknown,
+  "description": "1-2 sentences describing the product"
 }
 
 Rules:
-- Any phone-like device (smartphone, iPhone, Android, Galaxy, Pixel, cellphone) → category MUST be "Electronics", never "Watches".
+- Phones/smartphones/tablets → category "Electronics".
+- Hats, caps, beanies, shirts, jackets, pants → category "Clothing" (caps may also be "Accessories" if more accurate).
+- For hats/caps with visible venue or team text: put that text in brand (e.g. "The Shack") and title (e.g. "The Shack Baseball Cap").
 - Wristwatches only → "Watches".
-- Be specific in title; never name the product after sticker or background text.
+- Extract readable product text (bar name, team, logo) into brand/title when it identifies the item.
 
-Example output for a phone photo:
+Example — phone:
 {
   "title": "iPhone 12",
   "brand": "Apple",
   "category": "Electronics",
   "condition": "Used",
   "price": 299.99,
-  "description": "Apple iPhone 12 smartphone in used condition with orange case."
+  "description": "Apple iPhone 12 smartphone in used condition."
+}
+
+Example — baseball cap with bar logo "The Shack":
+{
+  "title": "The Shack Baseball Cap",
+  "brand": "The Shack",
+  "category": "Clothing",
+  "condition": "Used",
+  "price": 0,
+  "description": "Baseball cap with The Shack bar logo on the front."
 }`;
 
 function parseVisionResponse(content: string): VisionProduct | null {
@@ -89,13 +101,22 @@ function parseVisionResponse(content: string): VisionProduct | null {
   try {
     const parsed = JSON.parse(jsonMatch[0]) as Partial<VisionProduct>;
     if (!parsed.title || typeof parsed.title !== "string") return null;
+    const title = parsed.title.trim();
+    const lowerTitle = title.toLowerCase();
     const categoryFromVision = String(parsed.category ?? "").trim();
+    let category = PHONE_TITLE_REGEX.test(title)
+      ? "Electronics"
+      : coalesceCategory(categoryFromVision);
+    if (
+      /\b(cap|hat|beanie|baseball cap)\b/i.test(lowerTitle) &&
+      (!categoryFromVision || category === "Other")
+    ) {
+      category = "Clothing";
+    }
     return {
-      title: parsed.title.trim(),
+      title,
       brand: parsed.brand?.trim() || "",
-      category: PHONE_TITLE_REGEX.test(parsed.title)
-        ? "Electronics"
-        : coalesceCategory(categoryFromVision),
+      category,
       condition: parsed.condition || "Used",
       price: parsed.price ?? 0,
       description: parsed.description?.trim() || "",
@@ -199,10 +220,21 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
    });
 
    const visionRaw = response.choices[0].message.content || "";
-   const vision =
-     parseVisionResponse(visionRaw) ??
-     ({ title: visionRaw.trim(), category: "Other", condition: "Used" } as VisionProduct);
-   console.log("🔬 [Vision] Parsed vision object:", JSON.stringify(vision, null, 2));
+   console.log("🔬 [Vision] Raw model response:", visionRaw);
+   const vision = parseVisionResponse(visionRaw);
+   console.log(
+     "🔬 [Vision] Parsed vision object:",
+     vision ? JSON.stringify(vision, null, 2) : "(parse failed — no valid title)"
+   );
+
+   if (!vision?.title?.trim()) {
+     console.warn("❌ Vision could not identify product from image");
+     return res.status(422).json({
+       message:
+         "Could not identify product – please try again with better lighting",
+     });
+   }
+
    const searchQuery = vision.title;
    console.log("🔍 [3/5] Vision identified:", JSON.stringify(vision, null, 2));
 

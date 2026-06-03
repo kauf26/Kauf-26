@@ -1,6 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { saveToDraftStorage } from './masterScraperBridge';
 
 type IdentifyApiResponse = {
   success?: boolean;
@@ -58,6 +57,61 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
     }
   };
 
+  const sendImageToScraper = async (imageBase64: string) => {
+    const response = await fetch(imageBase64);
+    const blob = await response.blob();
+
+    const formData = new FormData();
+    formData.append('image', blob, 'camera-capture.jpg');
+
+    const res = await fetch('/api/identify', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(
+        (body as { message?: string; error?: string }).message ||
+          (body as { message?: string; error?: string }).error ||
+          'Failed to process image with scraper'
+      );
+    }
+
+    return res.json() as Promise<IdentifyApiResponse>;
+  };
+
+  const directImageScrape = async (imageBase64?: string) => {
+    const image = imageBase64 ?? capturedImage;
+    if (!image) return;
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      console.log('📸 Sending camera image to /api/identify...');
+      const result = await sendImageToScraper(image);
+      console.log('✅ Identify result:', result);
+
+      persistPendingAnalysisFromIdentify(result);
+
+      if (result.draftId != null) {
+        console.log('Draft saved with ID:', result.draftId);
+      }
+
+      onScrapeSuccess?.(result);
+      navigate('/product-draft');
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to identify product. Please try again.'
+      );
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const capturePhoto = () => {
     if (!videoRef.current || !canvasRef.current) return;
     const context = canvasRef.current.getContext('2d');
@@ -71,83 +125,13 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
       stream.getTracks().forEach(track => track.stop());
       setStream(null);
     }
+    void directImageScrape(imageData);
   };
 
   const resetCamera = () => {
     setCapturedImage(null);
+    setError(null);
     startCamera();
-  };
-
-  const sendImageToScraper = async (imageBase64: string, productTitle?: string) => {
-    const response = await fetch(imageBase64);
-    const blob = await response.blob();
-
-    const formData = new FormData();
-    formData.append('image', blob, 'camera-capture.jpg');
-    formData.append('title', productTitle || "Camera Captured Product");
-
-    const res = await fetch('/api/identify', {
-      method: 'POST',
-      body: formData
-    });
-
-    if (!res.ok) {
-      throw new Error('Failed to process image with scraper');
-    }
-
-    return res.json() as Promise<IdentifyApiResponse>;
-  };
-
-  const identifyProduct = async () => {
-    if (!capturedImage) return;
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const productQuery = prompt("Enter product name to search for:", "Apple Watch Series 8");
-      if (!productQuery) {
-        setError("Product name is required for search.");
-        return;
-      }
-
-      const result = await sendImageToScraper(capturedImage, productQuery);
-      persistPendingAnalysisFromIdentify(result);
-
-      await saveToDraftStorage(result.product);
-      onScrapeSuccess?.(result);
-      navigate('/product-draft');
-    } catch (err) {
-      setError('Failed to identify product. Please try again.');
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const directImageScrape = async () => {
-    if (!capturedImage) return;
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      console.log("📸 Sending camera image to /api/identify...");
-      const result = await sendImageToScraper(capturedImage, "Live Camera Scan");
-      console.log("✅ Identify result:", result);
-
-      persistPendingAnalysisFromIdentify(result);
-
-      if (result.draftId != null) {
-        console.log("Draft saved with ID:", result.draftId);
-      }
-
-      onScrapeSuccess?.(result);
-      navigate('/product-draft');
-    } catch (err) {
-      setError('Failed to process image with scraper.');
-      console.error(err);
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   useEffect(() => {
@@ -168,8 +152,8 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
           ) : (
             <div className="space-y-4">
               <video ref={videoRef} autoPlay playsInline className="w-full rounded border border-zinc-700 bg-black" />
-              <button onClick={capturePhoto} className="w-full py-3 bg-emerald-600 rounded font-semibold hover:bg-emerald-500 transition-colors">
-                Capture Photo
+              <button onClick={capturePhoto} disabled={isLoading} className="w-full py-3 bg-emerald-600 rounded font-semibold hover:bg-emerald-500 disabled:opacity-40 transition-colors">
+                {isLoading ? 'Identifying...' : 'Capture Photo'}
               </button>
             </div>
           )}
@@ -179,16 +163,20 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
           <img src={capturedImage} alt="Captured preview" className="w-full rounded border border-zinc-700" />
           <div className="flex flex-col gap-3">
             <div className="flex gap-4">
-              <button onClick={resetCamera} className="flex-1 py-4 bg-zinc-800 rounded font-semibold hover:bg-zinc-700 transition-colors">
+              <button onClick={resetCamera} disabled={isLoading} className="flex-1 py-4 bg-zinc-800 rounded font-semibold hover:bg-zinc-700 disabled:opacity-40 transition-colors">
                 Retake
               </button>
-              <button onClick={identifyProduct} disabled={isLoading} className="flex-1 py-4 bg-blue-600 rounded font-semibold hover:bg-blue-500 disabled:opacity-40 transition-colors">
-                {isLoading ? 'Identifying...' : 'Text Search'}
+              <button
+                onClick={() => directImageScrape()}
+                disabled={isLoading}
+                className="flex-1 py-4 bg-blue-600 rounded font-semibold hover:bg-blue-500 disabled:opacity-40 transition-colors"
+              >
+                {isLoading ? 'Identifying...' : 'Identify again'}
               </button>
             </div>
-            <button onClick={directImageScrape} disabled={isLoading} className="w-full py-4 bg-purple-600 rounded font-semibold hover:bg-purple-500 disabled:opacity-40 transition-colors">
-              {isLoading ? 'Scraping...' : '📸 Camera → Scraper'}
-            </button>
+            {isLoading && (
+              <p className="text-center text-xs text-zinc-400">Analyzing photo…</p>
+            )}
           </div>
         </div>
       )}
