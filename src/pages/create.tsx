@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 
 import { Button } from "@/components/ui/button" // (or whatever your button path is)
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
+import { loadListingSession } from "@/lib/pendingAnalysis";
 
 interface ProductDraft {
  capturedImage: string;
@@ -26,6 +27,24 @@ export default function Create() {
  const [isEditing, setIsEditing] = useState(false);
 
  useEffect(() => {
+   const listing = loadListingSession();
+   if (listing) {
+     setDraft({
+       capturedImage: listing.capturedImage,
+       modelName: listing.title,
+       brand: listing.brand,
+       year: new Date().getFullYear(),
+       condition: listing.condition,
+       category: listing.category,
+       refNumber: "",
+       material: "",
+       aiDescription: listing.description,
+       recommendedPrice: parseFloat(listing.price) || 0,
+       allegroAvg: parseFloat(listing.product.allegroAvg) || 0,
+       ebayAvg: parseFloat(listing.product.ebayAvg) || 0,
+     });
+     return;
+   }
    const stored = sessionStorage.getItem("pendingAnalysis");
    if (stored) {
      try {

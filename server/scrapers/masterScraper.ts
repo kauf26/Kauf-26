@@ -8,9 +8,6 @@ import { scrapeProduct as scrapeRapidAPI } from "./rapidapi";
 import dotenv from 'dotenv';
 dotenv.config();
 
-export const PHONE_TITLE_REGEX =
-  /\b(\w*phone\w*|iphone|android|samsung|galaxy|pixel|smartphone|cell\s*phone)\b/i;
-
 const truncateDescription = (text: string, query: string): string => {
   if (!text || text.trim() === "") return ""; 
   const words = text.split(/\s+/);
@@ -36,19 +33,6 @@ function resolveOpenAIFallbackPrice(aiData: {
   return 0;
 }
 
-/** Temporary: fix Watches when title clearly describes a phone */
-export function correctMisclassifiedCategory(
-  product: Record<string, unknown>
-): Record<string, unknown> {
-  const title = String(product.title ?? "");
-  const category = String(product.category ?? "");
-  const phoneLike = PHONE_TITLE_REGEX.test(title);
-  if (phoneLike && category !== "Electronics") {
-    return { ...product, category: "Electronics" };
-  }
-  return product;
-}
-
 // Logic: If result is clearly a placeholder, return null instead of a generic object
 function validateProduct(data: any): boolean {
   if (!data || !data.title || data.title === "N/A") return false;
@@ -67,12 +51,12 @@ function buildScrapedProduct(
   isExactMatch: boolean,
   query: string
 ) {
-  return correctMisclassifiedCategory({
+  return {
     ...data,
     price: parsePrice(data.price),
     description: truncateDescription(String(data.description ?? ""), query),
     isExactMatch,
-  });
+  };
 }
 
 export const scrapeProduct = async (query: string): Promise<any | null> => {

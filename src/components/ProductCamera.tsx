@@ -1,5 +1,6 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { saveListingSession } from '@/lib/pendingAnalysis';
 
 type IdentifyApiResponse = {
   success?: boolean;
@@ -24,14 +25,34 @@ function persistPendingAnalysisFromIdentify(result: IdentifyApiResponse) {
   if (!result?.product) {
     throw new Error('Identify response missing product');
   }
-  sessionStorage.setItem(
-    'pendingAnalysis',
-    JSON.stringify({
-      product: result.product,
-      draftId: result.draftId,
-      isExactMatch: result.isExactMatch ?? result.product.isExactMatch ?? false,
-    })
-  );
+  const p = result.product;
+  const isExactMatch =
+    result.isExactMatch ?? p.isExactMatch ?? false;
+  saveListingSession({
+    title: p.title ?? '',
+    description: p.description ?? '',
+    price: String(p.price ?? 0),
+    brand: p.brand ?? '',
+    category: p.category ?? '',
+    condition: p.condition ?? 'Used',
+    capturedImage: p.capturedImage ?? '',
+    isExactMatch,
+    product: {
+      title: p.title ?? '',
+      description: p.description ?? '',
+      price: String(p.price ?? 0),
+      brand: p.brand ?? '',
+      category: p.category ?? '',
+      condition: p.condition ?? 'Used',
+      capturedImage: p.capturedImage ?? '',
+      allegroAvg: String(p.allegroAvg ?? p.price ?? 0),
+      ebayAvg: String(p.ebayAvg ?? p.price ?? 0),
+      isExactMatch,
+    },
+  });
+  if (result.draftId != null) {
+    sessionStorage.setItem('identifyDraftId', String(result.draftId));
+  }
 }
 
 interface ProductCameraProps {

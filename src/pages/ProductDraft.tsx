@@ -1,6 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
+import {
+  parseListingSession,
+  saveListingSession,
+  type ListingSession,
+} from "@/lib/pendingAnalysis";
 
 type ProductDraftState = {
 isExactMatch: boolean;
@@ -63,30 +68,22 @@ useEffect(() => {
   if (!saved) return;
 
   try {
-    const data = JSON.parse(saved);
-    // Task A API shape: { product: { title, description, price, ... } }
-    // Legacy / IdentificationResults: flat fields via toPendingAnalysis
-    const src = data.product ?? data;
+    const listing = parseListingSession(JSON.parse(saved));
+    if (!listing) return;
 
     setProduct({
-      isExactMatch: data.isExactMatch ?? src.isExactMatch ?? DEFAULT_PRODUCT.isExactMatch,
-      title: src.title ?? data.modelName ?? DEFAULT_PRODUCT.title,
-      brand: src.brand ?? DEFAULT_PRODUCT.brand,
-      description: src.description ?? data.aiDescription ?? DEFAULT_PRODUCT.description,
-      price: String(src.price ?? data.recommendedPrice ?? DEFAULT_PRODUCT.price),
-      category:
-        String(src.category ?? data.category ?? "").trim() ||
-        DEFAULT_PRODUCT.category,
-      condition: src.condition ?? DEFAULT_PRODUCT.condition,
-      modelNumber: src.modelNumber ?? data.refNumber ?? DEFAULT_PRODUCT.modelNumber,
-      material: src.material ?? DEFAULT_PRODUCT.material,
-      allegroAverage: String(
-        src.allegroAvg ?? src.allegroAverage ?? data.allegroAvg ?? DEFAULT_PRODUCT.allegroAverage
-      ),
-      ebayAverage: String(
-        src.ebayAvg ?? src.ebayAverage ?? data.ebayAvg ?? DEFAULT_PRODUCT.ebayAverage
-      ),
-      capturedImage: src.capturedImage ?? DEFAULT_PRODUCT.capturedImage,
+      isExactMatch: listing.isExactMatch ?? DEFAULT_PRODUCT.isExactMatch,
+      title: listing.title,
+      brand: listing.brand,
+      description: listing.description,
+      price: listing.price,
+      category: listing.category || DEFAULT_PRODUCT.category,
+      condition: listing.condition,
+      modelNumber: DEFAULT_PRODUCT.modelNumber,
+      material: DEFAULT_PRODUCT.material,
+      allegroAverage: listing.product.allegroAvg,
+      ebayAverage: listing.product.ebayAvg,
+      capturedImage: listing.capturedImage,
     });
   } catch (e) {
     console.error("Error parsing product draft data:", e);
@@ -99,22 +96,29 @@ const isProhibited = PROHIBITED_KEYWORDS.some(kw =>
 );
 
 const handleContinue = async () => {
-  const finalData = {
-    capturedImage: product.capturedImage,
-    modelName: product.title,
+  const listing: ListingSession = {
+    title: product.title,
+    description: product.description,
+    price: product.price,
     brand: product.brand,
-    year: new Date().getFullYear(),
-    condition: product.condition,
     category: product.category,
-    refNumber: product.modelNumber,
-    material: product.material,
-    aiDescription: product.description,
-    recommendedPrice: parseFloat(product.price) || 0,
-    allegroAvg: parseFloat(product.allegroAverage) || 0,
-    ebayAvg: parseFloat(product.ebayAverage) || 0,
+    condition: product.condition,
+    capturedImage: product.capturedImage,
+    isExactMatch: product.isExactMatch,
+    product: {
+      title: product.title,
+      description: product.description,
+      price: product.price,
+      brand: product.brand,
+      category: product.category,
+      condition: product.condition,
+      capturedImage: product.capturedImage,
+      allegroAvg: product.allegroAverage,
+      ebayAvg: product.ebayAverage,
+      isExactMatch: product.isExactMatch,
+    },
   };
-
-  sessionStorage.setItem("productListingData", JSON.stringify(finalData));
+  saveListingSession(listing);
 
   try {
     await fetch("/api/drafts", {
@@ -123,7 +127,17 @@ const handleContinue = async () => {
       body: JSON.stringify({
         title: product.title,
         status: "draft",
-        attributes: finalData,
+        attributes: {
+          capturedImage: product.capturedImage,
+          modelName: product.title,
+          brand: product.brand,
+          condition: product.condition,
+          category: product.category,
+          aiDescription: product.description,
+          recommendedPrice: parseFloat(product.price) || 0,
+          allegroAvg: parseFloat(product.allegroAverage) || 0,
+          ebayAvg: parseFloat(product.ebayAverage) || 0,
+        },
       }),
     });
   } catch (err) {

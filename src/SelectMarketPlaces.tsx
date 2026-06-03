@@ -1,6 +1,10 @@
-import { useState, useEffect, Fragment } from "react";
+import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import ToggleSwitch from './ToggleSwitch';
+import {
+  loadListingSession,
+  saveListingSession,
+  type ListingSession,
+} from "@/lib/pendingAnalysis";
 
 type Marketplace =
 | "ebay" | "amazon" | "walmart" | "wish" | "reverb"
@@ -11,13 +15,6 @@ type Marketplace =
 | "mercadolibre_br" | "mercadolibre_ar"
 | "lazada" | "shopee" | "flipkart"
 | "gmarket" | "coupang" | "daraz" | "depop";
-
-type ProductDraft = {
-capturedImage?: string;
-title: string;
-description?: string;
-price?: string;
-};
 
 const US_MARKETS = [
   { id: "ebay", name: "eBay", currency: "USD" },
@@ -53,145 +50,168 @@ const US_MARKETS = [
 
 export default function SelectMarketplaces() {
   const [, setLocation] = useLocation();
-const [draft, setDraft] = useState<ProductDraft | null>(null);
-const [selected, setSelected] = useState<Marketplace[]>(["ebay"]);
+  const [draft, setDraft] = useState<ListingSession | null>(null);
+  const [selected, setSelected] = useState<Marketplace[]>(["ebay"]);
 
-useEffect(() => {
-  const raw = sessionStorage.getItem("pendingAnalysis");
-  if (raw) {
-    try {
-      setDraft(JSON.parse(raw));
-    } catch (e) {
-      console.error("Error parsing backend analysis session data:", e);
+  useEffect(() => {
+    const loaded = loadListingSession();
+    if (loaded) {
+      setDraft(loaded);
+      console.log("[SelectMarketplaces] Loaded listing:", loaded);
+    } else {
+      console.warn("[SelectMarketplaces] No listing in sessionStorage");
     }
-  } else {
-    setDraft({ title: "Sample Product", price: "0.00", description: "" });
-  }
-}, []);
+  }, []);
 
-const toggle = (id: Marketplace) => {
-  setSelected((prev) =>
-    prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-  );
-};
+  const toggle = (id: Marketplace) => {
+    setSelected((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
 
-const updateField = (field: keyof ProductDraft, value: string) => {
-  if (!draft) return;
-  setDraft({ ...draft, [field]: value });
-};
+  const updateField = (
+    field: "title" | "description" | "price",
+    value: string
+  ) => {
+    if (!draft) return;
+    const next: ListingSession = {
+      ...draft,
+      [field]: value,
+      product: { ...draft.product, [field]: value },
+    };
+    setDraft(next);
+  };
 
-const renderMarketList = (markets: readonly { id: Marketplace; name: string; currency: string }[]) => {
-  return (
-    <div className="space-y-2">
-      {markets.map((m) => {
-        const isSelected = selected.includes(m.id);
-        return (
-          <div
-            key={m.id}
-            onClick={() => toggle(m.id)}
-            className={`flex items-center justify-between gap-3 p-2 rounded-md cursor-pointer transition-colors border ${
-              isSelected
-                ? "bg-emerald-900/20 border-emerald-500/50"
-                : "bg-red-900/20 border-red-500/50 hover:bg-red-900/30"
-            }`}
-          >
-     <div>
-             <div className={`text-sm font-medium ${isSelected ? "text-emerald-400" : "text-red-200"}`}>
-               {m.name}
-             </div>
-             <div className="text-xs text-zinc-500 uppercase">{m.id}</div>
-           </div>
-           <div className="flex items-center gap-2">
-             <span className="text-xs bg-zinc-950 border border-zinc-800 px-1.5 py-0.5 rounded text-zinc-400">
-               {m.currency}
-             </span>
-             {isSelected && <span className="text-emerald-400 text-xs font-bold">✓</span>}
-           </div>
-         </div>
-       );
-     })}
-   </div>
-  );
-};
-
-if (!draft) {
- return <div className="p-8 text-center text-zinc-500">Loading product data...</div>;
-}
-
-return (
-  <div className="max-w-6xl mx-auto p-6 space-y-6 text-zinc-100">
-    <div className="flex justify-between items-center">
-    <button onClick={() => setLocation("/product-draft")} className="text-zinc-400 hover:text-zinc-100">
-        ← Back
-      </button>
-      <span className="text-xs text-zinc-500 tracking-wider">MARKETPLACE SELECTOR</span>
-    </div>
-
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-      <div className="lg:col-span-2 bg-zinc-900 border border-zinc-800 rounded-lg p-6 space-y-4">
-        <h2 className="text-lg font-semibold text-zinc-200">Edit Listing Details</h2>
-
-        <div className="space-y-1">
-          <label className="text-xs text-zinc-500">Title</label>
-          <input
-            type="text"
-            value={draft.title}
-            onChange={(e) => updateField("title", e.target.value)}
-            className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-700"
-          />
-        </div>
-
-        <div className="space-y-1">
-          <label className="text-xs text-zinc-500">Price</label>
-          <input
-            type="text"
-            value={draft.price || ""}
-            onChange={(e) => updateField("price", e.target.value)}
-            placeholder="0.00"
-            className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-700"
-          />
-        </div>
-
-        <div className="space-y-1">
-          <label className="text-xs text-zinc-500">Description</label>
-          <textarea
-            rows={6}
-            value={draft.description || ""}
-            onChange={(e) => updateField("description", e.target.value)}
-            className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-700 resize-none"
-          />
-        </div>
+  const renderMarketList = (markets: readonly { id: Marketplace; name: string; currency: string }[]) => {
+    return (
+      <div className="space-y-2">
+        {markets.map((m) => {
+          const isSelected = selected.includes(m.id);
+          return (
+            <div
+              key={m.id}
+              onClick={() => toggle(m.id)}
+              className={`flex items-center justify-between gap-3 p-2 rounded-md cursor-pointer transition-colors border ${
+                isSelected
+                  ? "bg-emerald-900/20 border-emerald-500/50"
+                  : "bg-red-900/20 border-red-500/50 hover:bg-red-900/30"
+              }`}
+            >
+              <div>
+                <div className={`text-sm font-medium ${isSelected ? "text-emerald-400" : "text-red-200"}`}>
+                  {m.name}
+                </div>
+                <div className="text-xs text-zinc-500 uppercase">{m.id}</div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs bg-zinc-950 border border-zinc-800 px-1.5 py-0.5 rounded text-zinc-400">
+                  {m.currency}
+                </span>
+                {isSelected && <span className="text-emerald-400 text-xs font-bold">✓</span>}
+              </div>
+            </div>
+          );
+        })}
       </div>
+    );
+  };
 
-      <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 space-y-6">
-        <div>
-          <div className="text-xs font-semibold uppercase mb-2 flex gap-1 tracking-wider text-zinc-400">
-            <span>🇺🇸</span> US-Based Marketplaces
-          </div>
-          {renderMarketList(US_MARKETS as any)}
-        </div>
-
-        <div className="border-t border-zinc-800 pt-4">
-          <div className="text-xs font-semibold uppercase mb-2 flex gap-1 tracking-wider text-zinc-400">
-            <span>🌐</span> International Channels
-          </div>
-          {renderMarketList(GLOBAL_MARKETS as any)}
-        </div>
-
+  if (!draft) {
+    return (
+      <div className="p-8 text-center text-zinc-500 space-y-4">
+        <p>No product data found. Complete the draft step first.</p>
         <button
-       onClick={() => {
-        // 1. Save selection to storage for the next page
-        sessionStorage.setItem("selectedMarkets", JSON.stringify(selected));
-       
-        // 2. Navigate to the next stage (e.g., /create)
-        setLocation("/create");
-       }}
-          disabled={selected.length === 0}
-          className="w-full bg-emerald-600 hover:..." >
-          Publish to Channels
+          onClick={() => setLocation("/product-draft")}
+          className="text-blue-400 hover:text-blue-300"
+        >
+          ← Back to Product Draft
         </button>
       </div>
+    );
+  }
+
+  return (
+    <div className="max-w-6xl mx-auto p-6 space-y-6 text-zinc-100">
+      <div className="flex justify-between items-center">
+        <button onClick={() => setLocation("/product-draft")} className="text-zinc-400 hover:text-zinc-100">
+          ← Back
+        </button>
+        <span className="text-xs text-zinc-500 tracking-wider">MARKETPLACE SELECTOR</span>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 bg-zinc-900 border border-zinc-800 rounded-lg p-6 space-y-4">
+          <h2 className="text-lg font-semibold text-zinc-200">Edit Listing Details</h2>
+
+          {draft.brand && (
+            <p className="text-xs text-zinc-500">
+              {draft.brand}
+              {draft.category ? ` · ${draft.category}` : ""}
+              {draft.condition ? ` · ${draft.condition}` : ""}
+            </p>
+          )}
+
+          <div className="space-y-1">
+            <label className="text-xs text-zinc-500">Title</label>
+            <input
+              type="text"
+              value={draft.title}
+              onChange={(e) => updateField("title", e.target.value)}
+              className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-700"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs text-zinc-500">Price</label>
+            <input
+              type="text"
+              value={draft.price || ""}
+              onChange={(e) => updateField("price", e.target.value)}
+              placeholder="0.00"
+              className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-700"
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs text-zinc-500">Description</label>
+            <textarea
+              rows={6}
+              value={draft.description || ""}
+              onChange={(e) => updateField("description", e.target.value)}
+              placeholder="Listing description from identification…"
+              className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-700 resize-none"
+            />
+          </div>
+        </div>
+
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 space-y-6">
+          <div>
+            <div className="text-xs font-semibold uppercase mb-2 flex gap-1 tracking-wider text-zinc-400">
+              <span>🇺🇸</span> US-Based Marketplaces
+            </div>
+            {renderMarketList(US_MARKETS as any)}
+          </div>
+
+          <div className="border-t border-zinc-800 pt-4">
+            <div className="text-xs font-semibold uppercase mb-2 flex gap-1 tracking-wider text-zinc-400">
+              <span>🌐</span> International Channels
+            </div>
+            {renderMarketList(GLOBAL_MARKETS as any)}
+          </div>
+
+          <button
+            onClick={() => {
+              saveListingSession(draft);
+              sessionStorage.setItem("selectedMarkets", JSON.stringify(selected));
+              setLocation("/create");
+            }}
+            disabled={selected.length === 0}
+            className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-semibold py-3 rounded transition-colors"
+          >
+            Publish to Channels
+          </button>
+        </div>
+      </div>
     </div>
-  </div>
-);
+  );
 }

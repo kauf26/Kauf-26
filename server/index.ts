@@ -5,11 +5,7 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic } from "./vite";
 import multer from "multer";
 import OpenAI from "openai";
-import {
-  scrapeProduct as fetchMasterProductData,
-  correctMisclassifiedCategory,
-  PHONE_TITLE_REGEX,
-} from "./scrapers/masterScraper";
+import { scrapeProduct as fetchMasterProductData } from "./scrapers/masterScraper";
 import { productRoutes } from "./productsRoutes";
 
 /** First non-empty category wins; "Other" only when all are blank */
@@ -52,47 +48,33 @@ type ScrapedListing = ScrapedProduct & {
 const VISION_IDENTIFY_PROMPT = `You are a product identification expert analyzing a product photo for a resale listing.
 
 CRITICAL:
-- Identify ONLY the main physical product in focus (hat, shirt, phone, watch, shoes, bag, etc.).
-- IGNORE background clutter, posters, and text not printed on the product itself.
-- USE text/logos printed ON the product (bar names, sports teams, brand marks) for brand and title when relevant.
-- Use a specific descriptive title (e.g. "iPhone 12 Pro", "The Shack Baseball Cap"), NOT vague phrases like "Smartphone with Orange Case".
+- Identify ONLY the main physical product in focus (any item: apparel, electronics, home goods, toys, sports gear, tools, etc.).
+- IGNORE background clutter not part of the product.
+- USE text/logos printed ON the product (brand names, venue names, team names) for brand and title when they identify the item.
+- Use a specific descriptive title for the actual product, not vague scene descriptions.
 
 Return ONLY valid JSON:
 {
   "title": "specific product name",
-  "brand": "brand or venue/team name from product text if visible, else empty string",
-  "category": "best marketplace category (e.g. Electronics, Clothing, Accessories, Shoes, Watches)",
+  "brand": "brand or text on product if visible, else empty string",
+  "category": "accurate marketplace category for this item (any appropriate label)",
   "condition": "one of: New, Used, Like New",
   "price": estimated USD resale price as a number; use 0 if unknown,
-  "description": "1-2 sentences describing the product"
+  "description": "1-2 sentences describing the product for a listing"
 }
 
-Rules:
-- Phones/smartphones/tablets → category "Electronics".
-- Hats, caps, beanies, shirts, jackets, pants → category "Clothing" (caps may also be "Accessories" if more accurate).
-- For hats/caps with visible venue or team text: put that text in brand (e.g. "The Shack") and title (e.g. "The Shack Baseball Cap").
-- Wristwatches only → "Watches".
-- Extract readable product text (bar name, team, logo) into brand/title when it identifies the item.
+Guidance:
+- Pick category and price that fit THIS item (e.g. small low-cost items vs luxury goods).
+- Include visible on-product text in brand/title when helpful (e.g. bar name on a cap).
+- Do not use the word "General" as category — choose a specific category.
 
-Example — phone:
-{
-  "title": "iPhone 12",
-  "brand": "Apple",
-  "category": "Electronics",
-  "condition": "Used",
-  "price": 299.99,
-  "description": "Apple iPhone 12 smartphone in used condition."
-}
+Examples (format only):
 
-Example — baseball cap with bar logo "The Shack":
-{
-  "title": "The Shack Baseball Cap",
-  "brand": "The Shack",
-  "category": "Clothing",
-  "condition": "Used",
-  "price": 0,
-  "description": "Baseball cap with The Shack bar logo on the front."
-}`;
+Phone: { "title": "iPhone 12", "brand": "Apple", "category": "Electronics", "condition": "Used", "price": 299.99, "description": "..." }
+
+Cap with logo: { "title": "The Shack Baseball Cap", "brand": "The Shack", "category": "Clothing", "condition": "Used", "price": 15, "description": "..." }
+
+Small toy: { "title": "Yellow Stress Ball", "brand": "", "category": "Toys", "condition": "Used", "price": 8, "description": "..." }`;
 
 function parseVisionResponse(content: string): VisionProduct | null {
   const trimmed = content.trim();
@@ -102,21 +84,11 @@ function parseVisionResponse(content: string): VisionProduct | null {
     const parsed = JSON.parse(jsonMatch[0]) as Partial<VisionProduct>;
     if (!parsed.title || typeof parsed.title !== "string") return null;
     const title = parsed.title.trim();
-    const lowerTitle = title.toLowerCase();
     const categoryFromVision = String(parsed.category ?? "").trim();
-    let category = PHONE_TITLE_REGEX.test(title)
-      ? "Electronics"
-      : coalesceCategory(categoryFromVision);
-    if (
-      /\b(cap|hat|beanie|baseball cap)\b/i.test(lowerTitle) &&
-      (!categoryFromVision || category === "Other")
-    ) {
-      category = "Clothing";
-    }
     return {
       title,
       brand: parsed.brand?.trim() || "",
-      category,
+      category: coalesceCategory(categoryFromVision),
       condition: parsed.condition || "Used",
       price: parsed.price ?? 0,
       description: parsed.description?.trim() || "",
@@ -132,14 +104,9 @@ function mergeListingWithVision(
 ): ScrapedListing {
   const base = scraped ?? {};
   const exact = scraped?.isExactMatch === true;
-  const phoneLike =
-    PHONE_TITLE_REGEX.test(vision.title) ||
-    PHONE_TITLE_REGEX.test(String(base.title ?? ""));
-  const category = phoneLike
-    ? "Electronics"
-    : exact
-      ? coalesceCategory(base.category, vision.category)
-      : coalesceCategory(vision.category, base.category);
+  const category = exact
+    ? coalesceCategory(base.category, vision.category)
+    : coalesceCategory(vision.category, base.category);
   return {
     ...base,
     title: exact ? base.title ?? vision.title : vision.title ?? base.title,
@@ -158,25 +125,19 @@ function mergeListingWithVision(
   };
 }
 
-// TODO: Remove mock market prices when Apify actor returns real listings
-function applyMockMarketPrices(input: {
+/** Fill missing marketplace averages from listing price — does not change model price */
+function fillMarketAverages(input: {
   price?: string | number;
-  category?: string;
-  title?: string;
   allegroAvg?: string | number;
   ebayAvg?: string | number;
 }) {
   const priceNum = parseFloat(String(input.price ?? 0)) || 0;
   let allegro = parseFloat(String(input.allegroAvg ?? 0)) || 0;
   let ebay = parseFloat(String(input.ebayAvg ?? 0)) || 0;
-  const phoneLike =
-    PHONE_TITLE_REGEX.test(String(input.title ?? "")) ||
-    input.category === "Electronics";
-  const fallback = phoneLike ? 299 : priceNum > 0 ? priceNum : 99;
-  if (allegro <= 0) allegro = priceNum > 0 ? priceNum : fallback;
-  if (ebay <= 0) ebay = Math.round(allegro * 1.05);
+  if (allegro <= 0 && priceNum > 0) allegro = priceNum;
+  if (ebay <= 0 && priceNum > 0) ebay = Math.round(priceNum * 1.05);
   return {
-    price: priceNum > 0 ? priceNum : allegro,
+    price: priceNum,
     allegroAvg: String(allegro),
     ebayAvg: String(ebay),
   };
@@ -235,14 +196,17 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
      });
    }
 
+   console.log(
+     "🔬 [Vision] Full parsed JSON:",
+     JSON.stringify(vision, null, 2)
+   );
+
    const searchQuery = vision.title;
    console.log("🔍 [3/5] Vision identified:", JSON.stringify(vision, null, 2));
 
    console.log("🕸️ [4/5] Calling scraper with query:", searchQuery);
    const scrapedRaw = await fetchMasterProductData(searchQuery);
-   const listings = correctMisclassifiedCategory(
-     mergeListingWithVision(scrapedRaw, vision) as Record<string, unknown>
-   ) as ScrapedListing;
+   const listings = mergeListingWithVision(scrapedRaw, vision);
    console.log("📦 Scraper returned:", JSON.stringify(listings, null, 2));
 
    // ✨ NEW: Save as a draft in the database
@@ -285,10 +249,8 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
 
    // Normalized response for ProductDraft / sessionStorage (Task A)
    const capturedImage = `data:${req.file.mimetype};base64,${base64Image}`;
-   const mocked = applyMockMarketPrices({
+   const market = fillMarketAverages({
      price: listings.price ?? vision.price ?? 0,
-     category: String(listings.category ?? vision.category ?? ""),
-     title: String(listings.title ?? vision.title ?? ""),
      allegroAvg: listings.price,
      ebayAvg: listings.ebayPrice,
    });
@@ -302,12 +264,12 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
      product: {
        title: listings.title ?? searchQuery,
        description: listings.description ?? vision.description ?? "",
-       price: String(mocked.price),
+       price: String(market.price),
        brand: listings.brand ?? vision.brand ?? "",
        category: coalesceCategory(listings.category, vision.category),
        condition: listings.condition ?? vision.condition ?? "Used",
-       allegroAvg: mocked.allegroAvg,
-       ebayAvg: mocked.ebayAvg,
+       allegroAvg: market.allegroAvg,
+       ebayAvg: market.ebayAvg,
        capturedImage,
        isExactMatch,
      },
