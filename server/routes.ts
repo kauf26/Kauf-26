@@ -12,16 +12,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   console.log("🚀 Registering API routes...");
 
-  // 1. Scraper Route - Updated to expect 'query' from the frontend
+  // 1. Scraper Route - Updated with Gatekeeper logic
   app.post("/api/catalog/scrape", async (req, res) => {
     console.log("[API] Received request for: /api/catalog/scrape");
     try {
-      // Canonical: { query }. Legacy aliases: imageUrl / imageData (string product name).
-      const query =
-        req.body?.query ?? req.body?.imageUrl ?? req.body?.imageData;
+      const query = req.body?.query ?? req.body?.imageUrl ?? req.body?.imageData;
 
       if (!query || typeof query !== "string") {
         return res.status(400).json({ message: "Product query (model name) is required" });
+      }
+
+      // GATEKEEPER: Prevent the scraper from running on AI failure messages
+      const lowerQuery = query.toLowerCase();
+      if (lowerQuery.includes("can't identify") || lowerQuery.includes("unable to identify")) {
+        console.warn("[API] Aborting scrape: AI identification failed.");
+        return res.status(422).json({ 
+          message: "Product could not be identified automatically. Please enter product details manually." 
+        });
       }
 
       const productData = await fetchMasterProductData(query.trim());
@@ -89,8 +96,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(500).json({ message: error.message || "Internal Server Error" });
     }
   });
-
-  // POST /api/drafts — implemented in productsRoutes (mounted in server/index.ts)
 
   const httpServer = createServer(app);
   return httpServer;

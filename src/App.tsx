@@ -23,31 +23,42 @@ import SettingsPage from "./pages/settings";
 import { IdentificationResultsPage } from "./pages/IdentificationResults";
 
 function App() {
- return (
-   <QueryClientProvider client={queryClient}>
-     <TooltipProvider>
-       <Switch>
-         <Route path="/product-draft" component={ProductDraftPage} />
-         <Route path="/select-marketplaces" component={SelectMarketPlaces} />
-         <Route path="/identification-results" component={IdentificationResultsPage} />
-         <Route path="/dashboard" component={Dashboard} />
-         <Route path="/inventory" component={Inventory} />
-         <Route path="/listings" component={Listings} />
-         <Route path="/sales" component={Sales} />
-         <Route path="/tools" component={Tools} />
-         <Route path="/create" component={Create} />
-         <Route path="/submit" component={Submit} />
-         <Route path="/login" component={LoginPage} />
-         <Route path="/pricing" component={PricingPage} />
-         <Route path="/terms" component={Terms} />
-         <Route path="/privacy" component={Privacy} />
-         <Route path="/settings" component={SettingsPage} />
-         <Route path="/" component={Welcome} />
-       </Switch>
-       <Toaster />
-     </TooltipProvider>
-   </QueryClientProvider>
- );
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <div className="min-h-screen flex flex-col">
+          <main className="flex-grow">
+            <Switch>
+              <Route path="/product-draft" component={ProductDraftPage} />
+              <Route path="/select-marketplaces" component={SelectMarketPlaces} />
+              <Route path="/identification-results" component={IdentificationResultsPage} />
+              <Route path="/dashboard" component={Dashboard} />
+              <Route path="/inventory" component={Inventory} />
+              <Route path="/listings" component={Listings} />
+              <Route path="/sales" component={Sales} />
+              <Route path="/tools" component={Tools} />
+              <Route path="/create" component={Create} />
+              <Route path="/submit" component={Submit} />
+              <Route path="/login" component={LoginPage} />
+              <Route path="/pricing" component={PricingPage} />
+              <Route path="/terms" component={Terms} />
+              <Route path="/privacy" component={Privacy} />
+              <Route path="/settings" component={SettingsPage} />
+              <Route path="/" component={Welcome} />
+            </Switch>
+          </main>
+
+          {/* Footer with only text - no logo */}
+          <footer className="p-6 text-center mt-auto border-t">
+            <span className="text-sm font-medium" style={{ color: "#C084FC" }}>
+              Sold with KAUF
+            </span>
+          </footer>
+        </div>
+        <Toaster />
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
 }
 
 export default App;
