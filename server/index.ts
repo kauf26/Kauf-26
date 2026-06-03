@@ -125,6 +125,8 @@ CRITICAL:
 - Identify ONLY the main physical product in focus (any item: apparel, electronics, home goods, toys, sports gear, tools, etc.).
 - IGNORE background clutter not part of the product.
 - USE text/logos printed ON the product (brand names, venue names, team names) for brand and title when they identify the item.
+- Pay attention to any small text, serial numbers, or logos on the product – these are critical for exact match identification (e.g. watch dial text, model numbers, engraved markings).
+- Mentally "zoom in" on the sharpest legible text and logos; prefer readings from those details over guessing from shape alone.
 - Use a specific descriptive title for the actual product, not vague scene descriptions.
 
 Return ONLY valid JSON:
