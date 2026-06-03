@@ -98,8 +98,8 @@ function normalizeApifyItem(raw: Record<string, unknown>): RawListing {
     brand: extractBrand(raw) || extractBrand(product ?? {}),
     price: extractPrice(raw),
     description,
-    category: category || "Other",
-    condition: condition || "Used",
+    category,
+    condition,
   };
 }
 
@@ -224,7 +224,6 @@ export const scrapeProduct = async (
         String(aggregated.description || ""),
         query
       ),
-      category: aggregated.category || "Other",
     };
   } catch (error) {
     console.error("❌ Apify Error:", error);
@@ -235,11 +234,11 @@ export const scrapeProduct = async (
 function getGeneralDescription(query: string) {
   return {
     title: query,
-    brand: "N/A",
-    description: `A general item matching the search criteria for "${query}". Please review the details manually.`,
+    brand: "",
+    description: "",
     price: undefined,
-    category: "Other",
-    condition: "New",
+    category: "",
+    condition: "",
     isExactMatch: false,
   };
 }

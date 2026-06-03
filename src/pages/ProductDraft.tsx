@@ -19,6 +19,7 @@ category: string;
 condition: string;
 modelNumber: string;
 material: string;
+color: string;
 allegroAverage: string;
 ebayAverage: string;
 capturedImage: string;
@@ -44,13 +45,14 @@ const DEFAULT_PRODUCT: ProductDraftState = {
 isExactMatch: false,
 matchType: "generic",
 title: "Draft Product Title",
-brand: "Brand Name",
+brand: "",
 description: "Detailed product description goes here...",
 price: "0.00",
 category: "",
 condition: "New",
 modelNumber: "N/A",
-material: "N/A",
+material: "",
+color: "",
 allegroAverage: "0.00",
 ebayAverage: "0.00",
 capturedImage: ""
@@ -78,6 +80,23 @@ function formatMarketAvg(value: string): string {
   return `$${formatPrice(value)}`;
 }
 
+function normalizeConditionForSelect(condition: string): string {
+  const c = condition.trim().toLowerCase();
+  if (!c || c === "n/a") return "Used";
+  if (c === "like new" || c === "like-new" || c === "mint") return "Like New";
+  if (c === "new" || c === "brand new") return "New";
+  if (c === "used" || c === "pre-owned") return "Used";
+  if (c === "fair" || c === "vintage") return "Fair";
+  const options = ["New", "Like New", "Used", "Fair"];
+  const match = options.find((o) => o.toLowerCase() === c);
+  return match ?? "Used";
+}
+
+function sanitizeBrandDisplay(brand: string): string {
+  const s = brand.trim();
+  return s.toUpperCase() === "N/A" ? "" : s;
+}
+
 const ProductDraft: React.FC = () => {
 const [, setLocation] = useLocation();
 const { toast } = useToast();
@@ -97,13 +116,14 @@ useEffect(() => {
         listing.matchType ??
         (listing.isExactMatch ? "exact" : "generic"),
       title: listing.title,
-      brand: listing.brand,
+      brand: sanitizeBrandDisplay(listing.brand),
       description: listing.description,
       price: listing.price,
       category: listing.category || DEFAULT_PRODUCT.category,
-      condition: listing.condition,
+      condition: normalizeConditionForSelect(listing.condition),
       modelNumber: DEFAULT_PRODUCT.modelNumber,
-      material: listing.material ?? listing.product.material ?? DEFAULT_PRODUCT.material,
+      material: (listing.material ?? listing.product.material ?? "").trim(),
+      color: (listing.color ?? listing.product.color ?? "").trim(),
       allegroAverage: listing.product.allegroAvg,
       ebayAverage: listing.product.ebayAvg,
       capturedImage: listing.capturedImage,
@@ -126,6 +146,8 @@ const handleContinue = async () => {
     brand: product.brand,
     category: product.category,
     condition: product.condition,
+    material: product.material,
+    color: product.color,
     capturedImage: product.capturedImage,
     isExactMatch: product.isExactMatch,
     matchType: product.matchType,
@@ -136,6 +158,8 @@ const handleContinue = async () => {
       brand: product.brand,
       category: product.category,
       condition: product.condition,
+      material: product.material,
+      color: product.color,
       capturedImage: product.capturedImage,
       allegroAvg: product.allegroAverage,
       ebayAvg: product.ebayAverage,
@@ -306,11 +330,15 @@ return (
           </div>
           <div className="space-y-1">
             <label className="text-xs font-medium text-zinc-400">Material Composition</label>
-            <input className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-700" value={product.material} onChange={e => update("material", e.target.value)} />
+            <input className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-700" value={product.material} onChange={e => update("material", e.target.value)} placeholder="e.g. ceramic, cotton" />
           </div>
         </div>
 
         <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-zinc-400">Color</label>
+            <input className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-700" value={product.color} onChange={e => update("color", e.target.value)} placeholder="e.g. white and blue" />
+          </div>
           <div className="space-y-1">
             <label className="text-xs font-medium text-zinc-400">Category Node</label>
             <input
@@ -318,7 +346,7 @@ return (
               className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-700"
               value={product.category}
               onChange={e => update("category", e.target.value)}
-              placeholder="e.g. Shoes, Electronics, Cameras"
+              placeholder="e.g. Home & Kitchen, Electronics"
             />
             <datalist id="category-suggestions">
               {CATEGORY_SUGGESTIONS.map(cat => (
@@ -326,9 +354,12 @@ return (
               ))}
             </datalist>
           </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
             <label className="text-xs font-medium text-zinc-400">Item Condition</label>
-            <select className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-700" value={product.condition} onChange={e => update("condition", e.target.value)}>
+            <select className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-700" value={normalizeConditionForSelect(product.condition)} onChange={e => update("condition", e.target.value)}>
               <option value="New">New / Unworn</option>
               <option value="Like New">Like New / Mint</option>
               <option value="Used">Used / Light Wear</option>

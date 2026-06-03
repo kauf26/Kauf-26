@@ -9,6 +9,8 @@ export type RawListing = {
   price?: unknown;
   category?: string;
   condition?: string;
+  material?: string;
+  color?: string;
 };
 
 export type VisionMatchContext = {
@@ -92,6 +94,17 @@ export function scoreListingMatch(
   return "similar";
 }
 
+function sanitizeBrand(brand: unknown): string {
+  const s = String(brand ?? "").trim();
+  return !s || s.toUpperCase() === "N/A" ? "" : s;
+}
+
+function sanitizeCategory(category: unknown): string {
+  const s = String(category ?? "").trim();
+  if (!s || /^(general|other)$/i.test(s)) return "";
+  return s;
+}
+
 /** Collapse N marketplace rows → one product row with mean price + match flags */
 export function aggregateListings(
   items: RawListing[],
@@ -119,10 +132,12 @@ export function aggregateListings(
 
   return {
     title: rep.title ?? query,
-    brand: rep.brand ?? matchCtx.visionBrand ?? "",
+    brand: sanitizeBrand(rep.brand) || sanitizeBrand(matchCtx.visionBrand),
     description: rep.description ?? "",
-    category: rep.category ?? "Other",
-    condition: rep.condition ?? "Used",
+    category: sanitizeCategory(rep.category),
+    condition: String(rep.condition ?? "").trim(),
+    material: String(rep.material ?? "").trim(),
+    color: String(rep.color ?? "").trim(),
     price: avgPrice || parseListingPrice(rep.price),
     ebayAvg: avgPrice,
     allegroAvg: avgPrice,

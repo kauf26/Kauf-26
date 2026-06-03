@@ -22,6 +22,59 @@ const truncateDescription = (text: string, query: string): string => {
   return words.length > 50 ? words.slice(0, 50).join(" ") + "..." : text;
 };
 
+function isPlaceholderDescription(text: string): boolean {
+  const t = text.toLowerCase();
+  return (
+    t.includes("general item matching") ||
+    t.includes("details pending manual review") ||
+    t.includes("please review the details manually") ||
+    t.includes("similar listing match for") ||
+    t.length < 12
+  );
+}
+
+function sanitizeBrand(brand: unknown): string {
+  const s = String(brand ?? "").trim();
+  return !s || s.toUpperCase() === "N/A" ? "" : s;
+}
+
+function sanitizeCategory(category: unknown): string {
+  const s = String(category ?? "").trim();
+  if (!s || /^(general|other)$/i.test(s)) return "";
+  return s;
+}
+
+function normalizeCondition(condition: unknown): string {
+  const s = String(condition ?? "").trim();
+  if (!s) return "";
+  const lower = s.toLowerCase();
+  if (lower === "like new" || lower === "like-new" || lower === "mint") {
+    return "Like New";
+  }
+  if (lower === "new" || lower === "brand new") return "New";
+  if (lower === "used" || lower === "pre-owned") return "Used";
+  if (lower === "fair" || lower === "vintage") return "Fair";
+  return s;
+}
+
+function buildListingDescription(
+  scraped: Record<string, unknown>,
+  title: string
+): string {
+  const raw = String(scraped.description ?? "").trim();
+  if (raw && !isPlaceholderDescription(raw)) {
+    return truncateDescription(raw, title);
+  }
+  const parts = [
+    scraped.color ? `Color: ${scraped.color}` : null,
+    scraped.material ? `Material: ${scraped.material}` : null,
+  ]
+    .filter(Boolean)
+    .map(String);
+  if (parts.length > 0) return truncateDescription(parts.join(" "), title);
+  return "";
+}
+
 function parsePrice(price: unknown): number {
   const str = String(price).replace(/[^0-9.]/g, "");
   const parsed = parseFloat(str);
@@ -62,14 +115,17 @@ function buildExactProduct(
   const price = parsePrice(data.price);
   return {
     ...data,
-    title: data.title ?? query,
-    brand: data.brand ?? "",
-    category: String(data.category ?? "").trim() || "Other",
-    condition: data.condition ?? "New",
+    title: String(data.title ?? query).trim(),
+    brand: sanitizeBrand(data.brand),
+    category: sanitizeCategory(data.category),
+    condition: normalizeCondition(data.condition),
+    material: String(data.material ?? "").trim(),
+    color: String(data.color ?? "").trim(),
+    style: String(data.style ?? "").trim(),
     price,
     allegroAvg: parsePrice(data.allegroAvg ?? data.price),
     ebayAvg: parsePrice(data.ebayAvg ?? data.ebayPrice ?? data.price),
-    description: String(data.description ?? ""),
+    description: buildListingDescription(data, String(data.title ?? query)),
     isExactMatch: true,
     matchType: "exact" satisfies MatchType,
   };
@@ -89,26 +145,19 @@ export function mergeSimilarProduct(
   const ebayAvg = parsePrice(
     scraped.ebayAvg ?? scraped.ebayPrice ?? scraped.price
   );
-  const descParts = [
-    scraped.description,
-    scraped.color ? `Color: ${scraped.color}` : null,
-    scraped.material ? `Material: ${scraped.material}` : null,
-  ]
-    .filter(Boolean)
-    .map(String);
-  const description = truncateDescription(
-    descParts.join(" ") || `Similar listing match for ${title}.`,
-    title
-  );
+  const description = buildListingDescription(scraped, title);
 
   return {
     ...scraped,
     title,
-    brand: scraped.brand ?? "",
+    brand: sanitizeBrand(scraped.brand),
     category:
-      String(scraped.category ?? context?.visionCategory ?? "").trim() ||
-      "Other",
-    condition: scraped.condition ?? "Used",
+      sanitizeCategory(scraped.category) ||
+      sanitizeCategory(context?.visionCategory),
+    condition: normalizeCondition(scraped.condition),
+    material: String(scraped.material ?? "").trim(),
+    color: String(scraped.color ?? "").trim(),
+    style: String(scraped.style ?? "").trim(),
     price: price || allegroAvg || ebayAvg,
     allegroAvg,
     ebayAvg,
@@ -126,14 +175,17 @@ function buildGenericProduct(
   const price = parsePrice(data.price);
   return {
     ...data,
-    title: data.title ?? query,
-    brand: data.brand ?? "",
-    category: String(data.category ?? "").trim() || "Other",
-    condition: data.condition ?? "New",
+    title: String(data.title ?? query).trim(),
+    brand: sanitizeBrand(data.brand),
+    category: sanitizeCategory(data.category),
+    condition: normalizeCondition(data.condition),
+    material: String(data.material ?? "").trim(),
+    color: String(data.color ?? "").trim(),
+    style: String(data.style ?? "").trim(),
     price,
     allegroAvg: price,
     ebayAvg: price,
-    description: truncateDescription(String(data.description ?? ""), query),
+    description: buildListingDescription(data, String(data.title ?? query)),
     isExactMatch: false,
     matchType: "generic" satisfies MatchType,
   };
@@ -188,11 +240,13 @@ export const scrapeProduct = async (
       return buildGenericProduct(
         {
           title: aiData.title,
-          brand: aiData.brand || "",
+          brand: sanitizeBrand(aiData.brand),
           price,
           description: aiData.description,
-          category: String(aiData.category ?? "").trim() || "Other",
-          condition: aiData.condition || "New",
+          category: sanitizeCategory(aiData.category),
+          condition: normalizeCondition(aiData.condition),
+          material: String(aiData.material ?? "").trim(),
+          color: String(aiData.color ?? "").trim(),
         },
         query
       );

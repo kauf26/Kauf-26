@@ -16,7 +16,7 @@ function isWeakCategory(category: string): boolean {
   return !s || s === "general" || s === "other";
 }
 
-/** First non-empty, specific category wins; "Other" only when all are blank/vague */
+/** First non-empty, specific category wins; empty string if none */
 function coalesceCategory(
   ...candidates: (string | undefined | null)[]
 ): string {
@@ -24,7 +24,23 @@ function coalesceCategory(
     const s = String(c ?? "").trim();
     if (s && !isWeakCategory(s)) return s;
   }
-  return "Other";
+  return "";
+}
+
+function normalizeBrand(brand: unknown): string {
+  const s = String(brand ?? "").trim();
+  return !s || s.toUpperCase() === "N/A" ? "" : s;
+}
+
+function normalizeCondition(condition: unknown): string {
+  const s = String(condition ?? "").trim();
+  if (!s) return "";
+  const lower = s.toLowerCase();
+  if (lower === "like new" || lower === "like-new") return "Like New";
+  if (lower === "new") return "New";
+  if (lower === "used") return "Used";
+  if (lower === "fair") return "Fair";
+  return s;
 }
 
 interface ScrapedProduct {
@@ -32,6 +48,8 @@ interface ScrapedProduct {
  year?: string;
  condition?: string;
  material?: string;
+ color?: string;
+ style?: string;
  refNumber?: string;
  description?: string;
  price?: string | number;
@@ -194,6 +212,21 @@ function pickDescription(
   return scraped || fromVision;
 }
 
+function generateInformativeDescription(
+  listing: ScrapedListing,
+  vision: VisionProduct
+): string {
+  const title = String(listing.title ?? vision.title ?? "").trim();
+  const brand = normalizeBrand(listing.brand) || normalizeBrand(vision.brand);
+  const material = String(listing.material ?? vision.material ?? "").trim();
+  const color = String(listing.color ?? vision.color ?? "").trim();
+  const bits = [title];
+  if (brand) bits.push(`by ${brand}`);
+  const attrs = [color, material].filter(Boolean).join(", ");
+  if (attrs) bits.push(`(${attrs})`);
+  return bits.filter(Boolean).join(" ").trim();
+}
+
 function applyVisionEnrichment(
   listing: ScrapedListing,
   vision: VisionProduct
@@ -208,14 +241,27 @@ function applyVisionEnrichment(
     vision.price != null && vision.price > 0 ? vision.price : 0;
   const price = scrapedPrice > 0 ? scrapedPrice : visionPrice;
 
+  let description = truncateWords(pickDescription(listing.description, vision), 50);
+  if (!description || isPlaceholderDescription(description)) {
+    description = truncateWords(
+      generateInformativeDescription(listing, vision),
+      50
+    );
+  }
+
   return {
     ...listing,
     title: listing.title ?? vision.title,
-    brand: String(listing.brand || vision.brand || ""),
+    brand: normalizeBrand(listing.brand) || normalizeBrand(vision.brand),
     category,
-    material: String(listing.material || vision.material || ""),
-    condition: listing.condition ?? vision.condition ?? "Used",
-    description: truncateWords(pickDescription(listing.description, vision), 50),
+    material: String(listing.material ?? vision.material ?? "").trim(),
+    color: String(listing.color ?? vision.color ?? "").trim(),
+    style: String(listing.style ?? vision.style ?? "").trim(),
+    condition:
+      normalizeCondition(listing.condition) ||
+      normalizeCondition(vision.condition) ||
+      "Used",
+    description,
     price,
   };
 }
@@ -223,10 +269,12 @@ function applyVisionEnrichment(
 function buildGenericFromVision(vision: VisionProduct): ScrapedListing {
   return {
     title: vision.title,
-    brand: vision.brand ?? "",
-    category: coalesceCategory(vision.category, "Home & Kitchen"),
-    condition: vision.condition ?? "Used",
-    material: vision.material ?? "",
+    brand: normalizeBrand(vision.brand),
+    category: coalesceCategory(vision.category) || "",
+    condition: normalizeCondition(vision.condition) || "Used",
+    material: String(vision.material ?? "").trim(),
+    color: String(vision.color ?? "").trim(),
+    style: String(vision.style ?? "").trim(),
     description: truncateWords(vision.description ?? "", 50),
     price: vision.price != null && vision.price > 0 ? vision.price : 0,
     allegroAvg: 0,
@@ -434,12 +482,15 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
      status: 'ready_for_posting', // This makes it appear on page 3
      images: [`data:${req.file.mimetype};base64,${base64Image}`],
      attributes: {
-       brand: listings.brand || "Unknown",
+       brand: normalizeBrand(listings.brand) || normalizeBrand(vision.brand),
        year: listings.year || new Date().getFullYear().toString(),
-       condition: listings.condition || "Used",
-       material: listings.material || vision.material || "Not specified",
-       color: vision.color || "",
-       style: vision.style || "",
+       condition:
+         normalizeCondition(listings.condition) ||
+         normalizeCondition(vision.condition) ||
+         "Used",
+       material: String(listings.material ?? vision.material ?? "").trim(),
+       color: String(listings.color ?? vision.color ?? "").trim(),
+       style: String(vision.style ?? "").trim(),
        aiDescription: listings.description || `KAUF-AI identified as: ${searchQuery}`,
        marketPrices: {
          allegroAvg: String(listings.allegroAvg ?? listings.price ?? "0.00"),
@@ -488,12 +539,15 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
        title: listings.title ?? searchQuery,
        description: listings.description ?? vision.description ?? "",
        price: String(market.price),
-       brand: listings.brand ?? vision.brand ?? "",
+       brand: normalizeBrand(listings.brand) || normalizeBrand(vision.brand),
        category: coalesceCategory(listings.category, vision.category),
-       condition: listings.condition ?? vision.condition ?? "Used",
-       material: listings.material ?? vision.material ?? "",
-       color: vision.color ?? "",
-       style: vision.style ?? "",
+       condition:
+         normalizeCondition(listings.condition) ||
+         normalizeCondition(vision.condition) ||
+         "Used",
+       material: String(listings.material ?? vision.material ?? "").trim(),
+       color: String(listings.color ?? vision.color ?? "").trim(),
+       style: String(listings.style ?? vision.style ?? "").trim(),
        allegroAvg: market.allegroAvg,
        ebayAvg: market.ebayAvg,
        capturedImage,

@@ -42,11 +42,11 @@ export const scrapeProduct = async (query: string, _context?: unknown) => {
  
  const getGeneralDescription = (query: string) => ({
   title: query,
-  brand: 'N/A',
-  description: `A general item matching the search criteria for "${query}". Please review the details manually.`,
+  brand: "",
+  description: "",
   price: undefined,
-  category: 'Other',
-  condition: 'New',
+  category: "",
+  condition: "",
   isExactMatch: false,
  });
  

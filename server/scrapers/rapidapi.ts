@@ -38,7 +38,6 @@ export const scrapeProduct = async (
       description: truncateDescription(
         String(aggregated.description || `Listings for ${query}`)
       ),
-      category: aggregated.category || "Other",
     };
   } catch (error: any) {
     console.error('❌ RapidAPI scraping error:', error.message || error);
@@ -53,10 +52,10 @@ const truncateDescription = (text: string): string => {
 
 const getGeneralDescription = (query: string) => ({
   title: query,
-  brand: 'N/A',
-  description: `A general listing for "${query}". Details pending manual review.`,
+  brand: "",
+  description: "",
   price: undefined,
-  category: 'Other',
-  condition: 'New',
+  category: "",
+  condition: "",
   isExactMatch: false,
 });

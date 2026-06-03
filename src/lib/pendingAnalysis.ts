@@ -83,11 +83,14 @@ export function parseListingSession(raw: unknown): ListingSession | null {
   const material = String(p.material ?? data.material ?? "");
   const color = String(p.color ?? data.color ?? "");
   const style = String(p.style ?? data.style ?? "");
+  const rawBrand = String(p.brand ?? data.brand ?? "").trim();
+  const brand =
+    rawBrand.toUpperCase() === "N/A" ? "" : rawBrand;
   const product = {
     title,
     description,
     price,
-    brand: String(p.brand ?? data.brand ?? ""),
+    brand,
     category: String(p.category ?? data.category ?? ""),
     condition: String(p.condition ?? data.condition ?? "Used"),
     capturedImage: String(p.capturedImage ?? data.capturedImage ?? ""),
