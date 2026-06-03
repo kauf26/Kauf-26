@@ -106,9 +106,13 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
    const allegroAvg = listings.price ?? "0.00";
    const ebayAvg = listings.ebayPrice ?? listings.price ?? "0.00";
 
+   const isExactMatch =
+     (listings as { isExactMatch?: boolean }).isExactMatch ?? false;
+
    res.json({
      success: true,
      draftId: savedDraft.id ?? savedDraft,
+     isExactMatch,
      product: {
        title: (listings as any).title ?? searchQuery,
        description:
@@ -121,6 +125,7 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
        allegroAvg: String(allegroAvg),
        ebayAvg: String(ebayAvg),
        capturedImage,
+       isExactMatch,
      },
    });
  } catch (error) {

@@ -25,6 +25,24 @@ function validateProduct(data: any): boolean {
   return true;
 }
 
+/**
+ * Every successful scrape returns isExactMatch:
+ * - true: a marketplace scraper returned validated listing data (winner path).
+ * - false: OpenAI fallback only — inferred fields, needs manual review on draft.
+ */
+function buildScrapedProduct(
+  data: Record<string, unknown>,
+  isExactMatch: boolean,
+  query: string
+) {
+  return {
+    ...data,
+    price: parsePrice(data.price),
+    description: truncateDescription(String(data.description ?? ""), query),
+    isExactMatch,
+  };
+}
+
 export const scrapeProduct = async (query: string): Promise<any | null> => {
   console.log(`[MasterScraper] Initiating search for: ${query}`);
 
@@ -38,12 +56,8 @@ export const scrapeProduct = async (query: string): Promise<any | null> => {
 
   if (winner) {
     console.log(`[MasterScraper] Winner found!`);
-    return {
-        ...winner.value,
-        price: parsePrice(winner.value.price),
-        description: truncateDescription(winner.value.description || "", query),
-        isExactMatch: true
-    };
+    // true = validated marketplace listing, not AI guesswork
+    return buildScrapedProduct(winner.value, true, query);
   }
 
   // 2. Fallback to OpenAI
@@ -51,15 +65,18 @@ export const scrapeProduct = async (query: string): Promise<any | null> => {
   try {
     const aiData = await scrapeOpenAI(query);
     if (validateProduct(aiData)) {
-      return {
-        title: aiData.title,
-        brand: aiData.brand || "N/A",
-        description: truncateDescription(aiData.description || "", query),
-        price: parsePrice(aiData.price),
-        category: aiData.category || "General",
-        condition: aiData.condition || "New",
-        isExactMatch: true,
-      };
+      // false = AI-inferred product; user should verify on draft
+      return buildScrapedProduct(
+        {
+          title: aiData.title,
+          brand: aiData.brand || "N/A",
+          price: aiData.price,
+          category: aiData.category || "General",
+          condition: aiData.condition || "New",
+        },
+        false,
+        query
+      );
     }
   } catch (error) {
     console.error('❌ AI Fallback failed:', error);

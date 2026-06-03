@@ -18,7 +18,7 @@ capturedImage: string;
 };
 
 const DEFAULT_PRODUCT: ProductDraftState = {
-isExactMatch: true,
+isExactMatch: false,
 title: "Draft Product Title",
 brand: "Brand Name",
 description: "Detailed product description goes here...",
@@ -33,6 +33,11 @@ capturedImage: ""
 };
 
 const PROHIBITED_KEYWORDS = ["gun", "drugs", "alcohol", "tobacco", "vape", "weapon"];
+
+function formatPrice(value: string): string {
+  const n = parseFloat(value);
+  return Number.isFinite(n) ? n.toFixed(2) : value || "0.00";
+}
 
 const ProductDraft: React.FC = () => {
 const [, setLocation] = useLocation();
@@ -118,6 +123,58 @@ const update = (field: keyof ProductDraftState, val: string) => {
 
 return (
   <div className="max-w-3xl mx-auto p-6 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-100 space-y-6 my-6">
+    {product.isExactMatch ? (
+      <div
+        className="rounded-lg border border-emerald-700/50 bg-emerald-950/40 px-4 py-3 flex items-center gap-2"
+        role="status"
+      >
+        <span className="inline-flex items-center rounded-full bg-emerald-600 px-2.5 py-0.5 text-xs font-semibold text-white">
+          Exact Match Confirmed
+        </span>
+        <p className="text-sm text-emerald-200/90">
+          Listing data came from a validated marketplace match.
+        </p>
+      </div>
+    ) : (
+      <div
+        className="rounded-lg border border-amber-700/50 bg-amber-950/30 px-4 py-3"
+        role="alert"
+      >
+        <p className="text-sm font-medium text-amber-200">Best guess — review required</p>
+        <p className="text-xs text-amber-200/70 mt-1">
+          Product details may be incomplete or inferred. Confirm title, brand, price, category, and condition before posting.
+        </p>
+      </div>
+    )}
+
+    <section className="rounded-lg border border-zinc-800 bg-zinc-950/80 p-4">
+      <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-3">
+        Identified product
+      </h2>
+      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+        <div>
+          <dt className="text-zinc-500">Title</dt>
+          <dd className="font-medium text-zinc-100">{product.title || "—"}</dd>
+        </div>
+        <div>
+          <dt className="text-zinc-500">Brand</dt>
+          <dd className="font-medium text-zinc-100">{product.brand || "—"}</dd>
+        </div>
+        <div>
+          <dt className="text-zinc-500">Price</dt>
+          <dd className="font-medium text-zinc-100">${formatPrice(product.price)}</dd>
+        </div>
+        <div>
+          <dt className="text-zinc-500">Category</dt>
+          <dd className="font-medium text-zinc-100">{product.category || "—"}</dd>
+        </div>
+        <div className="sm:col-span-2">
+          <dt className="text-zinc-500">Condition</dt>
+          <dd className="font-medium text-zinc-100">{product.condition || "—"}</dd>
+        </div>
+      </dl>
+    </section>
+
     <div>
       <h1 className="text-2xl font-bold text-zinc-100">Product Draft</h1>
       <p className="text-xs text-zinc-500">Refine the automatically extracted product metadata specifications below.</p>

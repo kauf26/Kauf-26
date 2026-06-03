@@ -5,6 +5,7 @@ import { saveToDraftStorage } from './masterScraperBridge';
 type IdentifyApiResponse = {
   success?: boolean;
   draftId?: number | string;
+  isExactMatch?: boolean;
   product?: {
     title?: string;
     description?: string;
@@ -29,7 +30,7 @@ function persistPendingAnalysisFromIdentify(result: IdentifyApiResponse) {
     JSON.stringify({
       product: result.product,
       draftId: result.draftId,
-      isExactMatch: result.product.isExactMatch ?? true,
+      isExactMatch: result.isExactMatch ?? result.product.isExactMatch ?? false,
     })
   );
 }

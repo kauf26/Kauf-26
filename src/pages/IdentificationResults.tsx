@@ -1,8 +1,6 @@
 import React from "react";
 import { useLocation as useWouterLocation } from "wouter";
 import { useLocation as useRouterLocation } from "react-router-dom";
-import { savePendingAnalysis } from "@/lib/pendingAnalysis";
-
 interface IdentificationResultsProps {
   productData: {
     capturedImage: string;
@@ -13,17 +11,20 @@ interface IdentificationResultsProps {
     refNumber: string;
     material: string;
     aiDescription: string;
+    category?: string;
   };
   marketPrices: {
     allegroAvg: number | string;
     ebayAvg: number | string;
     recommendedPrice: number | string;
   };
+  isExactMatch?: boolean;
 }
 
 const IdentificationResults: React.FC<IdentificationResultsProps> = ({
   productData,
   marketPrices,
+  isExactMatch = false,
 }) => {
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8 pb-24 text-gray-900">
@@ -37,13 +38,34 @@ const IdentificationResults: React.FC<IdentificationResultsProps> = ({
             />
           </div>
           <div className="flex-1 text-center md:text-left">
-            <span className="inline-block px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold mb-2">
-              98% AI MATCH
-            </span>
+            {isExactMatch ? (
+              <span className="inline-block px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold mb-2">
+                Exact Match Confirmed
+              </span>
+            ) : (
+              <span className="inline-block px-3 py-1 bg-amber-100 text-amber-800 rounded-full text-xs font-bold mb-2">
+                Best guess — review on draft
+              </span>
+            )}
             <h1 className="text-3xl font-bold">{productData.modelName}</h1>
             <p className="text-gray-500 mt-2">{productData.brand} • {productData.year}</p>
           </div>
         </div>
+      </section>
+
+      <section className="mb-6 rounded-xl bg-white p-4 shadow-sm border border-gray-100">
+        <h2 className="text-xs font-semibold uppercase text-gray-500 mb-2">Product summary</h2>
+        <p className="text-sm text-gray-800">
+          <span className="font-medium">{productData.modelName}</span>
+          {" · "}
+          {productData.brand}
+          {" · "}$
+          {String(marketPrices.recommendedPrice)}
+          {" · "}
+          {productData.category ?? "General"}
+          {" · "}
+          {productData.condition}
+        </p>
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -90,6 +112,7 @@ type WelcomeScrapedPayload = {
   condition?: string;
   category?: string;
   imageUrl?: string;
+  isExactMatch?: boolean;
 };
 
 const DEFAULT_PRODUCT_DATA: IdentificationResultsProps["productData"] = {
@@ -121,12 +144,14 @@ function mapWelcomeScrapedToProps(scraped: WelcomeScrapedPayload): Identificatio
       refNumber: "AUTO-GEN",
       material: "Detected",
       aiDescription: scraped.description ?? "",
+      category: scraped.category ?? "General",
     },
     marketPrices: {
       allegroAvg: priceNum,
       ebayAvg: priceNum * 1.1,
       recommendedPrice: priceNum,
     },
+    isExactMatch: scraped.isExactMatch ?? false,
   };
 }
 
@@ -145,6 +170,7 @@ function propsFromRouterState(state: unknown): IdentificationResultsProps | null
             ? (s.marketPrices as IdentificationResultsProps["marketPrices"])
             : {}),
         },
+        isExactMatch: Boolean(s.isExactMatch ?? pd.isExactMatch ?? false),
       };
     }
     return mapWelcomeScrapedToProps(pd as WelcomeScrapedPayload);
@@ -173,30 +199,71 @@ export const IdentificationResultsPage: React.FC = () => {
     if (backupData) {
       try {
         const parsed = JSON.parse(backupData);
+        const product = parsed.product ?? parsed;
+        const isExact =
+          parsed.isExactMatch ?? product.isExactMatch ?? false;
+        const price =
+          product.price ?? parsed.recommendedPrice ?? parsed.suggestedPrice ?? 0;
         resolved = {
           productData: {
-            capturedImage: parsed.imageUrl || "",
-            modelName: parsed.title || "Identified Item",
-            brand: parsed.brand || "KAUF-AI Detected",
-            year: parsed.year || new Date().getFullYear().toString(),
-            condition: parsed.condition || "Used",
-            refNumber: parsed.refNumber || "AUTO-GEN",
-            material: parsed.material || "Identified",
-            aiDescription: parsed.description || ""
+            capturedImage: product.capturedImage ?? parsed.imageUrl ?? "",
+            modelName: product.title ?? parsed.title ?? "Identified Item",
+            brand: product.brand ?? parsed.brand ?? "KAUF-AI Detected",
+            year: parsed.year ?? new Date().getFullYear().toString(),
+            condition: product.condition ?? parsed.condition ?? "Used",
+            refNumber: product.modelNumber ?? parsed.refNumber ?? "AUTO-GEN",
+            material: product.material ?? parsed.material ?? "Identified",
+            aiDescription: product.description ?? parsed.description ?? "",
+            category: product.category ?? parsed.category ?? "General",
           },
           marketPrices: {
-            allegroAvg: parsed.suggestedPrice || 0,
-            ebayAvg: parsed.suggestedPrice ? parsed.suggestedPrice * 1.1 : 0,
-            recommendedPrice: parsed.suggestedPrice || 0
-          }
+            allegroAvg: product.allegroAvg ?? parsed.allegroAvg ?? price,
+            ebayAvg: product.ebayAvg ?? parsed.ebayAvg ?? (price ? Number(price) * 1.1 : 0),
+            recommendedPrice: price,
+          },
+          isExactMatch: isExact,
         };
       } catch (e) { console.error("Error parsing session backup:", e); }
     }
   }
 
-  const finalProps = resolved ?? {
+  const finalProps: IdentificationResultsProps = resolved ?? {
     productData: DEFAULT_PRODUCT_DATA,
     marketPrices: DEFAULT_MARKET_PRICES,
+    isExactMatch: false,
+  };
+
+  const persistForDraft = (scrapedData: Record<string, unknown> = {}) => {
+    const scrapedProduct =
+      scrapedData.product && typeof scrapedData.product === "object"
+        ? (scrapedData.product as Record<string, unknown>)
+        : scrapedData;
+    const isExact =
+      (scrapedProduct.isExactMatch as boolean | undefined) ??
+      (scrapedData.isExactMatch as boolean | undefined) ??
+      finalProps.isExactMatch ??
+      false;
+
+    sessionStorage.setItem(
+      "pendingAnalysis",
+      JSON.stringify({
+        product: {
+          title: finalProps.productData.modelName,
+          brand: finalProps.productData.brand,
+          description: finalProps.productData.aiDescription,
+          price: String(finalProps.marketPrices.recommendedPrice),
+          category: finalProps.productData.category ?? "General",
+          condition: finalProps.productData.condition,
+          capturedImage: finalProps.productData.capturedImage,
+          allegroAvg: String(finalProps.marketPrices.allegroAvg),
+          ebayAvg: String(finalProps.marketPrices.ebayAvg),
+          isExactMatch: isExact,
+          ...scrapedProduct,
+        },
+        isExactMatch: isExact,
+        timestamp: new Date().toISOString(),
+      })
+    );
   };
 
   const handleContinue = async () => {
@@ -207,16 +274,11 @@ export const IdentificationResultsPage: React.FC = () => {
         body: JSON.stringify({ query: finalProps.productData.modelName })
       });
       const scrapedData = response.ok ? await response.json() : {};
-      savePendingAnalysis({
-        ...finalProps.productData,
-        ...finalProps.marketPrices,
-        ...scrapedData,
-        timestamp: new Date().toISOString()
-      });
+      persistForDraft(scrapedData);
       setLocation("/product-draft");
     } catch (error) {
       console.error("Scrape failed:", error);
-      savePendingAnalysis({ ...finalProps.productData, ...finalProps.marketPrices });
+      persistForDraft();
       setLocation("/product-draft");
     }
   };
@@ -226,6 +288,7 @@ export const IdentificationResultsPage: React.FC = () => {
       <IdentificationResults
         productData={finalProps.productData}
         marketPrices={finalProps.marketPrices}
+        isExactMatch={finalProps.isExactMatch}
       />
       <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 flex justify-center z-50">
         <button
