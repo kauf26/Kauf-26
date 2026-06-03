@@ -1,5 +1,5 @@
 // server/scrapers/oxylabs.ts
-export const scrapeProduct = async (query: string) => {
+export const scrapeProduct = async (query: string, _context?: unknown) => {
   try {
     console.log(`OxyLabs: Searching for "${query}"...`);
  

@@ -5,10 +5,15 @@ import {
 import { scrapeProduct as scrapeApify } from "./apify";
 import { scrapeProduct as scrapeOxylabs } from "./oxylabs";
 import { scrapeProduct as scrapeRapidAPI } from "./rapidapi";
+import type { VisionMatchContext } from "./listingUtils";
 import dotenv from "dotenv";
 dotenv.config();
 
 export type MatchType = "exact" | "similar" | "generic";
+
+export type ScrapeOptions = {
+  vision?: VisionMatchContext;
+};
 
 const truncateDescription = (text: string, query: string): string => {
   if (!text || text.trim() === "") return "";
@@ -133,11 +138,17 @@ function buildGenericProduct(
   };
 }
 
-export const scrapeProduct = async (query: string): Promise<any | null> => {
+export const scrapeProduct = async (
+  query: string,
+  options?: ScrapeOptions
+): Promise<any | null> => {
   console.log(`[MasterScraper] Initiating search for: ${query}`);
+  const vision = options?.vision;
 
   const scrapers = [scrapeApify, scrapeOxylabs, scrapeRapidAPI];
-  const results = await Promise.allSettled(scrapers.map((s) => s(query)));
+  const results = await Promise.allSettled(
+    scrapers.map((s) => s(query, vision))
+  );
 
   const fulfilled = results.filter(
     (res): res is PromiseFulfilledResult<Record<string, unknown>> =>
@@ -155,7 +166,10 @@ export const scrapeProduct = async (query: string): Promise<any | null> => {
   );
   if (similarWinner) {
     console.log("[MasterScraper] Similar marketplace match");
-    return mergeSimilarProduct(similarWinner.value);
+    return mergeSimilarProduct(similarWinner.value, {
+      visionTitle: vision?.visionTitle,
+      visionCategory: undefined,
+    });
   }
 
   console.log(

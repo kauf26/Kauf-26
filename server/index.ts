@@ -30,6 +30,8 @@ interface ScrapedProduct {
  ebayPrice?: string | number;
 }
 
+type VisionConfidence = "high" | "medium" | "low";
+
 type VisionProduct = {
   title: string;
   brand?: string;
@@ -37,6 +39,7 @@ type VisionProduct = {
   condition?: string;
   price?: number | null;
   description?: string;
+  confidence: VisionConfidence;
 };
 
 type MatchType = "exact" | "similar" | "generic";
@@ -65,6 +68,7 @@ Return ONLY valid JSON:
   "category": "accurate marketplace category for this item (any appropriate label)",
   "condition": "one of: New, Used, Like New",
   "price": estimated USD resale price as a number; use 0 if unknown,
+  "confidence": "high" | "medium" | "low",
   "description": "1-2 sentences describing the product for a listing"
 }
 
@@ -72,14 +76,21 @@ Guidance:
 - Pick category and price that fit THIS item (e.g. small low-cost items vs luxury goods).
 - Include visible on-product text in brand/title when helpful (e.g. bar name on a cap).
 - Do not use the word "General" as category — choose a specific category.
+- confidence:
+  - "high": clear product, recognizable brand/model (e.g. iPhone in frame).
+  - "medium": identifiable type but limited detail (generic sneakers, unbranded mug).
+  - "low": unclear photo, unusual/generic object, or you cannot confidently name a specific SKU.
+    For low confidence use a simple generic title (e.g. "Eyeglass cleaning cloth"), set price to 0.
 
 Examples (format only):
 
-Phone: { "title": "iPhone 12", "brand": "Apple", "category": "Electronics", "condition": "Used", "price": 299.99, "description": "..." }
+Phone: { "title": "iPhone 12", "brand": "Apple", "category": "Electronics", "condition": "Used", "price": 299.99, "confidence": "high", "description": "..." }
 
-Cap with logo: { "title": "The Shack Baseball Cap", "brand": "The Shack", "category": "Clothing", "condition": "Used", "price": 15, "description": "..." }
+Cap with logo: { "title": "The Shack Baseball Cap", "brand": "The Shack", "category": "Clothing", "condition": "Used", "price": 15, "confidence": "medium", "description": "..." }
 
-Small toy: { "title": "Yellow Stress Ball", "brand": "", "category": "Toys", "condition": "Used", "price": 8, "description": "..." }`;
+Small toy: { "title": "Yellow Stress Ball", "brand": "", "category": "Toys", "condition": "Used", "price": 8, "confidence": "medium", "description": "..." }
+
+Cleaning cloth (blurry/generic): { "title": "Eyeglass cleaning cloth", "brand": "", "category": "Accessories", "condition": "Used", "price": 0, "confidence": "low", "description": "Soft microfiber cloth for cleaning eyeglasses." }`;
 
 function parseVisionResponse(content: string): VisionProduct | null {
   const trimmed = content.trim();
@@ -90,6 +101,11 @@ function parseVisionResponse(content: string): VisionProduct | null {
     if (!parsed.title || typeof parsed.title !== "string") return null;
     const title = parsed.title.trim();
     const categoryFromVision = String(parsed.category ?? "").trim();
+    const rawConf = parsed.confidence;
+    const confidence: VisionConfidence =
+      rawConf === "high" || rawConf === "medium" || rawConf === "low"
+        ? rawConf
+        : "medium";
     return {
       title,
       brand: parsed.brand?.trim() || "",
@@ -97,10 +113,84 @@ function parseVisionResponse(content: string): VisionProduct | null {
       condition: parsed.condition || "Used",
       price: parsed.price ?? 0,
       description: parsed.description?.trim() || "",
+      confidence,
     };
   } catch {
     return null;
   }
+}
+
+const TITLE_STOP_WORDS = new Set([
+  "with", "from", "that", "this", "your", "for", "the", "and", "new", "used",
+]);
+
+function significantTitleTokens(title: string): Set<string> {
+  return new Set(
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length > 3 && !TITLE_STOP_WORDS.has(w))
+  );
+}
+
+function titlesAreVeryDifferent(visionTitle: string, scraperTitle: string): boolean {
+  const a = significantTitleTokens(visionTitle);
+  const b = significantTitleTokens(scraperTitle);
+  if (a.size === 0 || b.size === 0) return false;
+  let overlap = 0;
+  for (const w of a) if (b.has(w)) overlap++;
+  const union = a.size + b.size - overlap;
+  const jaccard = union > 0 ? overlap / union : 0;
+  return jaccard < 0.15;
+}
+
+function truncateWords(text: string, maxWords = 50): string {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return words.join(" ");
+  return words.slice(0, maxWords).join(" ");
+}
+
+function buildGenericFromVision(vision: VisionProduct): ScrapedListing {
+  return {
+    title: vision.title,
+    brand: vision.brand ?? "",
+    category: coalesceCategory(vision.category, "Accessories"),
+    condition: vision.condition ?? "Used",
+    description: truncateWords(vision.description ?? "", 50),
+    price: 0,
+    allegroAvg: 0,
+    ebayAvg: 0,
+    isExactMatch: false,
+    matchType: "generic",
+  };
+}
+
+const LOW_COST_CATEGORY_KEYWORDS = ["accessories", "clothing", "toys", "apparel"];
+
+function isLowCostCategory(category: string): boolean {
+  const c = category.toLowerCase();
+  return LOW_COST_CATEGORY_KEYWORDS.some((k) => c.includes(k));
+}
+
+function applyPriceSanityCheck(
+  listing: ScrapedListing,
+  vision: VisionProduct
+): ScrapedListing {
+  const category = coalesceCategory(listing.category, vision.category);
+  const priceNum = parseFloat(String(listing.price ?? 0)) || 0;
+  if (!isLowCostCategory(category) || priceNum <= 50) return listing;
+  console.warn(
+    `[Identify] Price sanity: ${priceNum} → 0 for low-cost category "${category}"`
+  );
+  return {
+    ...listing,
+    price: 0,
+    allegroAvg: 0,
+    ebayAvg: 0,
+    isExactMatch: false,
+    matchType: "generic",
+  };
 }
 
 function mergeListingWithVision(
@@ -246,10 +336,36 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
    const searchQuery = vision.title;
    console.log("🔍 [3/5] Vision identified:", JSON.stringify(vision, null, 2));
 
-   console.log("🕸️ [4/5] Calling scraper with query:", searchQuery);
-   const scrapedRaw = await fetchMasterProductData(searchQuery);
-   const listings = mergeListingWithVision(scrapedRaw, vision);
-   console.log("📦 Scraper returned:", JSON.stringify(listings, null, 2));
+   let listings: ScrapedListing;
+
+   if (vision.confidence === "low") {
+     console.log("⚠️ [4/5] Low vision confidence — skipping marketplace scraper");
+     listings = buildGenericFromVision(vision);
+   } else {
+     console.log("🕸️ [4/5] Calling scraper with query:", searchQuery);
+     const scrapedRaw = await fetchMasterProductData(searchQuery, {
+       vision: {
+         visionTitle: vision.title,
+         visionBrand: vision.brand ?? "",
+       },
+     });
+     const scraperTitle = String(scrapedRaw?.title ?? "").trim();
+     if (
+       scrapedRaw &&
+       scraperTitle &&
+       titlesAreVeryDifferent(vision.title, scraperTitle)
+     ) {
+       console.warn(
+         `[Identify] Scraper title "${scraperTitle}" conflicts with vision "${vision.title}" — generic fallback`
+       );
+       listings = buildGenericFromVision(vision);
+     } else {
+       listings = mergeListingWithVision(scrapedRaw, vision);
+       listings = applyPriceSanityCheck(listings, vision);
+     }
+   }
+
+   console.log("📦 Listing result:", JSON.stringify(listings, null, 2));
 
    // ✨ NEW: Save as a draft in the database
    const draftData = {
@@ -305,6 +421,7 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
      draftId: savedDraft.id ?? savedDraft,
      isExactMatch,
      matchType,
+     confidence: vision.confidence,
      product: {
        title: listings.title ?? searchQuery,
        description: listings.description ?? vision.description ?? "",

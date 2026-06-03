@@ -178,7 +178,7 @@ export default function SelectMarketplaces() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs text-zinc-500">Price</label>
+            <label className="text-xs text-zinc-500">Price (USD)</label>
             <input
               type="text"
               value={
@@ -187,14 +187,14 @@ export default function SelectMarketplaces() {
               onChange={(e) => updateField("price", e.target.value)}
               placeholder={
                 parseFloat(draft.price || "0") <= 0
-                  ? "Price not available — set manually"
+                  ? "Price not available — enter manually"
                   : "0.00"
               }
               className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-700"
             />
             {parseFloat(draft.price || "0") <= 0 && (
               <p className="text-xs text-amber-400/90">
-                Price not available — set manually
+                Price not available — enter a price before publishing.
               </p>
             )}
           </div>

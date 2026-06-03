@@ -61,6 +61,21 @@ function formatPrice(value: string): string {
   return Number.isFinite(n) ? n.toFixed(2) : value || "0.00";
 }
 
+function isPriceUnset(value: string): boolean {
+  const n = parseFloat(value);
+  return !Number.isFinite(n) || n <= 0;
+}
+
+function formatPriceDisplay(value: string): string {
+  if (isPriceUnset(value)) return "Price not available";
+  return `$${formatPrice(value)}`;
+}
+
+function formatMarketAvg(value: string): string {
+  if (isPriceUnset(value)) return "—";
+  return `$${formatPrice(value)}`;
+}
+
 const ProductDraft: React.FC = () => {
 const [, setLocation] = useLocation();
 const { toast } = useToast();
@@ -214,7 +229,7 @@ return (
         </div>
         <div>
           <dt className="text-zinc-500">Price</dt>
-          <dd className="font-medium text-zinc-100">${formatPrice(product.price)}</dd>
+          <dd className="font-medium text-zinc-100">{formatPriceDisplay(product.price)}</dd>
         </div>
         <div>
           <dt className="text-zinc-500">Category</dt>
@@ -247,11 +262,11 @@ return (
           <h3 className="text-xs font-semibold tracking-wider text-zinc-400 uppercase">Scraped Valuations</h3>
           <div className="flex justify-between items-center text-sm">
             <span className="text-zinc-500">eBay Market Avg:</span>
-            <span className="font-medium text-zinc-300">${product.ebayAverage}</span>
+            <span className="font-medium text-zinc-300">{formatMarketAvg(product.ebayAverage)}</span>
           </div>
           <div className="flex justify-between items-center text-sm">
             <span className="text-zinc-500">Allegro Market Avg:</span>
-            <span className="font-medium text-zinc-300">${product.allegroAverage}</span>
+            <span className="font-medium text-zinc-300">{formatMarketAvg(product.allegroAverage)}</span>
           </div>
         </div>
       </div>
@@ -270,7 +285,15 @@ return (
           </div>
           <div className="space-y-1">
             <label className="text-xs font-medium text-zinc-400">Target Listing Price ($)</label>
-            <input className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-700" value={product.price} onChange={e => update("price", e.target.value)} />
+            <input
+              className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-700"
+              value={isPriceUnset(product.price) ? "" : product.price}
+              onChange={e => update("price", e.target.value)}
+              placeholder={isPriceUnset(product.price) ? "Price not available — enter manually" : "0.00"}
+            />
+            {isPriceUnset(product.price) && (
+              <p className="text-xs text-amber-400/90">Price not available — set manually before posting.</p>
+            )}
           </div>
         </div>
 

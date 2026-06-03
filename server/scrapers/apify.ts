@@ -1,39 +1,45 @@
 // server/scrapers/apify.ts
 import { ApifyClient } from 'apify-client';
+import {
+  aggregateListings,
+  SCRAPE_LISTING_LIMIT,
+  type VisionMatchContext,
+} from "./listingUtils";
 import dotenv from 'dotenv';
 dotenv.config();
 
 const client = new ApifyClient({ token: process.env.APIFY_API_KEY });
 
-// Enforce 50-word limit
 const truncateDescription = (text: string, query: string): string => {
  if (!text) return `A general listing for ${query}.`;
  const words = text.split(/\s+/);
  return words.length > 50 ? words.slice(0, 50).join(" ") + "..." : text;
 };
 
-export const scrapeProduct = async (query: string): Promise<any> => {
+export const scrapeProduct = async (
+  query: string,
+  context?: VisionMatchContext
+): Promise<any> => {
  try {
   const run = await client.actor("YOUR_NEW_ACTOR_ID").call({
      search: query,
      country: "US",
-     limit: 1,
+     limit: SCRAPE_LISTING_LIMIT,
    }, { timeout: 30000 });
 
-   const { items } = await client.dataset(run.defaultDatasetId).listItems({ limit: 1 });
+   const { items } = await client.dataset(run.defaultDatasetId).listItems({
+     limit: SCRAPE_LISTING_LIMIT,
+   });
 
    if (!items || items.length === 0) return getGeneralDescription(query);
 
-   const first = items[0] as any;
+   const aggregated = aggregateListings(items as any[], query, context);
+   if (!aggregated) return getGeneralDescription(query);
 
    return {
-     title: first.title || query,
-     brand: first.brand || "",
-     description: truncateDescription(first.description || "", query),
-     price: parsePrice(first.price),
-     category: first.category || 'General',
-     condition: first.condition || 'New',
-     isExactMatch: true,
+     ...aggregated,
+     description: truncateDescription(String(aggregated.description || ""), query),
+     category: aggregated.category || "Other",
    };
  } catch (error) {
    console.error('❌ Apify Error:', error);
@@ -51,10 +57,4 @@ function getGeneralDescription(query: string) {
    condition: 'New',
    isExactMatch: false,
  };
-}
-
-function parsePrice(price: any): number | undefined {
- const str = String(price).replace(/[^0-9.]/g, '');
- const parsed = parseFloat(str);
- return isNaN(parsed) ? undefined : parsed;
 }
