@@ -9,6 +9,10 @@ const router = express.Router();
 router.post('/publish', async (req, res) => {
  const { productData, marketplaceIds } = req.body;
 
+ if (!productData || typeof productData !== 'object') {
+   return res.status(400).json({ error: 'productData is required.' });
+ }
+
  if (!marketplaceIds || !Array.isArray(marketplaceIds) || marketplaceIds.length === 0) {
    return res.status(400).json({ error: 'No target marketplaces provided.' });
  }

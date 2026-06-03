@@ -7,6 +7,8 @@ import multer from "multer";
 import OpenAI from "openai";
 import { scrapeProduct as fetchMasterProductData } from "./scrapers/masterScraper";
 import { productRoutes } from "./productsRoutes";
+import marketplaceRoutes from "./marketplaceRoutes";
+import { startMarketplaceWorker } from "./marketplaceWorker";
 
 /** First non-empty category wins; "Other" only when all are blank */
 function coalesceCategory(
@@ -284,6 +286,9 @@ app.use(express.urlencoded({ extended: false }));
 // Mount product routes (handles POST /api/drafts and GET /api/drafts)
 app.use("/api", productRoutes);
 
+// Marketplace publish queue (POST /api/marketplaces/publish, GET /api/marketplaces/status/:jobId)
+app.use("/api/marketplaces", marketplaceRoutes);
+
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -472,5 +477,8 @@ const server = createServer(app);
    console.log(`   - POST /api/products/save`);
    console.log(`   - POST /api/create-checkout-session`);
    console.log(`   - POST /api/create-hold`);
+   console.log(`   - POST /api/marketplaces/publish`);
+   console.log(`   - GET  /api/marketplaces/status/:jobId`);
+   startMarketplaceWorker();
  });
 })();

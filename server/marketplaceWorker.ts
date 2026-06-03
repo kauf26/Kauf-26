@@ -1,19 +1,16 @@
 import { db } from './db'; // Adjust path if your initialized drizzle db instance is elsewhere
 import { publishJobs, publishTasks } from '../shared/schema';
-import { eq, and, or, lt, sql } from 'drizzle-orm';
+import { eq, and, or, lt } from 'drizzle-orm';
 
-// Simulate actual upload to a marketplace – replace with your real API/Puppeteer logic
-async function executeMarketplaceUpload(marketplaceId: string, productData: any) {
- console.log(`[Worker] Uploading to ${marketplaceId}...`);
- // Simulate work (remove this and add real integration later)
- await new Promise((resolve) => setTimeout(resolve, 2000));
-
- // Example real dispatch fallback check
- // switch (marketplaceId) {
- //   case 'depop': await depopApi.createListing(productData); break;
- //   case 'ebay': await ebayApi.createListing(productData); break;
- //   default: throw new Error(`No handler for ${marketplaceId}`);
- // }
+// Stub publisher — replace with eBay/Depop/etc. adapters later
+async function executeMarketplaceUpload(marketplaceId: string, productData: unknown) {
+ console.log(`[Worker] STUB publish → marketplace: ${marketplaceId}`);
+ console.log(
+   `[Worker] Listing payload (job productData):`,
+   JSON.stringify(productData, null, 2)
+ );
+ await new Promise((resolve) => setTimeout(resolve, 500));
+ console.log(`[Worker] STUB completed upload to ${marketplaceId}`);
 }
 
 async function processQueue() {
@@ -32,16 +29,12 @@ async function processQueue() {
      .from(publishTasks)
      .innerJoin(publishJobs, eq(publishTasks.jobId, publishJobs.id))
      .where(
-       and(
-         or(
-           eq(publishTasks.status, 'pending'),
-           and(
-             eq(publishTasks.status, 'failed'),
-             lt(publishTasks.attempts, 3)
-           )
-         ),
-         // Only retry failed tasks after a shifting interval delay
-         sql`${publishTasks.updatedAt} < NOW() - INTERVAL '5 minutes' * ${publishTasks.attempts}`
+       or(
+         eq(publishTasks.status, 'pending'),
+         and(
+           eq(publishTasks.status, 'failed'),
+           lt(publishTasks.attempts, 3)
+         )
        )
      )
      .limit(1)

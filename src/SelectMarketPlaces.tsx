@@ -48,10 +48,29 @@ const US_MARKETS = [
   { id: "kidizen", name: "Kidizen", currency: "USD" },
  ] as const;
 
+function listingToProductData(draft: ListingSession) {
+  return {
+    title: draft.title,
+    description: draft.description,
+    price: draft.price,
+    brand: draft.brand,
+    category: draft.category,
+    condition: draft.condition,
+    capturedImage: draft.capturedImage,
+    matchType: draft.matchType,
+    isExactMatch: draft.isExactMatch,
+    allegroAvg: draft.product.allegroAvg,
+    ebayAvg: draft.product.ebayAvg,
+  };
+}
+
 export default function SelectMarketplaces() {
   const [, setLocation] = useLocation();
   const [draft, setDraft] = useState<ListingSession | null>(null);
   const [selected, setSelected] = useState<Marketplace[]>(["ebay"]);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [publishJobId, setPublishJobId] = useState<number | null>(null);
 
   useEffect(() => {
     const loaded = loadListingSession();
@@ -138,6 +157,15 @@ export default function SelectMarketplaces() {
         </button>
         <span className="text-xs text-zinc-500 tracking-wider">MARKETPLACE SELECTOR</span>
       </div>
+
+      {publishError && (
+        <p className="text-sm text-red-400">{publishError}</p>
+      )}
+      {publishJobId != null && (
+        <p className="text-sm text-emerald-400">
+          Publish job queued (ID {publishJobId}). Worker will process tasks shortly.
+        </p>
+      )}
 
       {draft.matchType === "exact" && (
         <p className="text-sm text-emerald-400">
@@ -227,15 +255,48 @@ export default function SelectMarketplaces() {
           </div>
 
           <button
-            onClick={() => {
+            onClick={async () => {
+              if (!draft || selected.length === 0) return;
+              setIsPublishing(true);
+              setPublishError(null);
+              setPublishJobId(null);
               saveListingSession(draft);
               sessionStorage.setItem("selectedMarkets", JSON.stringify(selected));
-              setLocation("/create");
+              const productData = listingToProductData(draft);
+              try {
+                const res = await fetch("/api/marketplaces/publish", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    productData,
+                    marketplaceIds: selected,
+                  }),
+                });
+                const body = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                  throw new Error(
+                    (body as { error?: string }).error ||
+                      `Publish failed (${res.status})`
+                  );
+                }
+                const jobId = (body as { jobId?: number }).jobId;
+                if (jobId != null) {
+                  setPublishJobId(jobId);
+                  sessionStorage.setItem("publishJobId", String(jobId));
+                }
+                setLocation("/create");
+              } catch (err) {
+                setPublishError(
+                  err instanceof Error ? err.message : "Publish request failed"
+                );
+              } finally {
+                setIsPublishing(false);
+              }
             }}
-            disabled={selected.length === 0}
+            disabled={selected.length === 0 || isPublishing}
             className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-semibold py-3 rounded transition-colors"
           >
-            Publish to Channels
+            {isPublishing ? "Queuing…" : "Publish to Channels"}
           </button>
         </div>
       </div>
