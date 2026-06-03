@@ -8,6 +8,7 @@ import OpenAI from "openai";
 import {
   scrapeProduct as fetchMasterProductData,
   correctMisclassifiedCategory,
+  PHONE_TITLE_REGEX,
 } from "./scrapers/masterScraper";
 import { productRoutes } from "./productsRoutes";
 
@@ -53,21 +54,32 @@ CRITICAL:
 - Identify ONLY the main physical product in focus (phone, watch, shoes, bag, etc.).
 - IGNORE text on stickers, labels, packaging, posters, or background objects.
 - Do NOT use incidental text (band names, slogans, unrelated brands) as the product title.
+- Use a specific model name in title (e.g. "iPhone 12 Pro"), NOT generic phrases like "Smartphone with Orange Case".
 
 Return ONLY valid JSON:
 {
-  "title": "specific product name (e.g. iPhone 12 Pro, Rolex Submariner)",
+  "title": "specific product name (e.g. iPhone 12 Pro, Samsung Galaxy S21)",
   "brand": "brand if visible or reasonably inferred, else empty string",
   "category": "one of: Electronics, Watches, Clothing, Shoes, Accessories, Home, Other",
   "condition": "one of: New, Used, Like New",
-  "price": estimated USD market price as a number, or null if unknown,
-  "description": "1-2 sentences describing only the main product"
+  "price": estimated USD resale price as a number; use 0 only if truly unknown,
+  "description": "1-2 sentences describing only the main product, include brand/model if known"
 }
 
 Rules:
-- Smartphones, cell phones, tablets → category MUST be "Electronics", never "Watches".
+- Any phone-like device (smartphone, iPhone, Android, Galaxy, Pixel, cellphone) → category MUST be "Electronics", never "Watches".
 - Wristwatches only → "Watches".
-- Be specific in title; never name the product after sticker or background text.`;
+- Be specific in title; never name the product after sticker or background text.
+
+Example output for a phone photo:
+{
+  "title": "iPhone 12",
+  "brand": "Apple",
+  "category": "Electronics",
+  "condition": "Used",
+  "price": 299.99,
+  "description": "Apple iPhone 12 smartphone in used condition with orange case."
+}`;
 
 function parseVisionResponse(content: string): VisionProduct | null {
   const trimmed = content.trim();
@@ -84,9 +96,11 @@ function parseVisionResponse(content: string): VisionProduct | null {
     return {
       title: parsed.title.trim(),
       brand: parsed.brand?.trim() || "",
-      category,
+      category: PHONE_TITLE_REGEX.test(parsed.title)
+        ? "Electronics"
+        : category,
       condition: parsed.condition || "Used",
-      price: parsed.price ?? null,
+      price: parsed.price ?? 0,
       description: parsed.description?.trim() || "",
     };
   } catch {
@@ -99,18 +113,54 @@ function mergeListingWithVision(
   vision: VisionProduct
 ): ScrapedListing {
   const base = scraped ?? {};
+  const exact = scraped?.isExactMatch === true;
+  const phoneLike =
+    PHONE_TITLE_REGEX.test(vision.title) ||
+    PHONE_TITLE_REGEX.test(String(base.title ?? ""));
+  const category = phoneLike
+    ? "Electronics"
+    : exact
+      ? base.category ?? vision.category ?? "Other"
+      : vision.category ?? base.category ?? "Other";
   return {
     ...base,
-    title: base.title ?? vision.title,
-    brand: base.brand ?? vision.brand ?? "",
-    category: base.category ?? vision.category ?? "Other",
+    title: exact ? base.title ?? vision.title : vision.title ?? base.title,
+    brand: exact
+      ? base.brand ?? vision.brand ?? ""
+      : vision.brand || base.brand || "",
+    category,
     condition: base.condition ?? vision.condition ?? "Used",
     description:
+      (exact ? base.description : vision.description) ??
       base.description ??
       vision.description ??
       `Identified: ${vision.title}`,
     price: base.price ?? vision.price ?? 0,
     isExactMatch: scraped?.isExactMatch ?? false,
+  };
+}
+
+// TODO: Remove mock market prices when Apify actor returns real listings
+function applyMockMarketPrices(input: {
+  price?: string | number;
+  category?: string;
+  title?: string;
+  allegroAvg?: string | number;
+  ebayAvg?: string | number;
+}) {
+  const priceNum = parseFloat(String(input.price ?? 0)) || 0;
+  let allegro = parseFloat(String(input.allegroAvg ?? 0)) || 0;
+  let ebay = parseFloat(String(input.ebayAvg ?? 0)) || 0;
+  const phoneLike =
+    PHONE_TITLE_REGEX.test(String(input.title ?? "")) ||
+    input.category === "Electronics";
+  const fallback = phoneLike ? 299 : priceNum > 0 ? priceNum : 99;
+  if (allegro <= 0) allegro = priceNum > 0 ? priceNum : fallback;
+  if (ebay <= 0) ebay = Math.round(allegro * 1.05);
+  return {
+    price: priceNum > 0 ? priceNum : allegro,
+    allegroAvg: String(allegro),
+    ebayAvg: String(ebay),
   };
 }
 
@@ -155,6 +205,7 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
    const vision =
      parseVisionResponse(visionRaw) ??
      ({ title: visionRaw.trim(), category: "Other", condition: "Used" } as VisionProduct);
+   console.log("🔬 [Vision] Parsed vision object:", JSON.stringify(vision, null, 2));
    const searchQuery = vision.title;
    console.log("🔍 [3/5] Vision identified:", JSON.stringify(vision, null, 2));
 
@@ -205,8 +256,13 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
 
    // Normalized response for ProductDraft / sessionStorage (Task A)
    const capturedImage = `data:${req.file.mimetype};base64,${base64Image}`;
-   const allegroAvg = listings.price ?? "0.00";
-   const ebayAvg = listings.ebayPrice ?? listings.price ?? "0.00";
+   const mocked = applyMockMarketPrices({
+     price: listings.price ?? vision.price ?? 0,
+     category: String(listings.category ?? vision.category ?? ""),
+     title: String(listings.title ?? vision.title ?? ""),
+     allegroAvg: listings.price,
+     ebayAvg: listings.ebayPrice,
+   });
 
    const isExactMatch = listings.isExactMatch ?? false;
 
@@ -217,12 +273,12 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
      product: {
        title: listings.title ?? searchQuery,
        description: listings.description ?? vision.description ?? "",
-       price: String(listings.price ?? vision.price ?? 0),
+       price: String(mocked.price),
        brand: listings.brand ?? vision.brand ?? "",
        category: listings.category ?? vision.category ?? "Other",
        condition: listings.condition ?? vision.condition ?? "Used",
-       allegroAvg: String(allegroAvg),
-       ebayAvg: String(ebayAvg),
+       allegroAvg: mocked.allegroAvg,
+       ebayAvg: mocked.ebayAvg,
        capturedImage,
        isExactMatch,
      },

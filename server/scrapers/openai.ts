@@ -15,6 +15,28 @@ const getOpenAI = () => {
   return openai;
 };
 
+export function inferPriceFromDescription(description: string): number {
+  const patterns = [
+    /\$\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/i,
+    /(\d+(?:\.\d{2})?)\s*dollars?/i,
+    /(?:price|valued at|worth|msrp|retail)\s*[:\s]*\$?\s*(\d+(?:\.\d{2})?)/i,
+    /\b(\d{2,4}(?:\.\d{2})?)\s*(?:USD|usd)\b/i,
+  ];
+  for (const pattern of patterns) {
+    const match = description.match(pattern);
+    if (!match) continue;
+    const parsed = parseFloat(match[1].replace(/,/g, ""));
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  }
+  return 0;
+}
+
+function parsePriceField(price: unknown): number {
+  const str = String(price ?? "").replace(/[^0-9.]/g, "");
+  const parsed = parseFloat(str);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 export const extractProductData = async (rawText: string) => {
   const prompt = `Extract product listing details from this text. Return strictly valid JSON:
   {
@@ -31,16 +53,22 @@ export const extractProductData = async (rawText: string) => {
   Text: ${rawText}`;
 
   try {
-    // Get the instance only when needed
     const client = getOpenAI();
-    
+
     const completion = await client.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" }
     });
 
-    return JSON.parse(completion.choices[0].message.content || "{}");
+    const data = JSON.parse(completion.choices[0].message.content || "{}");
+    const price = parsePriceField(data.price);
+    if (price <= 0 && data.description) {
+      data.price = inferPriceFromDescription(String(data.description));
+    } else {
+      data.price = price;
+    }
+    return data;
   } catch (error) {
     console.error("❌ OpenAI Extraction Failed:", error);
     return null;

@@ -1,9 +1,15 @@
-import { extractProductData as scrapeOpenAI } from "./openai";
+import {
+  extractProductData as scrapeOpenAI,
+  inferPriceFromDescription,
+} from "./openai";
 import { scrapeProduct as scrapeApify } from "./apify";
 import { scrapeProduct as scrapeOxylabs } from "./oxylabs";
 import { scrapeProduct as scrapeRapidAPI } from "./rapidapi";
 import dotenv from 'dotenv';
 dotenv.config();
+
+export const PHONE_TITLE_REGEX =
+  /\b(\w*phone\w*|iphone|android|samsung|galaxy|pixel|smartphone|cell\s*phone)\b/i;
 
 const truncateDescription = (text: string, query: string): string => {
   if (!text || text.trim() === "") return ""; 
@@ -15,15 +21,6 @@ function parsePrice(price: any): number {
   const str = String(price).replace(/[^0-9.]/g, '');
   const parsed = parseFloat(str);
   return isNaN(parsed) ? 0.00 : parsed;
-}
-
-function inferPriceFromDescription(description: string): number {
-  const match = description.match(
-    /\$?\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*(?:USD|usd)?/
-  );
-  if (!match) return 0;
-  const parsed = parseFloat(match[1].replace(/,/g, ""));
-  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function resolveOpenAIFallbackPrice(aiData: {
@@ -43,14 +40,10 @@ function resolveOpenAIFallbackPrice(aiData: {
 export function correctMisclassifiedCategory(
   product: Record<string, unknown>
 ): Record<string, unknown> {
-  const title = String(product.title ?? "").toLowerCase();
+  const title = String(product.title ?? "");
   const category = String(product.category ?? "");
-  if (
-    category === "Watches" &&
-    /\b(phone|iphone|android|samsung|galaxy|pixel|smartphone|mobile|cell\s*phone)\b/i.test(
-      title
-    )
-  ) {
+  const phoneLike = PHONE_TITLE_REGEX.test(title);
+  if (phoneLike && category !== "Electronics") {
     return { ...product, category: "Electronics" };
   }
   return product;

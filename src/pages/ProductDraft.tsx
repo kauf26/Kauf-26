@@ -17,13 +17,33 @@ ebayAverage: string;
 capturedImage: string;
 };
 
+const DRAFT_CATEGORY_OPTIONS = [
+  "Electronics",
+  "Watches",
+  "Skate Gear",
+  "Collectibles",
+  "Clothing",
+  "Shoes",
+  "Accessories",
+  "Home",
+  "Other",
+] as const;
+
+function normalizeDraftCategory(category: string | undefined): string {
+  if (!category) return "Other";
+  if ((DRAFT_CATEGORY_OPTIONS as readonly string[]).includes(category)) return category;
+  if (/phone|iphone|android|smartphone|electronics/i.test(category)) return "Electronics";
+  if (/watch/i.test(category)) return "Watches";
+  return "Other";
+}
+
 const DEFAULT_PRODUCT: ProductDraftState = {
 isExactMatch: false,
 title: "Draft Product Title",
 brand: "Brand Name",
 description: "Detailed product description goes here...",
 price: "0.00",
-category: "Watches",
+category: "Other",
 condition: "New",
 modelNumber: "N/A",
 material: "N/A",
@@ -60,7 +80,7 @@ useEffect(() => {
       brand: src.brand ?? DEFAULT_PRODUCT.brand,
       description: src.description ?? data.aiDescription ?? DEFAULT_PRODUCT.description,
       price: String(src.price ?? data.recommendedPrice ?? DEFAULT_PRODUCT.price),
-      category: src.category ?? DEFAULT_PRODUCT.category,
+      category: normalizeDraftCategory(src.category ?? data.category),
       condition: src.condition ?? DEFAULT_PRODUCT.condition,
       modelNumber: src.modelNumber ?? data.refNumber ?? DEFAULT_PRODUCT.modelNumber,
       material: src.material ?? DEFAULT_PRODUCT.material,
@@ -237,10 +257,15 @@ return (
           <div className="space-y-1">
             <label className="text-xs font-medium text-zinc-400">Category Node</label>
             <select className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-700" value={product.category} onChange={e => update("category", e.target.value)}>
+              <option value="Electronics">Electronics</option>
               <option value="Watches">Luxury Watches</option>
               <option value="Skate Gear">Skate Gear & Apparel</option>
-              <option value="Electronics">Electronics</option>
               <option value="Collectibles">Collectibles</option>
+              <option value="Clothing">Clothing</option>
+              <option value="Shoes">Shoes</option>
+              <option value="Accessories">Accessories</option>
+              <option value="Home">Home</option>
+              <option value="Other">Other</option>
             </select>
           </div>
           <div className="space-y-1">
