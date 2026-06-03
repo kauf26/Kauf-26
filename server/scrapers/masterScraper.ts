@@ -4,6 +4,8 @@ import {
 } from "./openai";
 import { scrapeProduct as scrapeApify } from "./apify";
 import { scrapeProduct as scrapeGoogle } from "./googleShopping";
+import { scrapeProduct as scrapeRapidAPI } from "./rapidapi";
+import { scrapeProduct as scrapeOxylabs } from "./oxylabs";
 import {
   brandJaccard,
   brandsConflict,
@@ -240,6 +242,8 @@ export const scrapeProduct = async (
 
   const runners: ScraperRunner[] = [
     { source: "apify", run: scrapeApify },
+    { source: "rapidapi", run: scrapeRapidAPI },
+    { source: "oxylabs", run: scrapeOxylabs },
     { source: "google", run: scrapeGoogle },
     { source: "openai", run: runOpenAIScraper },
   ];
@@ -309,6 +313,9 @@ export const scrapeProduct = async (
   console.log(
     `[MasterScraper] WINNER: ${winner.source} (score=${winner.score}) — ${winner.reasons.join(", ")}`
   );
+  console.log(
+    `[MasterScraper] Winner preview — title: "${String(winner.product.title ?? "")}" brand: "${String(winner.product.brand ?? "")}" price: ${winner.product.price ?? 0}`
+  );
   if (candidates.length > 1) {
     console.log(
       "[MasterScraper] Runner-up:",
@@ -327,6 +334,8 @@ export const scrapeProduct = async (
       priceReliable: result.priceReliable,
       isExactMatch: result.isExactMatch,
       scraperSource: result.scraperSource,
+      brand: result.brand,
+      title: result.title,
     });
     return result;
   }
@@ -340,6 +349,8 @@ export const scrapeProduct = async (
     priceReliable: result.priceReliable,
     isExactMatch: result.isExactMatch,
     scraperSource: result.scraperSource,
+    brand: result.brand,
+    title: result.title,
   });
   return result;
 };

@@ -8,40 +8,61 @@ import {
 export const scrapeProduct = async (
   query: string,
   context?: VisionMatchContext
-): Promise<any> => {
+): Promise<Record<string, unknown> | null> => {
   try {
-    console.log(`🔎 RapidAPI: Searching for "${query}"...`);
+    if (!process.env.RAPIDAPI_KEY?.trim()) {
+      console.warn("[RapidAPI] RAPIDAPI_KEY missing — skipping");
+      return null;
+    }
+
+    console.log(`[RapidAPI] Searching for "${query}"...`);
 
     const url = `https://ebay-data-scraper.p.rapidapi.com/search?query=${encodeURIComponent(query)}&page=1`;
     const options = {
-      method: 'GET',
+      method: "GET",
       headers: {
-        'X-RapidAPI-Key': process.env.RAPIDAPI_KEY || '',
-        'X-RapidAPI-Host': 'ebay-data-scraper.p.rapidapi.com',
+        "X-RapidAPI-Key": process.env.RAPIDAPI_KEY,
+        "X-RapidAPI-Host": "ebay-data-scraper.p.rapidapi.com",
       },
     };
 
     const response = await fetch(url, options);
     if (!response.ok) throw new Error(`RapidAPI status ${response.status}`);
 
-    const data = await response.json();
+    const data = (await response.json()) as {
+      items?: unknown[];
+      results?: unknown[];
+    };
     const items = data.items || data.results || [];
 
-    if (items.length === 0) return getGeneralDescription(query);
+    if (items.length === 0) {
+      console.warn("[RapidAPI] No items");
+      return null;
+    }
 
     const slice = items.slice(0, SCRAPE_LISTING_LIMIT);
-    const aggregated = aggregateListings(slice, query, context);
-    if (!aggregated) return getGeneralDescription(query);
+    const aggregated = aggregateListings(
+      slice as Parameters<typeof aggregateListings>[0],
+      query,
+      context
+    );
+    if (!aggregated) return null;
+
+    console.log(
+      `[RapidAPI] Aggregated — title: "${aggregated.title ?? ""}" brand: "${aggregated.brand ?? ""}" price: ${aggregated.price ?? "n/a"}`
+    );
 
     return {
       ...aggregated,
+      scraperSource: "rapidapi",
       description: truncateDescription(
         String(aggregated.description || `Listings for ${query}`)
       ),
     };
-  } catch (error: any) {
-    console.error('❌ RapidAPI scraping error:', error.message || error);
-    return getGeneralDescription(query);
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error("❌ RapidAPI scraping error:", msg);
+    return null;
   }
 };
 
@@ -49,13 +70,3 @@ const truncateDescription = (text: string): string => {
   const words = text.split(/\s+/);
   return words.length > 50 ? words.slice(0, 50).join(" ") + "..." : text;
 };
-
-const getGeneralDescription = (query: string) => ({
-  title: query,
-  brand: "",
-  description: "",
-  price: undefined,
-  category: "",
-  condition: "",
-  isExactMatch: false,
-});

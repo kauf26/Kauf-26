@@ -77,9 +77,17 @@ export const scrapeProduct = async (
     url.searchParams.set("cx", cx);
     url.searchParams.set("q", query);
     url.searchParams.set("num", String(Math.min(SCRAPE_LISTING_LIMIT, 10)));
+    url.searchParams.set("searchType", "shopping");
 
     console.log(`[Google] Custom Search query: ${query}`);
-    const res = await fetch(url.toString());
+    let res = await fetch(url.toString());
+    if (!res.ok && res.status === 400) {
+      console.warn(
+        "[Google] searchType=shopping rejected — retrying without searchType"
+      );
+      url.searchParams.delete("searchType");
+      res = await fetch(url.toString());
+    }
     if (!res.ok) {
       const body = await res.text();
       console.error(`[Google] HTTP ${res.status}:`, body.slice(0, 300));
@@ -93,6 +101,12 @@ export const scrapeProduct = async (
     const listings = items
       .map(normalizeGoogleItem)
       .filter((row): row is RawListing => row != null);
+
+    if (listings.length > 0) {
+      console.log(
+        `[Google] First item — title: "${listings[0].title ?? ""}" brand: "${listings[0].brand ?? ""}" price: ${listings[0].price ?? "n/a"}`
+      );
+    }
 
     if (listings.length === 0) {
       console.warn("[Google] No parseable listings");

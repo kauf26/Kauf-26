@@ -1,6 +1,11 @@
 /** Shared helpers: multi-listing price median + vision-based exact/similar scoring */
 
-export type ScraperSource = "apify" | "google" | "openai";
+export type ScraperSource =
+  | "apify"
+  | "google"
+  | "openai"
+  | "rapidapi"
+  | "oxylabs";
 
 export const SCRAPE_LISTING_LIMIT = 8;
 const MIN_PRICED_LISTINGS = 3;

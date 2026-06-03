@@ -38,6 +38,7 @@ function buildActorInput(query: string): Record<string, unknown> {
     search: query,
     limit: SCRAPE_LISTING_LIMIT,
     scrapeMode: "AUTO",
+    country: "US",
   };
 }
 
@@ -193,6 +194,13 @@ export const scrapeProduct = async (
     const listings = rawItems
       .map(normalizeApifyItem)
       .filter((row) => (row.title ?? "").length > 0);
+
+    if (listings.length > 0) {
+      const first = listings[0];
+      console.log(
+        `[Apify] First item — title: "${first.title ?? ""}" brand: "${first.brand ?? ""}" price: ${first.price ?? "n/a"}`
+      );
+    }
 
     if (listings.length > 0) {
       const normSampleN = Math.min(LOG_SAMPLE_ITEMS, listings.length);
