@@ -423,8 +423,8 @@ function fillMarketAverages(input: {
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: false, limit: "10mb" }));
 
 // Mount product routes (handles POST /api/drafts and GET /api/drafts)
 app.use("/api", productRoutes);

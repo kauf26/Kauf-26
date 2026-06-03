@@ -37,7 +37,7 @@ function buildActorInput(query: string): Record<string, unknown> {
   return {
     search: query,
     limit: SCRAPE_LISTING_LIMIT,
-    scrapeMode: "auto",
+    scrapeMode: "AUTO",
   };
 }
 
