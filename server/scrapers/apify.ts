@@ -220,6 +220,7 @@ export const scrapeProduct = async (
 
     return {
       ...aggregated,
+      scraperSource: "apify",
       description: truncateDescription(
         String(aggregated.description || ""),
         query

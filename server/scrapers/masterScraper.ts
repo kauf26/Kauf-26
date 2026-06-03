@@ -3,10 +3,14 @@ import {
   inferPriceFromDescription,
 } from "./openai";
 import { scrapeProduct as scrapeApify } from "./apify";
-// Temporarily disabled — placeholders without valid API keys pollute results
-// import { scrapeProduct as scrapeOxylabs } from "./oxylabs";
-// import { scrapeProduct as scrapeRapidAPI } from "./rapidapi";
-import type { VisionMatchContext } from "./listingUtils";
+import { scrapeProduct as scrapeGoogle } from "./googleShopping";
+import {
+  brandJaccard,
+  brandsConflict,
+  scoreScraperCandidate,
+  type ScraperSource,
+  type VisionMatchContext,
+} from "./listingUtils";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -128,6 +132,7 @@ function buildExactProduct(
     description: buildListingDescription(data, String(data.title ?? query)),
     isExactMatch: true,
     matchType: "exact" satisfies MatchType,
+    scraperSource: data.scraperSource,
   };
 }
 
@@ -164,10 +169,11 @@ export function mergeSimilarProduct(
     description,
     isExactMatch: false,
     matchType: "similar" satisfies MatchType,
+    scraperSource: scraped.scraperSource,
   };
 }
 
-/** OpenAI-only fallback — generic description up to 50 words. */
+/** OpenAI text extraction — generic match type */
 function buildGenericProduct(
   data: Record<string, unknown>,
   query: string
@@ -188,87 +194,152 @@ function buildGenericProduct(
     description: buildListingDescription(data, String(data.title ?? query)),
     isExactMatch: false,
     matchType: "generic" satisfies MatchType,
+    scraperSource: "openai" satisfies ScraperSource,
   };
+}
+
+type ScraperRunner = {
+  source: ScraperSource;
+  run: (
+    query: string,
+    vision?: VisionMatchContext
+  ) => Promise<Record<string, unknown> | null>;
+};
+
+async function runOpenAIScraper(
+  query: string,
+  _vision?: VisionMatchContext
+): Promise<Record<string, unknown> | null> {
+  const aiData = await scrapeOpenAI(query);
+  if (!aiData || !validateProduct(aiData)) return null;
+  const price = resolveOpenAIFallbackPrice(aiData);
+  return buildGenericProduct(
+    {
+      title: aiData.title,
+      brand: sanitizeBrand(aiData.brand),
+      price,
+      description: aiData.description,
+      category: sanitizeCategory(aiData.category),
+      condition: normalizeCondition(aiData.condition),
+      material: String((aiData as { material?: string }).material ?? "").trim(),
+      color: String((aiData as { color?: string }).color ?? "").trim(),
+    },
+    query
+  );
 }
 
 export const scrapeProduct = async (
   query: string,
   options?: ScrapeOptions
-): Promise<any | null> => {
+): Promise<Record<string, unknown> | null> => {
   console.log(`[MasterScraper] Initiating search for: ${query}`);
-  const vision = options?.vision;
+  const vision: VisionMatchContext = options?.vision ?? {
+    visionTitle: query,
+    visionBrand: "",
+  };
 
-  // Only Apify until Oxylabs/RapidAPI keys are configured
-  const scrapers = [
-    scrapeApify,
-    // scrapeOxylabs,
-    // scrapeRapidAPI,
+  const runners: ScraperRunner[] = [
+    { source: "apify", run: scrapeApify },
+    { source: "google", run: scrapeGoogle },
+    { source: "openai", run: runOpenAIScraper },
   ];
-  const results = await Promise.allSettled(
-    scrapers.map((s) => s(query, vision))
-  );
-
-  const fulfilled = results.filter(
-    (res): res is PromiseFulfilledResult<Record<string, unknown>> =>
-      res.status === "fulfilled" && validateProduct(res.value)
-  );
-
-  const exactWinner = fulfilled.find((res) => res.value.isExactMatch === true);
-  if (exactWinner) {
-    console.log("[MasterScraper] Exact marketplace match");
-    const result = buildExactProduct(exactWinner.value, query);
-    console.log("[MasterScraper] Price stats:", {
-      price: result.price,
-      priceReliable: result.priceReliable,
-      isExactMatch: result.isExactMatch,
-      samplesPriced: result.samplesPriced,
-    });
-    return result;
-  }
-
-  const similarWinner = fulfilled.find(
-    (res) => res.value.isExactMatch === false
-  );
-  if (similarWinner) {
-    console.log("[MasterScraper] Similar marketplace match");
-    const result = mergeSimilarProduct(similarWinner.value, {
-      visionTitle: vision?.visionTitle,
-      visionCategory: undefined,
-    });
-    console.log("[MasterScraper] Price stats:", {
-      price: result.price,
-      priceReliable: result.priceReliable,
-      isExactMatch: result.isExactMatch,
-      samplesPriced: result.samplesPriced,
-    });
-    return result;
-  }
 
   console.log(
-    "[MasterScraper] Specialized scrapers failed. Falling back to OpenAI..."
+    `[MasterScraper] Running ${runners.length} scrapers in parallel:`,
+    runners.map((r) => r.source).join(", ")
   );
-  try {
-    const aiData = await scrapeOpenAI(query);
-    if (validateProduct(aiData)) {
-      const price = resolveOpenAIFallbackPrice(aiData);
-      return buildGenericProduct(
-        {
-          title: aiData.title,
-          brand: sanitizeBrand(aiData.brand),
-          price,
-          description: aiData.description,
-          category: sanitizeCategory(aiData.category),
-          condition: normalizeCondition(aiData.condition),
-          material: String(aiData.material ?? "").trim(),
-          color: String(aiData.color ?? "").trim(),
-        },
-        query
-      );
+
+  const results = await Promise.allSettled(
+    runners.map(async ({ source, run }) => {
+      const value = await run(query, vision);
+      return { source, value };
+    })
+  );
+
+  type Candidate = {
+    source: ScraperSource;
+    product: Record<string, unknown>;
+    score: number;
+    reasons: string[];
+  };
+
+  const candidates: Candidate[] = [];
+
+  for (const res of results) {
+    if (res.status !== "fulfilled") {
+      console.warn("[MasterScraper] Scraper rejected:", res.reason);
+      continue;
     }
-  } catch (error) {
-    console.error("❌ AI Fallback failed:", error);
+    const { source, value } = res.value;
+    if (!value || !validateProduct(value)) {
+      console.log(`[MasterScraper] ${source}: no valid product`);
+      continue;
+    }
+
+    const listingBrand = String(value.brand ?? "");
+    if (brandsConflict(vision.visionBrand, listingBrand)) {
+      console.warn(
+        `[MasterScraper] ${source}: REJECTED brand conflict — vision="${vision.visionBrand}" vs listing="${listingBrand}" (jaccard=${brandJaccard(vision.visionBrand ?? "", listingBrand).toFixed(2)})`
+      );
+      continue;
+    }
+
+    const { score, reasons } = scoreScraperCandidate(value, vision);
+    console.log(
+      `[MasterScraper] ${source}: score=${score} [${reasons.join(", ")}]`
+    );
+    candidates.push({
+      source,
+      product: { ...value, scraperSource: source },
+      score,
+      reasons,
+    });
   }
 
-  console.log("[MasterScraper] No valid data found for query.");
-  return null;
+  candidates.sort((a, b) => b.score - a.score);
+
+  if (candidates.length === 0) {
+    console.log(
+      "[MasterScraper] No scraper returned vision-consistent data — caller should use vision fallback"
+    );
+    return null;
+  }
+
+  const winner = candidates[0];
+  console.log(
+    `[MasterScraper] WINNER: ${winner.source} (score=${winner.score}) — ${winner.reasons.join(", ")}`
+  );
+  if (candidates.length > 1) {
+    console.log(
+      "[MasterScraper] Runner-up:",
+      candidates
+        .slice(1, 3)
+        .map((c) => `${c.source}=${c.score}`)
+        .join("; ")
+    );
+  }
+
+  const raw = winner.product;
+  if (raw.isExactMatch === true) {
+    const result = buildExactProduct(raw, query);
+    console.log("[MasterScraper] Price stats:", {
+      price: result.price,
+      priceReliable: result.priceReliable,
+      isExactMatch: result.isExactMatch,
+      scraperSource: result.scraperSource,
+    });
+    return result;
+  }
+
+  const result = mergeSimilarProduct(raw, {
+    visionTitle: vision.visionTitle,
+    visionCategory: undefined,
+  });
+  console.log("[MasterScraper] Price stats:", {
+    price: result.price,
+    priceReliable: result.priceReliable,
+    isExactMatch: result.isExactMatch,
+    scraperSource: result.scraperSource,
+  });
+  return result;
 };

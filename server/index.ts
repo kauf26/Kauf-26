@@ -6,6 +6,7 @@ import { setupVite, serveStatic } from "./vite";
 import multer from "multer";
 import OpenAI from "openai";
 import { scrapeProduct as fetchMasterProductData } from "./scrapers/masterScraper";
+import { brandsConflict } from "./scrapers/listingUtils";
 import { productRoutes } from "./productsRoutes";
 import marketplaceRoutes from "./marketplaceRoutes";
 import { startMarketplaceWorker } from "./marketplaceWorker";
@@ -117,6 +118,8 @@ type ScrapedListing = ScrapedProduct & {
   priceReliable?: boolean;
   allegroAvg?: string | number;
   ebayAvg?: string | number;
+  scraperSource?: string;
+  verificationWarning?: string;
 };
 
 const VISION_IDENTIFY_PROMPT = `You are a product identification expert analyzing a product photo for a resale listing.
@@ -305,7 +308,10 @@ function applyVisionEnrichment(
   };
 }
 
-function buildGenericFromVision(vision: VisionProduct): ScrapedListing {
+function buildGenericFromVision(
+  vision: VisionProduct,
+  warning?: string
+): ScrapedListing {
   return {
     title: vision.title,
     brand: normalizeBrand(vision.brand),
@@ -321,6 +327,9 @@ function buildGenericFromVision(vision: VisionProduct): ScrapedListing {
     isExactMatch: false,
     matchType: "generic",
     priceReliable: false,
+    verificationWarning:
+      warning ??
+      "No marketplace listing matched vision — manual verification recommended.",
   };
 }
 
@@ -491,25 +500,60 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
      listings = buildGenericFromVision(vision);
    } else {
      console.log("🕸️ [4/5] Calling scraper with query:", searchQuery);
-     const scrapedRaw = await fetchMasterProductData(searchQuery, {
+     const scrapedRaw = (await fetchMasterProductData(searchQuery, {
        vision: {
          visionTitle: vision.title,
          visionBrand: vision.brand ?? "",
        },
-     });
+     })) as ScrapedListing | null;
+
+     const visionBrand = normalizeBrand(vision.brand);
      const scraperTitle = String(scrapedRaw?.title ?? "").trim();
-     if (
-       scrapedRaw &&
-       scraperTitle &&
-       titlesAreVeryDifferent(vision.title, scraperTitle)
-     ) {
+     const scraperBrand = normalizeBrand(scrapedRaw?.brand);
+
+     if (!scrapedRaw) {
+       console.warn(
+         "[Identify] All scrapers failed or conflicted with vision — vision-only fallback"
+       );
+       listings = buildGenericFromVision(
+         vision,
+         visionBrand
+           ? `No marketplace data consistent with "${visionBrand}" — verify brand and model manually.`
+           : undefined
+       );
+     } else if (brandsConflict(visionBrand, scraperBrand)) {
+       console.warn(
+         `[Identify] Scraper brand "${scraperBrand}" conflicts with vision "${visionBrand}" — vision fallback`
+       );
+       listings = buildGenericFromVision(
+         vision,
+         `Scraper brand "${scraperBrand}" does not match vision "${visionBrand}" — manual verification required.`
+       );
+     } else if (scraperTitle && titlesAreVeryDifferent(vision.title, scraperTitle)) {
        console.warn(
          `[Identify] Scraper title "${scraperTitle}" conflicts with vision "${vision.title}" — generic fallback`
        );
-       listings = buildGenericFromVision(vision);
+       listings = buildGenericFromVision(
+         vision,
+         "Scraper title did not match vision — manual verification recommended."
+       );
      } else {
        listings = mergeListingWithVision(scrapedRaw, vision);
        listings = applyPriceSanityCheck(listings, vision);
+       if (scrapedRaw.scraperSource) {
+         listings.scraperSource = String(scrapedRaw.scraperSource);
+       }
+       if (listings.matchType !== "exact") {
+         listings.verificationWarning =
+           "Marketplace match is approximate — confirm brand and model before listing.";
+       }
+     }
+
+     if (listings.scraperSource) {
+       console.log("[Identify] Scraper source:", listings.scraperSource);
+     }
+     if (listings.verificationWarning) {
+       console.warn("[Identify] Verification:", listings.verificationWarning);
      }
    }
 
@@ -585,6 +629,8 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
      isExactMatch,
      matchType,
      confidence: vision.confidence,
+     scraperSource: listings.scraperSource ?? null,
+     verificationWarning: listings.verificationWarning ?? null,
      product: {
        title: listings.title ?? searchQuery,
        description: listings.description ?? vision.description ?? "",
@@ -604,6 +650,7 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
        capturedImage,
        isExactMatch,
        matchType,
+       scraperSource: listings.scraperSource,
      },
    });
  } catch (error) {
