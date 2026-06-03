@@ -44,7 +44,7 @@ export const extractProductData = async (rawText: string) => {
     "brand": "brand or empty string",
     "price": number or null,
     "description": "brief accurate description",
-    "category": "one of: Electronics, Watches, Clothing, Shoes, Accessories, Home, Other",
+    "category": "any accurate marketplace category (e.g. Electronics, Shoes, Cameras, Clothing)",
     "condition": "one of: New, Used, Like New"
   }
   Rules:

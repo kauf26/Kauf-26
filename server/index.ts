@@ -12,15 +12,16 @@ import {
 } from "./scrapers/masterScraper";
 import { productRoutes } from "./productsRoutes";
 
-const ALLOWED_CATEGORIES = [
-  "Electronics",
-  "Watches",
-  "Clothing",
-  "Shoes",
-  "Accessories",
-  "Home",
-  "Other",
-] as const;
+/** First non-empty category wins; "Other" only when all are blank */
+function coalesceCategory(
+  ...candidates: (string | undefined | null)[]
+): string {
+  for (const c of candidates) {
+    const s = String(c ?? "").trim();
+    if (s) return s;
+  }
+  return "Other";
+}
 
 interface ScrapedProduct {
  brand?: string;
@@ -60,7 +61,7 @@ Return ONLY valid JSON:
 {
   "title": "specific product name (e.g. iPhone 12 Pro, Samsung Galaxy S21)",
   "brand": "brand if visible or reasonably inferred, else empty string",
-  "category": "one of: Electronics, Watches, Clothing, Shoes, Accessories, Home, Other",
+  "category": "best marketplace category for this item (e.g. Electronics, Shoes, Cameras, Clothing — any accurate label)",
   "condition": "one of: New, Used, Like New",
   "price": estimated USD resale price as a number; use 0 only if truly unknown,
   "description": "1-2 sentences describing only the main product, include brand/model if known"
@@ -88,17 +89,13 @@ function parseVisionResponse(content: string): VisionProduct | null {
   try {
     const parsed = JSON.parse(jsonMatch[0]) as Partial<VisionProduct>;
     if (!parsed.title || typeof parsed.title !== "string") return null;
-    const category = ALLOWED_CATEGORIES.includes(
-      parsed.category as (typeof ALLOWED_CATEGORIES)[number]
-    )
-      ? parsed.category
-      : "Other";
+    const categoryFromVision = String(parsed.category ?? "").trim();
     return {
       title: parsed.title.trim(),
       brand: parsed.brand?.trim() || "",
       category: PHONE_TITLE_REGEX.test(parsed.title)
         ? "Electronics"
-        : category,
+        : coalesceCategory(categoryFromVision),
       condition: parsed.condition || "Used",
       price: parsed.price ?? 0,
       description: parsed.description?.trim() || "",
@@ -120,8 +117,8 @@ function mergeListingWithVision(
   const category = phoneLike
     ? "Electronics"
     : exact
-      ? base.category ?? vision.category ?? "Other"
-      : vision.category ?? base.category ?? "Other";
+      ? coalesceCategory(base.category, vision.category)
+      : coalesceCategory(vision.category, base.category);
   return {
     ...base,
     title: exact ? base.title ?? vision.title : vision.title ?? base.title,
@@ -275,7 +272,7 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
        description: listings.description ?? vision.description ?? "",
        price: String(mocked.price),
        brand: listings.brand ?? vision.brand ?? "",
-       category: listings.category ?? vision.category ?? "Other",
+       category: coalesceCategory(listings.category, vision.category),
        condition: listings.condition ?? vision.condition ?? "Used",
        allegroAvg: mocked.allegroAvg,
        ebayAvg: mocked.ebayAvg,

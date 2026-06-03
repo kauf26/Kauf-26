@@ -62,7 +62,7 @@ const IdentificationResults: React.FC<IdentificationResultsProps> = ({
           {" · "}$
           {String(marketPrices.recommendedPrice)}
           {" · "}
-          {productData.category ?? "General"}
+          {productData.category?.trim() || "—"}
           {" · "}
           {productData.condition}
         </p>
@@ -72,6 +72,8 @@ const IdentificationResults: React.FC<IdentificationResultsProps> = ({
         <section className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
           <h2 className="text-xl font-semibold mb-4 border-b pb-2 text-blue-600">Technical Specs</h2>
           <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="text-gray-500">Category</div>
+            <div className="font-medium text-right">{productData.category?.trim() || "—"}</div>
             <div className="text-gray-500">Condition</div>
             <div className="font-medium text-right uppercase">{productData.condition}</div>
             <div className="text-gray-500">Model Number</div>
@@ -144,7 +146,7 @@ function mapWelcomeScrapedToProps(scraped: WelcomeScrapedPayload): Identificatio
       refNumber: "AUTO-GEN",
       material: "Detected",
       aiDescription: scraped.description ?? "",
-      category: scraped.category ?? "General",
+      category: scraped.category?.trim() || "",
     },
     marketPrices: {
       allegroAvg: priceNum,
@@ -214,7 +216,8 @@ export const IdentificationResultsPage: React.FC = () => {
             refNumber: product.modelNumber ?? parsed.refNumber ?? "AUTO-GEN",
             material: product.material ?? parsed.material ?? "Identified",
             aiDescription: product.description ?? parsed.description ?? "",
-            category: product.category ?? parsed.category ?? "General",
+            category:
+              String(product.category ?? parsed.category ?? "").trim() || "",
           },
           marketPrices: {
             allegroAvg: product.allegroAvg ?? parsed.allegroAvg ?? price,
@@ -252,7 +255,12 @@ export const IdentificationResultsPage: React.FC = () => {
           brand: finalProps.productData.brand,
           description: finalProps.productData.aiDescription,
           price: String(finalProps.marketPrices.recommendedPrice),
-          category: finalProps.productData.category ?? "General",
+          category:
+            String(
+              scrapedProduct.category ??
+                finalProps.productData.category ??
+                ""
+            ).trim() || "Other",
           condition: finalProps.productData.condition,
           capturedImage: finalProps.productData.capturedImage,
           allegroAvg: String(finalProps.marketPrices.allegroAvg),

@@ -105,7 +105,7 @@ export const scrapeProduct = async (query: string): Promise<any | null> => {
           brand: aiData.brand || "N/A",
           price,
           description: aiData.description,
-          category: aiData.category || "Other",
+          category: String(aiData.category ?? "").trim() || "Other",
           condition: aiData.condition || "New",
         },
         false,
