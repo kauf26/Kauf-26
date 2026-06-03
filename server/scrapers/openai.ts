@@ -16,8 +16,18 @@ const getOpenAI = () => {
 };
 
 export const extractProductData = async (rawText: string) => {
-  const prompt = `Extract product details from this text and return strictly valid JSON:
-  { "title": string, "brand": string, "price": number, "description": string, "category": string, "condition": string }.
+  const prompt = `Extract product listing details from this text. Return strictly valid JSON:
+  {
+    "title": "specific product name",
+    "brand": "brand or empty string",
+    "price": number or null,
+    "description": "brief accurate description",
+    "category": "one of: Electronics, Watches, Clothing, Shoes, Accessories, Home, Other",
+    "condition": "one of: New, Used, Like New"
+  }
+  Rules:
+  - Phones/smartphones/tablets → category "Electronics", never "Watches".
+  - Ignore sticker/background/incidental text; use the main product only.
   Text: ${rawText}`;
 
   try {

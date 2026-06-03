@@ -17,6 +17,45 @@ function parsePrice(price: any): number {
   return isNaN(parsed) ? 0.00 : parsed;
 }
 
+function inferPriceFromDescription(description: string): number {
+  const match = description.match(
+    /\$?\s*(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)\s*(?:USD|usd)?/
+  );
+  if (!match) return 0;
+  const parsed = parseFloat(match[1].replace(/,/g, ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function resolveOpenAIFallbackPrice(aiData: {
+  price?: unknown;
+  description?: string;
+}): number {
+  const fromField = parsePrice(aiData.price);
+  if (fromField > 0) return fromField;
+  if (aiData.description) {
+    const fromDesc = inferPriceFromDescription(aiData.description);
+    if (fromDesc > 0) return fromDesc;
+  }
+  return 0;
+}
+
+/** Temporary: fix Watches when title clearly describes a phone */
+export function correctMisclassifiedCategory(
+  product: Record<string, unknown>
+): Record<string, unknown> {
+  const title = String(product.title ?? "").toLowerCase();
+  const category = String(product.category ?? "");
+  if (
+    category === "Watches" &&
+    /\b(phone|iphone|android|samsung|galaxy|pixel|smartphone|mobile|cell\s*phone)\b/i.test(
+      title
+    )
+  ) {
+    return { ...product, category: "Electronics" };
+  }
+  return product;
+}
+
 // Logic: If result is clearly a placeholder, return null instead of a generic object
 function validateProduct(data: any): boolean {
   if (!data || !data.title || data.title === "N/A") return false;
@@ -35,12 +74,12 @@ function buildScrapedProduct(
   isExactMatch: boolean,
   query: string
 ) {
-  return {
+  return correctMisclassifiedCategory({
     ...data,
     price: parsePrice(data.price),
     description: truncateDescription(String(data.description ?? ""), query),
     isExactMatch,
-  };
+  });
 }
 
 export const scrapeProduct = async (query: string): Promise<any | null> => {
@@ -65,13 +104,15 @@ export const scrapeProduct = async (query: string): Promise<any | null> => {
   try {
     const aiData = await scrapeOpenAI(query);
     if (validateProduct(aiData)) {
+      const price = resolveOpenAIFallbackPrice(aiData);
       // false = AI-inferred product; user should verify on draft
       return buildScrapedProduct(
         {
           title: aiData.title,
           brand: aiData.brand || "N/A",
-          price: aiData.price,
-          category: aiData.category || "General",
+          price,
+          description: aiData.description,
+          category: aiData.category || "Other",
           condition: aiData.condition || "New",
         },
         false,
