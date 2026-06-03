@@ -5,6 +5,8 @@ import {
 import { scrapeProduct as scrapeApify } from "./apify";
 import { scrapeProduct as scrapeGoogle } from "./googleShopping";
 import { scrapeProduct as scrapeRapidAPI } from "./rapidapi";
+import { scrapeProduct as scrapeEbay } from "./ebayBrowse";
+import { buildMarketplaceQuery } from "./marketplaceQuery";
 import {
   brandJaccard,
   brandsConflict,
@@ -22,9 +24,17 @@ export type ScrapeOptions = {
   vision?: VisionMatchContext;
 };
 
-const MIN_PARALLEL_WAIT_MS = 12_000;
-const SCRAPER_ATTEMPT_TIMEOUT_MS = 10_000;
-const SCRAPER_MAX_ATTEMPTS = 2;
+const MIN_PARALLEL_WAIT_MS = 8_000;
+const SCRAPER_MAX_ATTEMPTS = 1;
+
+const SCRAPER_TIMEOUT_MS: Record<ScraperSource, number> = {
+  apify: 32_000,
+  ebay: 12_000,
+  google: 8_000,
+  rapidapi: 8_000,
+  openai: 12_000,
+  oxylabs: 5_000,
+};
 const HIGH_CONFIDENCE_SCORE = 80;
 const MEDIUM_CONFIDENCE_SCORE = 50;
 const HIGH_CONFIDENCE_THRESHOLD = 60;
@@ -366,9 +376,10 @@ async function runScraperWithRetry(
   for (let attempt = 1; attempt <= SCRAPER_MAX_ATTEMPTS; attempt++) {
     const t0 = Date.now();
     try {
+      const timeoutMs = SCRAPER_TIMEOUT_MS[source] ?? 12_000;
       const value = await withTimeout(
         run(query, vision),
-        SCRAPER_ATTEMPT_TIMEOUT_MS,
+        timeoutMs,
         `${source}#${attempt}`
       );
       console.log(
@@ -391,16 +402,23 @@ export const scrapeProduct = async (
   query: string,
   options?: ScrapeOptions
 ): Promise<Record<string, unknown> | null> => {
-  console.log(`[MasterScraper] Initiating search for: ${query}`);
   const vision: VisionMatchContext = options?.vision ?? {
     visionTitle: query,
     visionBrand: "",
   };
+  const marketplaceQuery = buildMarketplaceQuery(
+    query,
+    vision.visionBrand
+  );
+  console.log(
+    `[MasterScraper] Vision query: "${query}" → marketplace: "${marketplaceQuery}"`
+  );
 
   const runners: ScraperRunner[] = [
     { source: "apify", run: scrapeApify },
-    { source: "rapidapi", run: scrapeRapidAPI },
+    { source: "ebay", run: scrapeEbay },
     { source: "google", run: scrapeGoogle },
+    { source: "rapidapi", run: scrapeRapidAPI },
     { source: "openai", run: runOpenAIScraper },
   ];
 
@@ -414,7 +432,7 @@ export const scrapeProduct = async (
   const [settledResults] = await Promise.all([
     Promise.allSettled(
       runners.map(({ source, run }) =>
-        runScraperWithRetry(source, run, query, vision)
+        runScraperWithRetry(source, run, marketplaceQuery, vision)
       )
     ),
     sleep(MIN_PARALLEL_WAIT_MS),

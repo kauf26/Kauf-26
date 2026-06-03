@@ -17,12 +17,19 @@ export const scrapeProduct = async (
 
     console.log(`[RapidAPI] Searching for "${query}"...`);
 
-    const url = `https://ebay-data-scraper.p.rapidapi.com/search?query=${encodeURIComponent(query)}&page=1`;
+    const host =
+      process.env.RAPIDAPI_EBAY_HOST?.trim() ||
+      "any-marketplace-api.p.rapidapi.com";
+    const path =
+      process.env.RAPIDAPI_EBAY_PATH?.trim() || "/ebay/search?query=";
+    const url = path.includes("?")
+      ? `https://${host}${path}${encodeURIComponent(query)}`
+      : `https://${host}${path}?query=${encodeURIComponent(query)}`;
     const options = {
       method: "GET",
       headers: {
         "X-RapidAPI-Key": process.env.RAPIDAPI_KEY,
-        "X-RapidAPI-Host": "ebay-data-scraper.p.rapidapi.com",
+        "X-RapidAPI-Host": host,
       },
     };
 

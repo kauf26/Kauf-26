@@ -5,10 +5,11 @@ export type ScraperSource =
   | "google"
   | "openai"
   | "rapidapi"
-  | "oxylabs";
+  | "oxylabs"
+  | "ebay";
 
 export const SCRAPE_LISTING_LIMIT = 8;
-const MIN_PRICED_LISTINGS = 3;
+const MIN_PRICED_LISTINGS = 2;
 
 export type RawListing = {
   title?: string;
@@ -217,14 +218,30 @@ export function scoreListingMatch(
   if (!listingTitle) return "similar";
 
   if (visionBrand) {
-    if (!listingBrand) return "similar";
-    if (listingBrand !== visionBrand) return "similar";
+    const brandInTitle = listingTitle.includes(visionBrand);
+    const brandMatch =
+      listingBrand === visionBrand ||
+      listingBrand.includes(visionBrand) ||
+      visionBrand.includes(listingBrand) ||
+      brandInTitle;
+
+    if (!listingBrand && brandInTitle) {
+      const overlap = modelTokenOverlapRatio(
+        ctx.visionTitle,
+        visionBrand,
+        listingTitle,
+        visionBrand
+      );
+      return overlap >= 0.4 ? "exact" : "similar";
+    }
+
+    if (!brandMatch) return "similar";
 
     const overlap = modelTokenOverlapRatio(
       ctx.visionTitle,
       visionBrand,
       listingTitle,
-      listingBrand
+      listingBrand || visionBrand
     );
     return overlap >= 0.5 ? "exact" : "similar";
   }

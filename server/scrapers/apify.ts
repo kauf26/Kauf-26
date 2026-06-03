@@ -6,66 +6,36 @@ import {
   type RawListing,
   type VisionMatchContext,
 } from "./listingUtils";
+import { scrapeViaGoogleSearch } from "./googleSearchApify";
 import dotenv from "dotenv";
 
 dotenv.config();
 
 const client = new ApifyClient({ token: process.env.APIFY_API_KEY });
 
-const DEFAULT_ACTOR_ID = "apify/e-commerce-scraping-tool";
+const ECOMMERCE_ACTOR_ID = "apify/e-commerce-scraping-tool";
 const RUN_TIMEOUT_SECS = Number(process.env.APIFY_RUN_TIMEOUT_SECS ?? 45);
 
-const truncateDescription = (text: string, query: string): string => {
-  if (!text) return `A general listing for ${query}.`;
-  const words = text.split(/\s+/);
-  return words.length > 50 ? words.slice(0, 50).join(" ") + "..." : text;
-};
+const LOG_SAMPLE_ITEMS = 3;
 
-function getActorId(): string {
+function getEcommerceActorId(): string {
   const id = process.env.APIFY_ACTOR_ID?.trim();
-  if (!id) {
-    console.warn(
-      `[Apify] APIFY_ACTOR_ID not set — using default ${DEFAULT_ACTOR_ID}`
-    );
-    return DEFAULT_ACTOR_ID;
-  }
+  if (!id || id.includes("google-search")) return ECOMMERCE_ACTOR_ID;
   return id;
 }
 
-/** Actor input for apify/e-commerce-scraping-tool */
-function buildActorInput(query: string): Record<string, unknown> {
+/** Official input for apify/e-commerce-scraping-tool */
+function buildEcommerceActorInput(query: string): Record<string, unknown> {
   return {
-    search: query,
-    limit: SCRAPE_LISTING_LIMIT,
+    searchEngineKeyword: query,
+    scrapeProductsFromSearchEngine: true,
+    maxSearchEngineResults: SCRAPE_LISTING_LIMIT,
+    maxSearchEngineProducts: SCRAPE_LISTING_LIMIT,
     scrapeMode: "AUTO",
-    country: "US",
+    countryCode: "us",
+    scrapeModeSearchEngine: "Google Listing",
   };
 }
-
-function isInvalidInputError(err: unknown): boolean {
-  const msg = String(err instanceof Error ? err.message : err).toLowerCase();
-  return msg.includes("invalid-input") || msg.includes("invalid input");
-}
-
-async function callActorWithRetry(actorId: string, query: string) {
-  const primary = buildActorInput(query);
-  try {
-    return await client.actor(actorId).call(primary, {
-      waitSecs: RUN_TIMEOUT_SECS,
-    });
-  } catch (err) {
-    if (!isInvalidInputError(err)) throw err;
-    console.warn(
-      "[Apify] invalid-input — retrying with explicit AUTO scrapeMode"
-    );
-    const fallback = { ...primary, scrapeMode: "AUTO" as const };
-    return await client.actor(actorId).call(fallback, {
-      waitSecs: RUN_TIMEOUT_SECS,
-    });
-  }
-}
-
-const LOG_SAMPLE_ITEMS = 3;
 
 function extractBrand(raw: Record<string, unknown>): string {
   const brand = raw.brand;
@@ -74,7 +44,7 @@ function extractBrand(raw: Record<string, unknown>): string {
     const b = brand as Record<string, unknown>;
     return String(b.name ?? b.slogan ?? "").trim();
   }
-  return String(raw.brandName ?? "").trim();
+  return String(raw.brandName ?? raw.name ?? "").trim();
 }
 
 function extractPrice(raw: Record<string, unknown>): unknown {
@@ -82,179 +52,85 @@ function extractPrice(raw: Record<string, unknown>): unknown {
   if (offers && typeof offers === "object") {
     const o = offers as Record<string, unknown>;
     if (o.price != null) return o.price;
-  }
-  const product = raw.product;
-  if (product && typeof product === "object") {
-    const p = product as Record<string, unknown>;
-    if (p.price != null) return p.price;
-    const pOffers = p.offers;
-    if (pOffers && typeof pOffers === "object") {
-      return (pOffers as Record<string, unknown>).price;
+    if (Array.isArray(o)) {
+      const first = (o as unknown[])[0] as Record<string, unknown> | undefined;
+      if (first?.price != null) return first.price;
     }
   }
   return raw.price ?? raw.currentPrice ?? raw.listPrice;
 }
 
 function normalizeApifyItem(raw: Record<string, unknown>): RawListing {
-  const product =
-    raw.product && typeof raw.product === "object"
-      ? (raw.product as Record<string, unknown>)
-      : undefined;
-
-  const title = String(
-    raw.title ?? raw.name ?? product?.title ?? product?.name ?? ""
-  ).trim();
-
-  const description = String(
-    raw.description ?? product?.description ?? ""
-  ).trim();
-
-  const category = String(
-    raw.category ?? raw.productCategory ?? product?.category ?? ""
-  ).trim();
-
-  const condition = String(
-    raw.condition ?? raw.itemCondition ?? "Used"
-  ).trim();
-
+  const title = String(raw.name ?? raw.title ?? "").trim();
+  const description = String(raw.description ?? "").trim();
   return {
     title,
-    brand: extractBrand(raw) || extractBrand(product ?? {}),
+    brand: extractBrand(raw),
     price: extractPrice(raw),
     description,
-    category,
-    condition,
+    category: String(raw.category ?? "").trim(),
+    condition: String(raw.condition ?? "").trim(),
   };
 }
 
-function collectRawItems(
-  datasetItems: unknown[],
-  runRecord: Record<string, unknown> | null
-): Record<string, unknown>[] {
-  const fromDataset = datasetItems.filter(
-    (x): x is Record<string, unknown> => !!x && typeof x === "object"
-  );
-  if (fromDataset.length > 0) return fromDataset;
+async function scrapeEcommerceTool(
+  query: string,
+  context?: VisionMatchContext
+): Promise<Record<string, unknown> | null> {
+  const actorId = getEcommerceActorId();
+  const input = buildEcommerceActorInput(query);
 
-  if (!runRecord) return [];
+  console.log(`[Apify/Ecommerce] Actor: ${actorId}`);
+  console.log("[Apify/Ecommerce] Input:", JSON.stringify(input, null, 2));
 
-  const candidates: unknown[] = [];
-  if (Array.isArray(runRecord.items)) candidates.push(...runRecord.items);
-  if (Array.isArray(runRecord.results)) candidates.push(...runRecord.results);
+  const run = await client.actor(actorId).call(input, {
+    waitSecs: RUN_TIMEOUT_SECS,
+  });
 
-  const dataset = runRecord.dataset;
-  if (dataset && typeof dataset === "object") {
-    const d = dataset as Record<string, unknown>;
-    if (Array.isArray(d.items)) candidates.push(...d.items);
+  console.log("[Apify/Ecommerce] Run:", run.status, run.id);
+
+  const { items: datasetItems } = await client
+    .dataset(run.defaultDatasetId)
+    .listItems({ limit: SCRAPE_LISTING_LIMIT });
+
+  console.log(`[Apify/Ecommerce] Dataset count: ${datasetItems?.length ?? 0}`);
+  if (datasetItems?.length) {
+    console.log(
+      `[Apify/Ecommerce] Raw (first ${LOG_SAMPLE_ITEMS}):`,
+      JSON.stringify(datasetItems.slice(0, LOG_SAMPLE_ITEMS), null, 2)
+    );
   }
 
-  return candidates.filter(
-    (x): x is Record<string, unknown> => !!x && typeof x === "object"
-  );
+  const listings = (datasetItems ?? [])
+    .map((x) => normalizeApifyItem(x as Record<string, unknown>))
+    .filter((row) => (row.title ?? "").length > 0 && row.price != null);
+
+  if (listings.length === 0) {
+    console.warn("[Apify/Ecommerce] No titled+priced listings");
+    return null;
+  }
+
+  const aggregated = aggregateListings(listings, query, context);
+  if (!aggregated) return null;
+
+  return { ...aggregated, scraperSource: "apify" };
 }
 
 export const scrapeProduct = async (
   query: string,
   context?: VisionMatchContext
-): Promise<any> => {
-  const actorId = getActorId();
+): Promise<Record<string, unknown> | null> => {
+  if (!process.env.APIFY_API_KEY?.trim()) {
+    console.warn("[Apify] APIFY_API_KEY missing — skipping");
+    return null;
+  }
 
   try {
-    if (!process.env.APIFY_API_KEY) {
-      console.warn("[Apify] APIFY_API_KEY missing — skipping Apify scraper");
-      return null;
-    }
+    const google = await scrapeViaGoogleSearch(query, context);
+    if (google) return google;
 
-    const input = buildActorInput(query);
-    console.log(`[Apify] Actor: ${actorId}`);
-    console.log("[Apify] Input sent to actor:", JSON.stringify(input, null, 2));
-
-    const run = await callActorWithRetry(actorId, query);
-
-    console.log("[Apify] Run finished:", {
-      id: run.id,
-      status: run.status,
-      defaultDatasetId: run.defaultDatasetId,
-    });
-
-    const { items: datasetItems } = await client
-      .dataset(run.defaultDatasetId)
-      .listItems({ limit: SCRAPE_LISTING_LIMIT });
-
-    console.log(
-      `[Apify] Dataset item count: ${datasetItems?.length ?? 0}`
-    );
-    if (datasetItems?.length) {
-      const sampleN = Math.min(LOG_SAMPLE_ITEMS, datasetItems.length);
-      console.log(
-        `[Apify] Raw dataset items (first ${sampleN}):`,
-        JSON.stringify(datasetItems.slice(0, LOG_SAMPLE_ITEMS), null, 2)
-      );
-    }
-
-    let runDetail: Record<string, unknown> | null = null;
-    try {
-      runDetail = (await client.run(run.id).get()) as unknown as Record<
-        string,
-        unknown
-      >;
-    } catch {
-      /* optional */
-    }
-
-    const rawItems = collectRawItems(datasetItems ?? [], runDetail);
-    console.log(`[Apify] Collected raw item count: ${rawItems.length}`);
-    if (rawItems.length > 0) {
-      const rawSampleN = Math.min(LOG_SAMPLE_ITEMS, rawItems.length);
-      console.log(
-        `[Apify] Raw items before normalization (first ${rawSampleN}):`,
-        JSON.stringify(rawItems.slice(0, LOG_SAMPLE_ITEMS), null, 2)
-      );
-    }
-
-    const listings = rawItems
-      .map(normalizeApifyItem)
-      .filter((row) => (row.title ?? "").length > 0);
-
-    if (listings.length > 0) {
-      const first = listings[0];
-      console.log(
-        `[Apify] First item — title: "${first.title ?? ""}" brand: "${first.brand ?? ""}" price: ${first.price ?? "n/a"}`
-      );
-    }
-
-    if (listings.length > 0) {
-      const normSampleN = Math.min(LOG_SAMPLE_ITEMS, listings.length);
-      console.log(
-        `[Apify] Normalized listings before aggregation (first ${normSampleN}):`,
-        JSON.stringify(listings.slice(0, LOG_SAMPLE_ITEMS), null, 2)
-      );
-    }
-
-    if (listings.length === 0) {
-      console.warn("[Apify] No parseable items");
-      return null;
-    }
-
-    console.log(
-      `[Apify] Parsed ${listings.length} listing(s); priced: ${listings.filter((r) => r.price != null).length}`
-    );
-
-    const aggregated = aggregateListings(listings, query, context);
-    console.log(
-      "[Apify] Aggregated result:",
-      JSON.stringify(aggregated, null, 2)
-    );
-    if (!aggregated) return null;
-
-    return {
-      ...aggregated,
-      scraperSource: "apify",
-      description: truncateDescription(
-        String(aggregated.description || ""),
-        query
-      ),
-    };
+    console.log("[Apify] Google Search actor empty — trying e-commerce tool");
+    return await scrapeEcommerceTool(query, context);
   } catch (error) {
     console.error("❌ Apify Error:", error);
     return null;
