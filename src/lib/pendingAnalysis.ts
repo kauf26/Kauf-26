@@ -3,6 +3,20 @@
 export const PENDING_ANALYSIS_KEY = "pendingAnalysis";
 export const PRODUCT_LISTING_DATA_KEY = "productListingData";
 
+export type MatchType = "exact" | "similar" | "generic";
+
+function resolveMatchType(
+  data: Record<string, unknown>,
+  p: Record<string, unknown>
+): MatchType {
+  const raw = data.matchType ?? p.matchType;
+  if (raw === "exact" || raw === "similar" || raw === "generic") {
+    return raw;
+  }
+  if (data.isExactMatch === true || p.isExactMatch === true) return "exact";
+  return "generic";
+}
+
 export type PendingAnalysis = {
   capturedImage: string;
   title: string;
@@ -16,6 +30,7 @@ export type PendingAnalysis = {
   allegroAverage: string;
   ebayAverage: string;
   isExactMatch: boolean;
+  matchType?: MatchType;
   year?: string | number;
   timestamp?: string;
 };
@@ -33,6 +48,7 @@ export type ListingSession = {
     allegroAvg: string;
     ebayAvg: string;
     isExactMatch?: boolean;
+    matchType?: MatchType;
   };
   title: string;
   description: string;
@@ -42,6 +58,7 @@ export type ListingSession = {
   condition: string;
   capturedImage: string;
   isExactMatch?: boolean;
+  matchType?: MatchType;
 };
 
 /** Normalize Task A `{ product }`, identify API, or legacy `productListingData` */
@@ -70,11 +87,13 @@ export function parseListingSession(raw: unknown): ListingSession | null {
     ),
     ebayAvg: String(p.ebayAvg ?? p.ebayAverage ?? data.ebayAvg ?? price),
     isExactMatch: Boolean(data.isExactMatch ?? p.isExactMatch ?? false),
+    matchType: resolveMatchType(data, p),
   };
 
   return {
     ...product,
     product,
+    matchType: product.matchType,
   };
 }
 
@@ -130,6 +149,7 @@ export function toPendingAnalysis(input: Record<string, unknown>): PendingAnalys
       allegroAverage: listing.product.allegroAvg,
       ebayAverage: listing.product.ebayAvg,
       isExactMatch: listing.isExactMatch ?? false,
+      matchType: listing.matchType,
       year: input.year as string | number | undefined,
       timestamp: new Date().toISOString(),
     };

@@ -5,19 +5,21 @@ import {
 import { scrapeProduct as scrapeApify } from "./apify";
 import { scrapeProduct as scrapeOxylabs } from "./oxylabs";
 import { scrapeProduct as scrapeRapidAPI } from "./rapidapi";
-import dotenv from 'dotenv';
+import dotenv from "dotenv";
 dotenv.config();
 
+export type MatchType = "exact" | "similar" | "generic";
+
 const truncateDescription = (text: string, query: string): string => {
-  if (!text || text.trim() === "") return ""; 
+  if (!text || text.trim() === "") return "";
   const words = text.split(/\s+/);
   return words.length > 50 ? words.slice(0, 50).join(" ") + "..." : text;
 };
 
-function parsePrice(price: any): number {
-  const str = String(price).replace(/[^0-9.]/g, '');
+function parsePrice(price: unknown): number {
+  const str = String(price).replace(/[^0-9.]/g, "");
   const parsed = parseFloat(str);
-  return isNaN(parsed) ? 0.00 : parsed;
+  return isNaN(parsed) ? 0.0 : parsed;
 }
 
 function resolveOpenAIFallbackPrice(aiData: {
@@ -33,75 +35,152 @@ function resolveOpenAIFallbackPrice(aiData: {
   return 0;
 }
 
-// Logic: If result is clearly a placeholder, return null instead of a generic object
-function validateProduct(data: any): boolean {
-  if (!data || !data.title || data.title === "N/A") return false;
-  // If price is 0 and description is missing/generic, treat as failure
-  if (parsePrice(data.price) === 0 && (!data.description || data.description.length < 10)) return false;
+function validateProduct(data: unknown): data is Record<string, unknown> {
+  if (!data || typeof data !== "object") return false;
+  const d = data as Record<string, unknown>;
+  if (!d.title || d.title === "N/A") return false;
+  if (
+    parsePrice(d.price) === 0 &&
+    (!d.description || String(d.description).length < 10)
+  ) {
+    return false;
+  }
   return true;
 }
 
-/**
- * Every successful scrape returns isExactMatch:
- * - true: a marketplace scraper returned validated listing data (winner path).
- * - false: OpenAI fallback only — inferred fields, needs manual review on draft.
- */
-function buildScrapedProduct(
+/** Exact marketplace listing — preserve fields as returned (no description trim). */
+function buildExactProduct(
   data: Record<string, unknown>,
-  isExactMatch: boolean,
   query: string
-) {
+): Record<string, unknown> {
+  const price = parsePrice(data.price);
   return {
     ...data,
-    price: parsePrice(data.price),
+    title: data.title ?? query,
+    brand: data.brand ?? "",
+    category: String(data.category ?? "").trim() || "Other",
+    condition: data.condition ?? "New",
+    price,
+    allegroAvg: parsePrice(data.allegroAvg ?? data.price),
+    ebayAvg: parsePrice(data.ebayAvg ?? data.ebayPrice ?? data.price),
+    description: String(data.description ?? ""),
+    isExactMatch: true,
+    matchType: "exact" satisfies MatchType,
+  };
+}
+
+/**
+ * Similar listing from marketplace (not exact SKU).
+ * Enriches description with color/material when present.
+ */
+export function mergeSimilarProduct(
+  scraped: Record<string, unknown>,
+  context?: { visionTitle?: string; visionCategory?: string }
+): Record<string, unknown> {
+  const title = String(scraped.title ?? context?.visionTitle ?? "").trim();
+  const price = parsePrice(scraped.price);
+  const allegroAvg = parsePrice(scraped.allegroAvg ?? scraped.price);
+  const ebayAvg = parsePrice(
+    scraped.ebayAvg ?? scraped.ebayPrice ?? scraped.price
+  );
+  const descParts = [
+    scraped.description,
+    scraped.color ? `Color: ${scraped.color}` : null,
+    scraped.material ? `Material: ${scraped.material}` : null,
+  ]
+    .filter(Boolean)
+    .map(String);
+  const description = truncateDescription(
+    descParts.join(" ") || `Similar listing match for ${title}.`,
+    title
+  );
+
+  return {
+    ...scraped,
+    title,
+    brand: scraped.brand ?? "",
+    category:
+      String(scraped.category ?? context?.visionCategory ?? "").trim() ||
+      "Other",
+    condition: scraped.condition ?? "Used",
+    price: price || allegroAvg || ebayAvg,
+    allegroAvg,
+    ebayAvg,
+    description,
+    isExactMatch: false,
+    matchType: "similar" satisfies MatchType,
+  };
+}
+
+/** OpenAI-only fallback — generic description up to 50 words. */
+function buildGenericProduct(
+  data: Record<string, unknown>,
+  query: string
+): Record<string, unknown> {
+  const price = parsePrice(data.price);
+  return {
+    ...data,
+    title: data.title ?? query,
+    brand: data.brand ?? "",
+    category: String(data.category ?? "").trim() || "Other",
+    condition: data.condition ?? "New",
+    price,
+    allegroAvg: price,
+    ebayAvg: price,
     description: truncateDescription(String(data.description ?? ""), query),
-    isExactMatch,
+    isExactMatch: false,
+    matchType: "generic" satisfies MatchType,
   };
 }
 
 export const scrapeProduct = async (query: string): Promise<any | null> => {
   console.log(`[MasterScraper] Initiating search for: ${query}`);
 
-  // 1. Race specialized scrapers
   const scrapers = [scrapeApify, scrapeOxylabs, scrapeRapidAPI];
-  const results = await Promise.allSettled(scrapers.map(s => s(query)));
+  const results = await Promise.allSettled(scrapers.map((s) => s(query)));
 
-  const winner = results.find((res): res is PromiseFulfilledResult<any> =>
-    res.status === 'fulfilled' && validateProduct(res.value)
+  const fulfilled = results.filter(
+    (res): res is PromiseFulfilledResult<Record<string, unknown>> =>
+      res.status === "fulfilled" && validateProduct(res.value)
   );
 
-  if (winner) {
-    console.log(`[MasterScraper] Winner found!`);
-    // true = validated marketplace listing, not AI guesswork
-    return buildScrapedProduct(winner.value, true, query);
+  const exactWinner = fulfilled.find((res) => res.value.isExactMatch === true);
+  if (exactWinner) {
+    console.log("[MasterScraper] Exact marketplace match");
+    return buildExactProduct(exactWinner.value, query);
   }
 
-  // 2. Fallback to OpenAI
-  console.log("[MasterScraper] Specialized scrapers failed. Falling back to OpenAI...");
+  const similarWinner = fulfilled.find(
+    (res) => res.value.isExactMatch === false
+  );
+  if (similarWinner) {
+    console.log("[MasterScraper] Similar marketplace match");
+    return mergeSimilarProduct(similarWinner.value);
+  }
+
+  console.log(
+    "[MasterScraper] Specialized scrapers failed. Falling back to OpenAI..."
+  );
   try {
     const aiData = await scrapeOpenAI(query);
     if (validateProduct(aiData)) {
       const price = resolveOpenAIFallbackPrice(aiData);
-      // false = AI-inferred product; user should verify on draft
-      return buildScrapedProduct(
+      return buildGenericProduct(
         {
           title: aiData.title,
-          brand: aiData.brand || "N/A",
+          brand: aiData.brand || "",
           price,
           description: aiData.description,
           category: String(aiData.category ?? "").trim() || "Other",
           condition: aiData.condition || "New",
         },
-        false,
         query
       );
     }
   } catch (error) {
-    console.error('❌ AI Fallback failed:', error);
+    console.error("❌ AI Fallback failed:", error);
   }
 
-  // RETURN NULL: This forces the API route to trigger the 404/422 handling 
-  // instead of saving a blank "General" item.
   console.log("[MasterScraper] No valid data found for query.");
   return null;
 };

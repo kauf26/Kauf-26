@@ -1,11 +1,12 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { saveListingSession } from '@/lib/pendingAnalysis';
+import { saveListingSession, type MatchType } from '@/lib/pendingAnalysis';
 
 type IdentifyApiResponse = {
   success?: boolean;
   draftId?: number | string;
   isExactMatch?: boolean;
+  matchType?: MatchType;
   product?: {
     title?: string;
     description?: string;
@@ -17,6 +18,7 @@ type IdentifyApiResponse = {
     ebayAvg?: string | number;
     capturedImage?: string;
     isExactMatch?: boolean;
+    matchType?: MatchType;
   };
 };
 
@@ -26,8 +28,11 @@ function persistPendingAnalysisFromIdentify(result: IdentifyApiResponse) {
     throw new Error('Identify response missing product');
   }
   const p = result.product;
-  const isExactMatch =
-    result.isExactMatch ?? p.isExactMatch ?? false;
+  const matchType: MatchType =
+    result.matchType ??
+    p.matchType ??
+    ((result.isExactMatch ?? p.isExactMatch) ? "exact" : "generic");
+  const isExactMatch = matchType === "exact";
   saveListingSession({
     title: p.title ?? '',
     description: p.description ?? '',
@@ -37,6 +42,7 @@ function persistPendingAnalysisFromIdentify(result: IdentifyApiResponse) {
     condition: p.condition ?? 'Used',
     capturedImage: p.capturedImage ?? '',
     isExactMatch,
+    matchType,
     product: {
       title: p.title ?? '',
       description: p.description ?? '',
@@ -48,6 +54,7 @@ function persistPendingAnalysisFromIdentify(result: IdentifyApiResponse) {
       allegroAvg: String(p.allegroAvg ?? p.price ?? 0),
       ebayAvg: String(p.ebayAvg ?? p.price ?? 0),
       isExactMatch,
+      matchType,
     },
   });
   if (result.draftId != null) {

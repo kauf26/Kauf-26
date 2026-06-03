@@ -39,10 +39,15 @@ type VisionProduct = {
   description?: string;
 };
 
+type MatchType = "exact" | "similar" | "generic";
+
 type ScrapedListing = ScrapedProduct & {
   title?: string;
   category?: string;
   isExactMatch?: boolean;
+  matchType?: MatchType;
+  allegroAvg?: string | number;
+  ebayAvg?: string | number;
 };
 
 const VISION_IDENTIFY_PROMPT = `You are a product identification expert analyzing a product photo for a resale listing.
@@ -102,26 +107,63 @@ function mergeListingWithVision(
   scraped: ScrapedListing | null,
   vision: VisionProduct
 ): ScrapedListing {
-  const base = scraped ?? {};
-  const exact = scraped?.isExactMatch === true;
-  const category = exact
-    ? coalesceCategory(base.category, vision.category)
-    : coalesceCategory(vision.category, base.category);
+  if (!scraped) {
+    return {
+      title: vision.title,
+      brand: vision.brand ?? "",
+      category: coalesceCategory(vision.category),
+      condition: vision.condition ?? "Used",
+      description: vision.description ?? "",
+      price: vision.price ?? 0,
+      allegroAvg: vision.price ?? 0,
+      ebayAvg: vision.price ?? 0,
+      isExactMatch: false,
+      matchType: "generic",
+    };
+  }
+
+  const matchType: MatchType =
+    scraped.matchType ??
+    (scraped.isExactMatch ? "exact" : "similar");
+
+  if (matchType === "exact") {
+    return {
+      ...scraped,
+      isExactMatch: true,
+      matchType: "exact",
+      allegroAvg: scraped.allegroAvg ?? scraped.price,
+      ebayAvg: scraped.ebayAvg ?? scraped.ebayPrice ?? scraped.price,
+    };
+  }
+
+  if (matchType === "similar") {
+    return {
+      ...scraped,
+      title: scraped.title ?? vision.title,
+      brand: String(scraped.brand || vision.brand || ""),
+      category: coalesceCategory(scraped.category, vision.category),
+      condition: scraped.condition ?? vision.condition ?? "Used",
+      description: scraped.description ?? vision.description ?? "",
+      price: scraped.price ?? vision.price ?? 0,
+      allegroAvg: scraped.allegroAvg ?? scraped.price ?? 0,
+      ebayAvg: scraped.ebayAvg ?? scraped.ebayPrice ?? scraped.price ?? 0,
+      isExactMatch: false,
+      matchType: "similar",
+    };
+  }
+
   return {
-    ...base,
-    title: exact ? base.title ?? vision.title : vision.title ?? base.title,
-    brand: exact
-      ? base.brand ?? vision.brand ?? ""
-      : vision.brand || base.brand || "",
-    category,
-    condition: base.condition ?? vision.condition ?? "Used",
-    description:
-      (exact ? base.description : vision.description) ??
-      base.description ??
-      vision.description ??
-      `Identified: ${vision.title}`,
-    price: base.price ?? vision.price ?? 0,
-    isExactMatch: scraped?.isExactMatch ?? false,
+    title: scraped.title ?? vision.title,
+    brand: String(scraped.brand || vision.brand || ""),
+    category: coalesceCategory(scraped.category, vision.category),
+    condition: scraped.condition ?? vision.condition ?? "Used",
+    description: scraped.description ?? vision.description ?? "",
+    price: scraped.price ?? vision.price ?? 0,
+    allegroAvg: scraped.allegroAvg ?? scraped.price ?? vision.price ?? 0,
+    ebayAvg:
+      scraped.ebayAvg ?? scraped.ebayPrice ?? vision.price ?? 0,
+    isExactMatch: false,
+    matchType: "generic",
   };
 }
 
@@ -222,9 +264,9 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
        material: listings.material || "Not specified",
        aiDescription: listings.description || `KAUF-AI identified as: ${searchQuery}`,
        marketPrices: {
-         allegroAvg: listings.price || "0.00",
-         ebayAvg: listings.ebayPrice || "0.00",
-         recommendedPrice: listings.price || "0.00"
+         allegroAvg: String(listings.allegroAvg ?? listings.price ?? "0.00"),
+         ebayAvg: String(listings.ebayAvg ?? listings.ebayPrice ?? "0.00"),
+         recommendedPrice: String(listings.price ?? "0.00"),
        },
        source: 'ai_identified',
        identifiedAt: new Date().toISOString()
@@ -251,16 +293,18 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
    const capturedImage = `data:${req.file.mimetype};base64,${base64Image}`;
    const market = fillMarketAverages({
      price: listings.price ?? vision.price ?? 0,
-     allegroAvg: listings.price,
-     ebayAvg: listings.ebayPrice,
+     allegroAvg: listings.allegroAvg ?? listings.price,
+     ebayAvg: listings.ebayAvg ?? listings.ebayPrice,
    });
 
-   const isExactMatch = listings.isExactMatch ?? false;
+   const matchType: MatchType = listings.matchType ?? "generic";
+   const isExactMatch = matchType === "exact";
 
    res.json({
      success: true,
      draftId: savedDraft.id ?? savedDraft,
      isExactMatch,
+     matchType,
      product: {
        title: listings.title ?? searchQuery,
        description: listings.description ?? vision.description ?? "",
@@ -272,6 +316,7 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
        ebayAvg: market.ebayAvg,
        capturedImage,
        isExactMatch,
+       matchType,
      },
    });
  } catch (error) {

@@ -5,10 +5,12 @@ import {
   parseListingSession,
   saveListingSession,
   type ListingSession,
+  type MatchType,
 } from "@/lib/pendingAnalysis";
 
 type ProductDraftState = {
 isExactMatch: boolean;
+matchType: MatchType;
 title: string;
 brand: string;
 description: string;
@@ -38,6 +40,7 @@ const CATEGORY_SUGGESTIONS = [
 
 const DEFAULT_PRODUCT: ProductDraftState = {
 isExactMatch: false,
+matchType: "generic",
 title: "Draft Product Title",
 brand: "Brand Name",
 description: "Detailed product description goes here...",
@@ -73,6 +76,9 @@ useEffect(() => {
 
     setProduct({
       isExactMatch: listing.isExactMatch ?? DEFAULT_PRODUCT.isExactMatch,
+      matchType:
+        listing.matchType ??
+        (listing.isExactMatch ? "exact" : "generic"),
       title: listing.title,
       brand: listing.brand,
       description: listing.description,
@@ -105,6 +111,7 @@ const handleContinue = async () => {
     condition: product.condition,
     capturedImage: product.capturedImage,
     isExactMatch: product.isExactMatch,
+    matchType: product.matchType,
     product: {
       title: product.title,
       description: product.description,
@@ -116,6 +123,7 @@ const handleContinue = async () => {
       allegroAvg: product.allegroAverage,
       ebayAvg: product.ebayAverage,
       isExactMatch: product.isExactMatch,
+      matchType: product.matchType,
     },
   };
   saveListingSession(listing);
@@ -153,7 +161,7 @@ const update = (field: keyof ProductDraftState, val: string) => {
 
 return (
   <div className="max-w-3xl mx-auto p-6 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-100 space-y-6 my-6">
-    {product.isExactMatch ? (
+    {product.matchType === "exact" ? (
       <div
         className="rounded-lg border border-emerald-700/50 bg-emerald-950/40 px-4 py-3 flex items-center gap-2"
         role="status"
@@ -165,14 +173,28 @@ return (
           Listing data came from a validated marketplace match.
         </p>
       </div>
+    ) : product.matchType === "similar" ? (
+      <div
+        className="rounded-lg border border-blue-700/50 bg-blue-950/30 px-4 py-3"
+        role="status"
+      >
+        <p className="text-sm font-medium text-blue-200">
+          Best match — similar product found; review before posting.
+        </p>
+        <p className="text-xs text-blue-200/70 mt-1">
+          Marketplace data is from a comparable listing, not an exact SKU match.
+        </p>
+      </div>
     ) : (
       <div
         className="rounded-lg border border-amber-700/50 bg-amber-950/30 px-4 py-3"
         role="alert"
       >
-        <p className="text-sm font-medium text-amber-200">Best guess — review required</p>
+        <p className="text-sm font-medium text-amber-200">
+          No exact match found — generic description generated.
+        </p>
         <p className="text-xs text-amber-200/70 mt-1">
-          Product details may be incomplete or inferred. Confirm title, brand, price, category, and condition before posting.
+          Confirm title, brand, price, category, and condition before posting.
         </p>
       </div>
     )}
