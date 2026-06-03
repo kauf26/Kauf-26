@@ -52,6 +52,7 @@ export type ListingSession = {
     ebayAvg: string;
     isExactMatch?: boolean;
     matchType?: MatchType;
+    priceReliable?: boolean;
   };
   title: string;
   description: string;
@@ -65,6 +66,7 @@ export type ListingSession = {
   style?: string;
   isExactMatch?: boolean;
   matchType?: MatchType;
+  priceReliable?: boolean;
 };
 
 /** Normalize Task A `{ product }`, identify API, or legacy `productListingData` */
@@ -103,12 +105,19 @@ export function parseListingSession(raw: unknown): ListingSession | null {
     ebayAvg: String(p.ebayAvg ?? p.ebayAverage ?? data.ebayAvg ?? price),
     isExactMatch: Boolean(data.isExactMatch ?? p.isExactMatch ?? false),
     matchType: resolveMatchType(data, p),
+    priceReliable:
+      data.priceReliable === true ||
+      p.priceReliable === true ||
+      (data.priceReliable !== false &&
+        p.priceReliable !== false &&
+        parseFloat(price) > 0),
   };
 
   return {
     ...product,
     product,
     matchType: product.matchType,
+    priceReliable: product.priceReliable,
   };
 }
 

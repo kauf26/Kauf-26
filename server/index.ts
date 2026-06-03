@@ -43,6 +43,42 @@ function normalizeCondition(condition: unknown): string {
   return s;
 }
 
+/** Conservative last-resort defaults when scrape median unavailable (non-exact only) */
+const CATEGORY_DEFAULT_PRICE: Array<{ keywords: string[]; price: number }> = [
+  { keywords: ["home & kitchen", "kitchenware", "mug", "drinkware"], price: 10 },
+  { keywords: ["electronics", "phone", "smartphone", "tablet"], price: 200 },
+  { keywords: ["clothing", "apparel", "shoes", "sneakers"], price: 25 },
+  { keywords: ["accessories", "watch", "watches"], price: 40 },
+  { keywords: ["toys", "game"], price: 15 },
+];
+
+function lookupCategoryDefaultPrice(category: string): number {
+  const c = category.toLowerCase();
+  for (const row of CATEGORY_DEFAULT_PRICE) {
+    if (row.keywords.some((k) => c.includes(k))) return row.price;
+  }
+  return 0;
+}
+
+function applyCategoryPriceFallback(listing: ScrapedListing): ScrapedListing {
+  if (listing.isExactMatch) return listing;
+  const priceNum = parseFloat(String(listing.price ?? 0)) || 0;
+  if (priceNum > 0) return listing;
+  const category = coalesceCategory(listing.category);
+  if (!category) return listing;
+  const fallback = lookupCategoryDefaultPrice(category);
+  if (fallback <= 0) return listing;
+  console.log(
+    `[Identify] Category price fallback: "${category}" → $${fallback}`
+  );
+  return {
+    ...listing,
+    price: fallback,
+    allegroAvg: fallback,
+    ebayAvg: fallback,
+  };
+}
+
 interface ScrapedProduct {
  brand?: string;
  year?: string;
@@ -78,6 +114,7 @@ type ScrapedListing = ScrapedProduct & {
   category?: string;
   isExactMatch?: boolean;
   matchType?: MatchType;
+  priceReliable?: boolean;
   allegroAvg?: string | number;
   ebayAvg?: string | number;
 };
@@ -281,6 +318,7 @@ function buildGenericFromVision(vision: VisionProduct): ScrapedListing {
     ebayAvg: 0,
     isExactMatch: false,
     matchType: "generic",
+    priceReliable: false,
   };
 }
 
@@ -473,6 +511,16 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
      }
    }
 
+   listings = applyCategoryPriceFallback(listings);
+
+   console.log("[Identify] Final listing price:", {
+     price: listings.price,
+     priceReliable: listings.priceReliable,
+     isExactMatch: listings.isExactMatch,
+     matchType: listings.matchType,
+     category: listings.category,
+   });
+
    console.log("📦 Listing result:", JSON.stringify(listings, null, 2));
 
    // ✨ NEW: Save as a draft in the database
@@ -539,6 +587,7 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
        title: listings.title ?? searchQuery,
        description: listings.description ?? vision.description ?? "",
        price: String(market.price),
+       priceReliable: listings.priceReliable === true,
        brand: normalizeBrand(listings.brand) || normalizeBrand(vision.brand),
        category: coalesceCategory(listings.category, vision.category),
        condition:

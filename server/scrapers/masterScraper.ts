@@ -216,7 +216,14 @@ export const scrapeProduct = async (
   const exactWinner = fulfilled.find((res) => res.value.isExactMatch === true);
   if (exactWinner) {
     console.log("[MasterScraper] Exact marketplace match");
-    return buildExactProduct(exactWinner.value, query);
+    const result = buildExactProduct(exactWinner.value, query);
+    console.log("[MasterScraper] Price stats:", {
+      price: result.price,
+      priceReliable: result.priceReliable,
+      isExactMatch: result.isExactMatch,
+      samplesPriced: result.samplesPriced,
+    });
+    return result;
   }
 
   const similarWinner = fulfilled.find(
@@ -224,10 +231,17 @@ export const scrapeProduct = async (
   );
   if (similarWinner) {
     console.log("[MasterScraper] Similar marketplace match");
-    return mergeSimilarProduct(similarWinner.value, {
+    const result = mergeSimilarProduct(similarWinner.value, {
       visionTitle: vision?.visionTitle,
       visionCategory: undefined,
     });
+    console.log("[MasterScraper] Price stats:", {
+      price: result.price,
+      priceReliable: result.priceReliable,
+      isExactMatch: result.isExactMatch,
+      samplesPriced: result.samplesPriced,
+    });
+    return result;
   }
 
   console.log(

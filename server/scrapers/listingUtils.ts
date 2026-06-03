@@ -1,6 +1,7 @@
-/** Shared helpers: multi-listing price mean + vision-based exact/similar scoring */
+/** Shared helpers: multi-listing price median + vision-based exact/similar scoring */
 
 export const SCRAPE_LISTING_LIMIT = 8;
+const MIN_PRICED_LISTINGS = 3;
 
 export type RawListing = {
   title?: string;
@@ -37,11 +38,33 @@ export function parseListingPrice(price: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export function meanPrice(prices: number[]): number {
+/** Drop prices > 2σ from mean (when enough samples) */
+export function filterOutlierPrices(prices: number[]): number[] {
   const valid = prices.filter((p) => p > 0);
-  if (valid.length === 0) return 0;
-  const sum = valid.reduce((a, b) => a + b, 0);
-  return Math.round((sum / valid.length) * 100) / 100;
+  if (valid.length < 3) return valid;
+  const mean = valid.reduce((a, b) => a + b, 0) / valid.length;
+  const variance =
+    valid.reduce((acc, p) => acc + (p - mean) ** 2, 0) / valid.length;
+  const std = Math.sqrt(variance);
+  if (std === 0) return valid;
+  return valid.filter((p) => Math.abs(p - mean) <= 2 * std);
+}
+
+export function medianPrice(prices: number[]): number {
+  const filtered = filterOutlierPrices(prices);
+  if (filtered.length === 0) return 0;
+  const sorted = [...filtered].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const median =
+    sorted.length % 2 === 0
+      ? (sorted[mid - 1] + sorted[mid]) / 2
+      : sorted[mid];
+  return Math.round(median * 100) / 100;
+}
+
+/** @deprecated Use medianPrice */
+export function meanPrice(prices: number[]): number {
+  return medianPrice(prices);
 }
 
 function normalize(s: string): string {
@@ -54,8 +77,22 @@ function titleTokens(title: string, minLen = 3): string[] {
     .filter((w) => w.length >= minLen && !STOP_WORDS.has(w));
 }
 
+function modelTokenOverlapRatio(
+  visionTitle: string,
+  visionBrand: string,
+  listingTitle: string,
+  listingBrand: string
+): number {
+  const modelTokens = titleTokens(visionTitle).filter((t) => t !== visionBrand);
+  if (modelTokens.length === 0) return 1;
+  const hits = modelTokens.filter(
+    (t) => listingTitle.includes(t) || listingBrand.includes(t)
+  ).length;
+  return hits / modelTokens.length;
+}
+
 /**
- * exact = vision brand (if any) + model tokens align with listing
+ * exact = strict brand + model match when vision has a brand; else title overlap
  * similar = returned by marketplace search but not exact
  */
 export function scoreListingMatch(
@@ -69,21 +106,16 @@ export function scoreListingMatch(
   if (!listingTitle) return "similar";
 
   if (visionBrand) {
-    const brandHit =
-      listingTitle.includes(visionBrand) || listingBrand.includes(visionBrand);
-    if (!brandHit) return "similar";
+    if (!listingBrand) return "similar";
+    if (listingBrand !== visionBrand) return "similar";
 
-    const modelTokens = titleTokens(ctx.visionTitle).filter(
-      (t) => t !== visionBrand
+    const overlap = modelTokenOverlapRatio(
+      ctx.visionTitle,
+      visionBrand,
+      listingTitle,
+      listingBrand
     );
-    if (modelTokens.length === 0) return "exact";
-
-    const modelHits = modelTokens.filter(
-      (t) => listingTitle.includes(t) || listingBrand.includes(t)
-    ).length;
-    return modelHits >= Math.ceil(modelTokens.length * 0.5)
-      ? "exact"
-      : "similar";
+    return overlap >= 0.5 ? "exact" : "similar";
   }
 
   const vt = titleTokens(ctx.visionTitle, 4);
@@ -105,7 +137,7 @@ function sanitizeCategory(category: unknown): string {
   return s;
 }
 
-/** Collapse N marketplace rows → one product row with mean price + match flags */
+/** Collapse N marketplace rows → one product row with median price + match flags */
 export function aggregateListings(
   items: RawListing[],
   query: string,
@@ -127,8 +159,22 @@ export function aggregateListings(
   const exactRows = scored.filter((s) => s.score === "exact");
   const hasExact = exactRows.length > 0;
   const pool = hasExact ? exactRows : scored;
-  const avgPrice = meanPrice(pool.map((s) => s.price));
+  const pricedInPool = pool.filter((s) => s.price > 0);
+  const pricedCount = pricedInPool.length;
+  const priceReliable = pricedCount >= MIN_PRICED_LISTINGS;
+  const median = priceReliable
+    ? medianPrice(pricedInPool.map((s) => s.price))
+    : 0;
   const rep = (hasExact ? exactRows[0] : scored[0]).item;
+
+  console.log("[listingUtils] aggregateListings:", {
+    totalItems: items.length,
+    exactMatches: exactRows.length,
+    isExactMatch: hasExact,
+    pricedListingsUsed: pricedCount,
+    medianPrice: median,
+    priceReliable,
+  });
 
   return {
     title: rep.title ?? query,
@@ -138,11 +184,12 @@ export function aggregateListings(
     condition: String(rep.condition ?? "").trim(),
     material: String(rep.material ?? "").trim(),
     color: String(rep.color ?? "").trim(),
-    price: avgPrice || parseListingPrice(rep.price),
-    ebayAvg: avgPrice,
-    allegroAvg: avgPrice,
+    price: priceReliable ? median : 0,
+    ebayAvg: priceReliable ? median : 0,
+    allegroAvg: priceReliable ? median : 0,
     isExactMatch: hasExact,
+    priceReliable,
     listingCount: items.length,
-    samplesPriced: pool.filter((s) => s.price > 0).length,
+    samplesPriced: pricedCount,
   };
 }
