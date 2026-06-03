@@ -5,6 +5,16 @@ export const PRODUCT_LISTING_DATA_KEY = "productListingData";
 
 export type MatchType = "exact" | "similar" | "generic";
 
+function resolvePriceReliable(
+  data: Record<string, unknown>,
+  p: Record<string, unknown>,
+  price: string
+): boolean {
+  if (data.priceReliable === false || p.priceReliable === false) return false;
+  if (data.priceReliable === true || p.priceReliable === true) return true;
+  return parseFloat(price) > 0;
+}
+
 function resolveMatchType(
   data: Record<string, unknown>,
   p: Record<string, unknown>
@@ -105,12 +115,7 @@ export function parseListingSession(raw: unknown): ListingSession | null {
     ebayAvg: String(p.ebayAvg ?? p.ebayAverage ?? data.ebayAvg ?? price),
     isExactMatch: Boolean(data.isExactMatch ?? p.isExactMatch ?? false),
     matchType: resolveMatchType(data, p),
-    priceReliable:
-      data.priceReliable === true ||
-      p.priceReliable === true ||
-      (data.priceReliable !== false &&
-        p.priceReliable !== false &&
-        parseFloat(price) > 0),
+    priceReliable: resolvePriceReliable(data, p, price),
   };
 
   return {

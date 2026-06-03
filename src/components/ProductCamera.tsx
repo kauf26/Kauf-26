@@ -22,7 +22,9 @@ type IdentifyApiResponse = {
     capturedImage?: string;
     isExactMatch?: boolean;
     matchType?: MatchType;
+    priceReliable?: boolean;
   };
+  priceReliable?: boolean;
 };
 
 /** Persist Task A shape for ProductDraft: reads `data.product` */
@@ -49,6 +51,7 @@ function persistPendingAnalysisFromIdentify(result: IdentifyApiResponse) {
     capturedImage: p.capturedImage ?? '',
     isExactMatch,
     matchType,
+    priceReliable: result.priceReliable === true || p.priceReliable === true,
     product: {
       title: p.title ?? '',
       description: p.description ?? '',
@@ -64,6 +67,7 @@ function persistPendingAnalysisFromIdentify(result: IdentifyApiResponse) {
       ebayAvg: String(p.ebayAvg ?? p.price ?? 0),
       isExactMatch,
       matchType,
+      priceReliable: result.priceReliable === true || p.priceReliable === true,
     },
   });
   if (result.draftId != null) {

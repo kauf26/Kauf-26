@@ -23,6 +23,7 @@ color: string;
 allegroAverage: string;
 ebayAverage: string;
 capturedImage: string;
+priceReliable: boolean;
 };
 
 /** Suggestions only — user can type any category (e.g. Cameras, Shoes) */
@@ -55,7 +56,8 @@ material: "",
 color: "",
 allegroAverage: "0.00",
 ebayAverage: "0.00",
-capturedImage: ""
+capturedImage: "",
+priceReliable: true,
 };
 
 const PROHIBITED_KEYWORDS = ["gun", "drugs", "alcohol", "tobacco", "vape", "weapon"];
@@ -97,6 +99,16 @@ function sanitizeBrandDisplay(brand: string): string {
   return s.toUpperCase() === "N/A" ? "" : s;
 }
 
+function priceHint(product: ProductDraftState): string | null {
+  if (!product.priceReliable) {
+    return "Price estimate unavailable – set manually";
+  }
+  if (isPriceUnset(product.price)) {
+    return "Price not available — set manually before posting.";
+  }
+  return null;
+}
+
 const ProductDraft: React.FC = () => {
 const [, setLocation] = useLocation();
 const { toast } = useToast();
@@ -127,6 +139,13 @@ useEffect(() => {
       allegroAverage: listing.product.allegroAvg,
       ebayAverage: listing.product.ebayAvg,
       capturedImage: listing.capturedImage,
+      priceReliable:
+        listing.priceReliable === false ||
+        listing.product.priceReliable === false
+          ? false
+          : listing.priceReliable === true ||
+            listing.product.priceReliable === true ||
+            parseFloat(listing.price) > 0,
     });
   } catch (e) {
     console.error("Error parsing product draft data:", e);
@@ -149,6 +168,7 @@ const handleContinue = async () => {
     material: product.material,
     color: product.color,
     capturedImage: product.capturedImage,
+    priceReliable: product.priceReliable,
     isExactMatch: product.isExactMatch,
     matchType: product.matchType,
     product: {
@@ -161,6 +181,7 @@ const handleContinue = async () => {
       material: product.material,
       color: product.color,
       capturedImage: product.capturedImage,
+      priceReliable: product.priceReliable,
       allegroAvg: product.allegroAverage,
       ebayAvg: product.ebayAverage,
       isExactMatch: product.isExactMatch,
@@ -315,10 +336,16 @@ return (
               className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-700"
               value={isPriceUnset(product.price) ? "" : product.price}
               onChange={e => update("price", e.target.value)}
-              placeholder={isPriceUnset(product.price) ? "Price not available — enter manually" : "0.00"}
+              placeholder={
+                !product.priceReliable
+                  ? "Price estimate unavailable – set manually"
+                  : isPriceUnset(product.price)
+                    ? "Price not available — enter manually"
+                    : "0.00"
+              }
             />
-            {isPriceUnset(product.price) && (
-              <p className="text-xs text-amber-400/90">Price not available — set manually before posting.</p>
+            {priceHint(product) && (
+              <p className="text-xs text-amber-400/90">{priceHint(product)}</p>
             )}
           </div>
         </div>
