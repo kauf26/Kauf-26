@@ -10,13 +10,19 @@ import { productRoutes } from "./productsRoutes";
 import marketplaceRoutes from "./marketplaceRoutes";
 import { startMarketplaceWorker } from "./marketplaceWorker";
 
-/** First non-empty category wins; "Other" only when all are blank */
+/** Skip vague scraper categories like "General" */
+function isWeakCategory(category: string): boolean {
+  const s = category.toLowerCase().trim();
+  return !s || s === "general" || s === "other";
+}
+
+/** First non-empty, specific category wins; "Other" only when all are blank/vague */
 function coalesceCategory(
   ...candidates: (string | undefined | null)[]
 ): string {
   for (const c of candidates) {
     const s = String(c ?? "").trim();
-    if (s) return s;
+    if (s && !isWeakCategory(s)) return s;
   }
   return "Other";
 }
@@ -41,6 +47,9 @@ type VisionProduct = {
   condition?: string;
   price?: number | null;
   description?: string;
+  material?: string;
+  color?: string;
+  style?: string;
   confidence: VisionConfidence;
 };
 
@@ -67,17 +76,22 @@ Return ONLY valid JSON:
 {
   "title": "specific product name",
   "brand": "brand or text on product if visible, else empty string",
-  "category": "accurate marketplace category for this item (any appropriate label)",
+  "category": "accurate marketplace category (e.g. Home & Kitchen, Electronics, Clothing — never \"General\")",
   "condition": "one of: New, Used, Like New",
-  "price": estimated USD resale price as a number; use 0 if unknown,
+  "price": estimated USD resale price as a number, or null if unknown,
   "confidence": "high" | "medium" | "low",
-  "description": "1-2 sentences describing the product for a listing"
+  "description": "1-2 sentences for a resale listing: material, color, use case",
+  "material": "primary material if visible or inferable (ceramic, glass, plastic, metal, wood, fabric, leather, etc.) or empty string",
+  "color": "primary color(s), e.g. white and blue, two-tone, matte black — or empty string",
+  "style": "optional pattern or style, e.g. striped, minimalist, vintage — or empty string"
 }
 
 Guidance:
-- Pick category and price that fit THIS item (e.g. small low-cost items vs luxury goods).
+- Pick category and price that fit THIS item (e.g. mug → Home & Kitchen; phone → Electronics).
+- Infer material from visible texture (glazed ceramic, stainless steel, cotton fabric).
+- Include color and style in description when helpful; keep description factual, not generic filler.
 - Include visible on-product text in brand/title when helpful (e.g. bar name on a cap).
-- Do not use the word "General" as category — choose a specific category.
+- Do not use the word "General" as category — choose a specific marketplace category.
 - confidence:
   - "high": clear product, recognizable brand/model (e.g. iPhone in frame).
   - "medium": identifiable type but limited detail (generic sneakers, unbranded mug).
@@ -90,9 +104,11 @@ Phone: { "title": "iPhone 12", "brand": "Apple", "category": "Electronics", "con
 
 Cap with logo: { "title": "The Shack Baseball Cap", "brand": "The Shack", "category": "Clothing", "condition": "Used", "price": 15, "confidence": "medium", "description": "..." }
 
-Small toy: { "title": "Yellow Stress Ball", "brand": "", "category": "Toys", "condition": "Used", "price": 8, "confidence": "medium", "description": "..." }
+Small toy: { "title": "Yellow Stress Ball", "brand": "", "category": "Toys", "condition": "Used", "price": 8, "confidence": "medium", "material": "rubber", "color": "yellow", "style": "", "description": "..." }
 
-Cleaning cloth (blurry/generic): { "title": "Eyeglass cleaning cloth", "brand": "", "category": "Accessories", "condition": "Used", "price": 0, "confidence": "low", "description": "Soft microfiber cloth for cleaning eyeglasses." }`;
+Ceramic mug: { "title": "Two-Tone Ceramic Mug", "brand": "", "category": "Home & Kitchen", "condition": "New", "price": null, "confidence": "medium", "material": "ceramic", "color": "white and blue", "style": "two-tone glaze", "description": "A ceramic mug with a two-tone glaze, suitable for coffee or tea." }
+
+Cleaning cloth (blurry/generic): { "title": "Eyeglass cleaning cloth", "brand": "", "category": "Accessories", "condition": "Used", "price": 0, "confidence": "low", "material": "microfiber", "color": "", "style": "", "description": "Soft microfiber cloth for cleaning eyeglasses." }`;
 
 function parseVisionResponse(content: string): VisionProduct | null {
   const trimmed = content.trim();
@@ -115,6 +131,9 @@ function parseVisionResponse(content: string): VisionProduct | null {
       condition: parsed.condition || "Used",
       price: parsed.price ?? 0,
       description: parsed.description?.trim() || "",
+      material: String(parsed.material ?? "").trim(),
+      color: String(parsed.color ?? "").trim(),
+      style: String(parsed.style ?? "").trim(),
       confidence,
     };
   } catch {
@@ -153,14 +172,63 @@ function truncateWords(text: string, maxWords = 50): string {
   return words.slice(0, maxWords).join(" ");
 }
 
+function isPlaceholderDescription(text: string): boolean {
+  const t = text.toLowerCase();
+  return (
+    t.includes("general item matching") ||
+    t.includes("details pending manual review") ||
+    t.includes("please review the details manually") ||
+    t.length < 12
+  );
+}
+
+function pickDescription(
+  scrapedDesc: string | undefined,
+  vision: VisionProduct
+): string {
+  const scraped = String(scrapedDesc ?? "").trim();
+  const fromVision = String(vision.description ?? "").trim();
+  if (fromVision && (!scraped || isPlaceholderDescription(scraped))) {
+    return fromVision;
+  }
+  return scraped || fromVision;
+}
+
+function applyVisionEnrichment(
+  listing: ScrapedListing,
+  vision: VisionProduct
+): ScrapedListing {
+  const scrapedCategory = String(listing.category ?? "");
+  const category = coalesceCategory(
+    isWeakCategory(scrapedCategory) ? undefined : scrapedCategory,
+    vision.category
+  );
+  const scrapedPrice = parseFloat(String(listing.price ?? 0)) || 0;
+  const visionPrice =
+    vision.price != null && vision.price > 0 ? vision.price : 0;
+  const price = scrapedPrice > 0 ? scrapedPrice : visionPrice;
+
+  return {
+    ...listing,
+    title: listing.title ?? vision.title,
+    brand: String(listing.brand || vision.brand || ""),
+    category,
+    material: String(listing.material || vision.material || ""),
+    condition: listing.condition ?? vision.condition ?? "Used",
+    description: truncateWords(pickDescription(listing.description, vision), 50),
+    price,
+  };
+}
+
 function buildGenericFromVision(vision: VisionProduct): ScrapedListing {
   return {
     title: vision.title,
     brand: vision.brand ?? "",
-    category: coalesceCategory(vision.category, "Accessories"),
+    category: coalesceCategory(vision.category, "Home & Kitchen"),
     condition: vision.condition ?? "Used",
+    material: vision.material ?? "",
     description: truncateWords(vision.description ?? "", 50),
-    price: 0,
+    price: vision.price != null && vision.price > 0 ? vision.price : 0,
     allegroAvg: 0,
     ebayAvg: 0,
     isExactMatch: false,
@@ -200,18 +268,7 @@ function mergeListingWithVision(
   vision: VisionProduct
 ): ScrapedListing {
   if (!scraped) {
-    return {
-      title: vision.title,
-      brand: vision.brand ?? "",
-      category: coalesceCategory(vision.category),
-      condition: vision.condition ?? "Used",
-      description: vision.description ?? "",
-      price: vision.price ?? 0,
-      allegroAvg: vision.price ?? 0,
-      ebayAvg: vision.price ?? 0,
-      isExactMatch: false,
-      matchType: "generic",
-    };
+    return buildGenericFromVision(vision);
   }
 
   const matchType: MatchType =
@@ -219,44 +276,42 @@ function mergeListingWithVision(
     (scraped.isExactMatch ? "exact" : "similar");
 
   if (matchType === "exact") {
-    return {
-      ...scraped,
-      isExactMatch: true,
-      matchType: "exact",
-      allegroAvg: scraped.allegroAvg ?? scraped.price,
-      ebayAvg: scraped.ebayAvg ?? scraped.ebayPrice ?? scraped.price,
-    };
+    return applyVisionEnrichment(
+      {
+        ...scraped,
+        isExactMatch: true,
+        matchType: "exact",
+        allegroAvg: scraped.allegroAvg ?? scraped.price,
+        ebayAvg: scraped.ebayAvg ?? scraped.ebayPrice ?? scraped.price,
+      },
+      vision
+    );
   }
 
   if (matchType === "similar") {
-    return {
-      ...scraped,
-      title: scraped.title ?? vision.title,
-      brand: String(scraped.brand || vision.brand || ""),
-      category: coalesceCategory(scraped.category, vision.category),
-      condition: scraped.condition ?? vision.condition ?? "Used",
-      description: scraped.description ?? vision.description ?? "",
-      price: scraped.price ?? vision.price ?? 0,
-      allegroAvg: scraped.allegroAvg ?? scraped.price ?? 0,
-      ebayAvg: scraped.ebayAvg ?? scraped.ebayPrice ?? scraped.price ?? 0,
-      isExactMatch: false,
-      matchType: "similar",
-    };
+    return applyVisionEnrichment(
+      {
+        ...scraped,
+        isExactMatch: false,
+        matchType: "similar",
+        allegroAvg: scraped.allegroAvg ?? scraped.price ?? 0,
+        ebayAvg: scraped.ebayAvg ?? scraped.ebayPrice ?? scraped.price ?? 0,
+      },
+      vision
+    );
   }
 
-  return {
-    title: scraped.title ?? vision.title,
-    brand: String(scraped.brand || vision.brand || ""),
-    category: coalesceCategory(scraped.category, vision.category),
-    condition: scraped.condition ?? vision.condition ?? "Used",
-    description: scraped.description ?? vision.description ?? "",
-    price: scraped.price ?? vision.price ?? 0,
-    allegroAvg: scraped.allegroAvg ?? scraped.price ?? vision.price ?? 0,
-    ebayAvg:
-      scraped.ebayAvg ?? scraped.ebayPrice ?? vision.price ?? 0,
-    isExactMatch: false,
-    matchType: "generic",
-  };
+  return applyVisionEnrichment(
+    {
+      ...scraped,
+      isExactMatch: false,
+      matchType: "generic",
+      allegroAvg: scraped.allegroAvg ?? scraped.price ?? vision.price ?? 0,
+      ebayAvg:
+        scraped.ebayAvg ?? scraped.ebayPrice ?? vision.price ?? 0,
+    },
+    vision
+  );
 }
 
 /** Fill missing marketplace averages from listing price — does not change model price */
@@ -382,7 +437,9 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
        brand: listings.brand || "Unknown",
        year: listings.year || new Date().getFullYear().toString(),
        condition: listings.condition || "Used",
-       material: listings.material || "Not specified",
+       material: listings.material || vision.material || "Not specified",
+       color: vision.color || "",
+       style: vision.style || "",
        aiDescription: listings.description || `KAUF-AI identified as: ${searchQuery}`,
        marketPrices: {
          allegroAvg: String(listings.allegroAvg ?? listings.price ?? "0.00"),
@@ -434,6 +491,9 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
        brand: listings.brand ?? vision.brand ?? "",
        category: coalesceCategory(listings.category, vision.category),
        condition: listings.condition ?? vision.condition ?? "Used",
+       material: listings.material ?? vision.material ?? "",
+       color: vision.color ?? "",
+       style: vision.style ?? "",
        allegroAvg: market.allegroAvg,
        ebayAvg: market.ebayAvg,
        capturedImage,

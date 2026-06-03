@@ -238,7 +238,7 @@ function getGeneralDescription(query: string) {
     brand: "N/A",
     description: `A general item matching the search criteria for "${query}". Please review the details manually.`,
     price: undefined,
-    category: "General",
+    category: "Other",
     condition: "New",
     isExactMatch: false,
   };

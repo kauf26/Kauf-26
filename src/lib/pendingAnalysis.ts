@@ -45,6 +45,9 @@ export type ListingSession = {
     category: string;
     condition: string;
     capturedImage: string;
+    material?: string;
+    color?: string;
+    style?: string;
     allegroAvg: string;
     ebayAvg: string;
     isExactMatch?: boolean;
@@ -57,6 +60,9 @@ export type ListingSession = {
   category: string;
   condition: string;
   capturedImage: string;
+  material?: string;
+  color?: string;
+  style?: string;
   isExactMatch?: boolean;
   matchType?: MatchType;
 };
@@ -74,6 +80,9 @@ export function parseListingSession(raw: unknown): ListingSession | null {
     p.description ?? data.aiDescription ?? data.description ?? ""
   ).trim();
   const price = String(p.price ?? data.recommendedPrice ?? "0");
+  const material = String(p.material ?? data.material ?? "");
+  const color = String(p.color ?? data.color ?? "");
+  const style = String(p.style ?? data.style ?? "");
   const product = {
     title,
     description,
@@ -82,6 +91,9 @@ export function parseListingSession(raw: unknown): ListingSession | null {
     category: String(p.category ?? data.category ?? ""),
     condition: String(p.condition ?? data.condition ?? "Used"),
     capturedImage: String(p.capturedImage ?? data.capturedImage ?? ""),
+    material,
+    color,
+    style,
     allegroAvg: String(
       p.allegroAvg ?? p.allegroAverage ?? data.allegroAvg ?? price
     ),
@@ -109,7 +121,9 @@ export function saveListingSession(session: ListingSession): void {
       condition: session.condition,
       category: session.category,
       refNumber: "",
-      material: "",
+      material: session.material ?? session.product.material ?? "",
+      color: session.color ?? session.product.color ?? "",
+      style: session.style ?? session.product.style ?? "",
       aiDescription: session.description,
       recommendedPrice: parseFloat(session.price) || 0,
       allegroAvg: parseFloat(session.product.allegroAvg) || 0,

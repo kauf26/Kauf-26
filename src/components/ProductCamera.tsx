@@ -14,6 +14,9 @@ type IdentifyApiResponse = {
     brand?: string;
     category?: string;
     condition?: string;
+    material?: string;
+    color?: string;
+    style?: string;
     allegroAvg?: string | number;
     ebayAvg?: string | number;
     capturedImage?: string;
@@ -40,6 +43,9 @@ function persistPendingAnalysisFromIdentify(result: IdentifyApiResponse) {
     brand: p.brand ?? '',
     category: p.category ?? '',
     condition: p.condition ?? 'Used',
+    material: p.material ?? '',
+    color: p.color ?? '',
+    style: p.style ?? '',
     capturedImage: p.capturedImage ?? '',
     isExactMatch,
     matchType,
@@ -50,6 +56,9 @@ function persistPendingAnalysisFromIdentify(result: IdentifyApiResponse) {
       brand: p.brand ?? '',
       category: p.category ?? '',
       condition: p.condition ?? 'Used',
+      material: p.material ?? '',
+      color: p.color ?? '',
+      style: p.style ?? '',
       capturedImage: p.capturedImage ?? '',
       allegroAvg: String(p.allegroAvg ?? p.price ?? 0),
       ebayAvg: String(p.ebayAvg ?? p.price ?? 0),

@@ -56,7 +56,7 @@ const getGeneralDescription = (query: string) => ({
   brand: 'N/A',
   description: `A general listing for "${query}". Details pending manual review.`,
   price: undefined,
-  category: 'General',
+  category: 'Other',
   condition: 'New',
   isExactMatch: false,
 });
