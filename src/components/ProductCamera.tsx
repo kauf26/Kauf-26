@@ -1,9 +1,41 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchMasterProductData, saveToDraftStorage } from './masterScraperBridge';
+import { saveToDraftStorage } from './masterScraperBridge';
+
+type IdentifyApiResponse = {
+  success?: boolean;
+  draftId?: number | string;
+  product?: {
+    title?: string;
+    description?: string;
+    price?: string | number;
+    brand?: string;
+    category?: string;
+    condition?: string;
+    allegroAvg?: string | number;
+    ebayAvg?: string | number;
+    capturedImage?: string;
+    isExactMatch?: boolean;
+  };
+};
+
+/** Persist Task A shape for ProductDraft: reads `data.product` */
+function persistPendingAnalysisFromIdentify(result: IdentifyApiResponse) {
+  if (!result?.product) {
+    throw new Error('Identify response missing product');
+  }
+  sessionStorage.setItem(
+    'pendingAnalysis',
+    JSON.stringify({
+      product: result.product,
+      draftId: result.draftId,
+      isExactMatch: result.product.isExactMatch ?? true,
+    })
+  );
+}
 
 interface ProductCameraProps {
-  onScrapeSuccess?: (result: any) => void;
+  onScrapeSuccess?: (result: IdentifyApiResponse) => void;
 }
 
 const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
@@ -62,7 +94,7 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
       throw new Error('Failed to process image with scraper');
     }
 
-    return res.json();
+    return res.json() as Promise<IdentifyApiResponse>;
   };
 
   const identifyProduct = async () => {
@@ -77,26 +109,11 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
         return;
       }
 
-      const scrapedData = await fetchMasterProductData(productQuery);
+      const result = await sendImageToScraper(capturedImage, productQuery);
+      persistPendingAnalysisFromIdentify(result);
 
-      sessionStorage.setItem("pendingAnalysis", JSON.stringify({
-        title: scrapedData.title || productQuery,
-        brand: scrapedData.brand || "",
-        description: scrapedData.description || "",
-        price: scrapedData.price?.toString() || "0.00",
-        category: scrapedData.category || "Watches",
-        condition: scrapedData.condition || "New",
-        modelNumber: scrapedData.modelNumber || "",
-        material: scrapedData.material || "",
-        allegroAverage: scrapedData.allegroAverage?.toString() || "0.00",
-        ebayAverage: scrapedData.ebayAverage?.toString() || "0.00",
-        capturedImage: capturedImage,
-        isExactMatch: true
-      }));
-
-      await saveToDraftStorage(scrapedData);
-      await sendImageToScraper(capturedImage, productQuery);
-
+      await saveToDraftStorage(result.product);
+      onScrapeSuccess?.(result);
       navigate('/product-draft');
     } catch (err) {
       setError('Failed to identify product. Please try again.');
@@ -112,35 +129,17 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
     setError(null);
 
     try {
-      console.log("📸 Sending camera image directly to scraper...");
+      console.log("📸 Sending camera image to /api/identify...");
       const result = await sendImageToScraper(capturedImage, "Live Camera Scan");
-      console.log("✅ Scraper result:", result);
+      console.log("✅ Identify result:", result);
 
-      if (!result || Object.keys(result).length === 0) {
-        setError("Scraper returned no data. Please try again.");
-        return;
+      persistPendingAnalysisFromIdentify(result);
+
+      if (result.draftId != null) {
+        console.log("Draft saved with ID:", result.draftId);
       }
 
-      const productData = result.product || result.data || result;
-      sessionStorage.setItem("pendingAnalysis", JSON.stringify({
-        title: productData.title || "Scanned Product",
-        brand: productData.brand || "",
-        description: productData.description || "",
-        price: productData.price?.toString() || "0.00",
-        category: productData.category || "Watches",
-        condition: productData.condition || "New",
-        modelNumber: productData.modelNumber || "",
-        material: productData.material || "",
-        allegroAverage: productData.allegroAverage?.toString() || "0.00",
-        ebayAverage: productData.ebayAverage?.toString() || "0.00",
-        capturedImage: capturedImage,
-        isExactMatch: true
-      }));
-
-      if (result.draft) {
-        alert(`✅ Product scraped! Draft ID: ${result.draft.id}`);
-      }
-
+      onScrapeSuccess?.(result);
       navigate('/product-draft');
     } catch (err) {
       setError('Failed to process image with scraper.');

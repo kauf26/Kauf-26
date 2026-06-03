@@ -101,25 +101,27 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
    const savedDraft = await saveResponse.json();
    console.log("✅ Draft saved successfully with ID:", savedDraft.id || savedDraft);
 
-   // Return response with draft ID
+   // Normalized response for ProductDraft / sessionStorage (Task A)
+   const capturedImage = `data:${req.file.mimetype};base64,${base64Image}`;
+   const allegroAvg = listings.price ?? "0.00";
+   const ebayAvg = listings.ebayPrice ?? listings.price ?? "0.00";
+
    res.json({
      success: true,
-     draftId: savedDraft.id || savedDraft,
-     productData: {
-       capturedImage: `data:${req.file.mimetype};base64,${base64Image}`,
-       modelName: searchQuery,
-       brand: listings.brand || "Not Found",
-       year: listings.year || new Date().getFullYear().toString(),
-       condition: listings.condition || "Used",
-       material: listings.material || "Not specified",
-       refNumber: listings.refNumber || "AUTO-GEN",
-       aiDescription: listings.description || `KAUF-AI identified this as: ${searchQuery}`
+     draftId: savedDraft.id ?? savedDraft,
+     product: {
+       title: (listings as any).title ?? searchQuery,
+       description:
+         listings.description ??
+         `KAUF-AI identified as: ${searchQuery}`,
+       price: String(listings.price ?? 0),
+       brand: listings.brand ?? "",
+       category: (listings as any).category ?? "General",
+       condition: listings.condition ?? "Used",
+       allegroAvg: String(allegroAvg),
+       ebayAvg: String(ebayAvg),
+       capturedImage,
      },
-     marketPrices: {
-       allegroAvg: listings.price || "0.00",
-       ebayAvg: listings.ebayPrice || "0.00",
-       recommendedPrice: listings.price || "0.00"
-     }
    });
  } catch (error) {
    console.error("❌ Identification Error:", error);

@@ -40,26 +40,33 @@ const { toast } = useToast();
 const [product, setProduct] = useState<ProductDraftState>(DEFAULT_PRODUCT);
 
 useEffect(() => {
-  // MUST use the same key as masterScraper.ts
   const saved = sessionStorage.getItem("pendingAnalysis");
   if (!saved) return;
+
   try {
     const data = JSON.parse(saved);
-    setProduct(p => ({
-      ...p,
-      isExactMatch: data.isExactMatch ?? p.isExactMatch,
-      title: data.modelName || data.title || p.title,
-      brand: data.brand || p.brand,
-      description: data.aiDescription || data.description || p.description,
-      price: String(data.recommendedPrice || data.price || p.price),
-      category: data.category || p.category,
-      condition: data.condition || p.condition,
-      modelNumber: data.refNumber || data.modelNumber || p.modelNumber,
-      material: data.material || p.material,
-      allegroAverage: String(data.allegroAvg || data.allegroAverage || p.allegroAverage),
-      ebayAverage: String(data.ebayAvg || data.ebayAverage || p.ebayAverage),
-      capturedImage: data.capturedImage || p.capturedImage
-    }));
+    // Task A API shape: { product: { title, description, price, ... } }
+    // Legacy / IdentificationResults: flat fields via toPendingAnalysis
+    const src = data.product ?? data;
+
+    setProduct({
+      isExactMatch: data.isExactMatch ?? src.isExactMatch ?? DEFAULT_PRODUCT.isExactMatch,
+      title: src.title ?? data.modelName ?? DEFAULT_PRODUCT.title,
+      brand: src.brand ?? DEFAULT_PRODUCT.brand,
+      description: src.description ?? data.aiDescription ?? DEFAULT_PRODUCT.description,
+      price: String(src.price ?? data.recommendedPrice ?? DEFAULT_PRODUCT.price),
+      category: src.category ?? DEFAULT_PRODUCT.category,
+      condition: src.condition ?? DEFAULT_PRODUCT.condition,
+      modelNumber: src.modelNumber ?? data.refNumber ?? DEFAULT_PRODUCT.modelNumber,
+      material: src.material ?? DEFAULT_PRODUCT.material,
+      allegroAverage: String(
+        src.allegroAvg ?? src.allegroAverage ?? data.allegroAvg ?? DEFAULT_PRODUCT.allegroAverage
+      ),
+      ebayAverage: String(
+        src.ebayAvg ?? src.ebayAverage ?? data.ebayAvg ?? DEFAULT_PRODUCT.ebayAverage
+      ),
+      capturedImage: src.capturedImage ?? DEFAULT_PRODUCT.capturedImage,
+    });
   } catch (e) {
     console.error("Error parsing product draft data:", e);
   }
