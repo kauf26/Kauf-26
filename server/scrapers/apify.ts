@@ -13,7 +13,7 @@ dotenv.config();
 const client = new ApifyClient({ token: process.env.APIFY_API_KEY });
 
 const DEFAULT_ACTOR_ID = "apify/e-commerce-scraping-tool";
-const RUN_TIMEOUT_SECS = Number(process.env.APIFY_RUN_TIMEOUT_SECS ?? 120);
+const RUN_TIMEOUT_SECS = Number(process.env.APIFY_RUN_TIMEOUT_SECS ?? 45);
 
 const truncateDescription = (text: string, query: string): string => {
   if (!text) return `A general listing for ${query}.`;
@@ -40,6 +40,29 @@ function buildActorInput(query: string): Record<string, unknown> {
     scrapeMode: "AUTO",
     country: "US",
   };
+}
+
+function isInvalidInputError(err: unknown): boolean {
+  const msg = String(err instanceof Error ? err.message : err).toLowerCase();
+  return msg.includes("invalid-input") || msg.includes("invalid input");
+}
+
+async function callActorWithRetry(actorId: string, query: string) {
+  const primary = buildActorInput(query);
+  try {
+    return await client.actor(actorId).call(primary, {
+      waitSecs: RUN_TIMEOUT_SECS,
+    });
+  } catch (err) {
+    if (!isInvalidInputError(err)) throw err;
+    console.warn(
+      "[Apify] invalid-input — retrying with explicit AUTO scrapeMode"
+    );
+    const fallback = { ...primary, scrapeMode: "AUTO" as const };
+    return await client.actor(actorId).call(fallback, {
+      waitSecs: RUN_TIMEOUT_SECS,
+    });
+  }
 }
 
 const LOG_SAMPLE_ITEMS = 3;
@@ -139,16 +162,14 @@ export const scrapeProduct = async (
   try {
     if (!process.env.APIFY_API_KEY) {
       console.warn("[Apify] APIFY_API_KEY missing — skipping Apify scraper");
-      return getGeneralDescription(query);
+      return null;
     }
 
     const input = buildActorInput(query);
     console.log(`[Apify] Actor: ${actorId}`);
     console.log("[Apify] Input sent to actor:", JSON.stringify(input, null, 2));
 
-    const run = await client.actor(actorId).call(input, {
-      waitSecs: RUN_TIMEOUT_SECS,
-    });
+    const run = await callActorWithRetry(actorId, query);
 
     console.log("[Apify] Run finished:", {
       id: run.id,
@@ -211,8 +232,8 @@ export const scrapeProduct = async (
     }
 
     if (listings.length === 0) {
-      console.warn("[Apify] No parseable items — falling back to generic");
-      return getGeneralDescription(query);
+      console.warn("[Apify] No parseable items");
+      return null;
     }
 
     console.log(
@@ -224,7 +245,7 @@ export const scrapeProduct = async (
       "[Apify] Aggregated result:",
       JSON.stringify(aggregated, null, 2)
     );
-    if (!aggregated) return getGeneralDescription(query);
+    if (!aggregated) return null;
 
     return {
       ...aggregated,
@@ -236,18 +257,6 @@ export const scrapeProduct = async (
     };
   } catch (error) {
     console.error("❌ Apify Error:", error);
-    return getGeneralDescription(query);
+    return null;
   }
 };
-
-function getGeneralDescription(query: string) {
-  return {
-    title: query,
-    brand: "",
-    description: "",
-    price: undefined,
-    category: "",
-    condition: "",
-    isExactMatch: false,
-  };
-}

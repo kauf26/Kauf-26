@@ -41,7 +41,6 @@ function captureVideoFrame(
   ctx.drawImage(video, 0, 0, vw, vh);
 }
 
-/** Full frame → max 1024px longest side, JPEG q=0.85 */
 function encodeCanvasForApi(canvas: HTMLCanvasElement): Promise<string> {
   let outW = canvas.width;
   let outH = canvas.height;
@@ -80,11 +79,19 @@ async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
   return res.blob();
 }
 
+type MatchConfidence = 'low' | 'medium' | 'high';
+
 type IdentifyApiResponse = {
   success?: boolean;
   draftId?: number | string;
   isExactMatch?: boolean;
   matchType?: MatchType;
+  visionConfidence?: MatchConfidence;
+  matchConfidence?: MatchConfidence;
+  confidence?: MatchConfidence;
+  matchScore?: number;
+  timedOut?: boolean;
+  verificationWarning?: string | null;
   product?: {
     title?: string;
     description?: string;
@@ -101,11 +108,32 @@ type IdentifyApiResponse = {
     isExactMatch?: boolean;
     matchType?: MatchType;
     priceReliable?: boolean;
+    matchConfidence?: MatchConfidence;
   };
   priceReliable?: boolean;
 };
 
-/** Persist Task A shape for ProductDraft: reads `data.product` */
+function shouldPromptBeforeDraft(result: IdentifyApiResponse): boolean {
+  if (result.isExactMatch === true) return false;
+
+  const matchConf =
+    result.matchConfidence ?? result.confidence ?? result.product?.matchConfidence;
+  if (matchConf === 'low') return true;
+  if (result.timedOut === true) return true;
+
+  const brand = String(result.product?.brand ?? '').trim();
+  if (!brand) return true;
+
+  const price = parseFloat(String(result.product?.price ?? 0)) || 0;
+  const reliable =
+    result.priceReliable === true || result.product?.priceReliable === true;
+  if (!reliable && price > 0 && price < 100) return true;
+
+  if (result.verificationWarning) return true;
+
+  return false;
+}
+
 function persistPendingAnalysisFromIdentify(result: IdentifyApiResponse) {
   if (!result?.product) {
     throw new Error('Identify response missing product');
@@ -166,6 +194,9 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingBestGuess, setPendingBestGuess] =
+    useState<IdentifyApiResponse | null>(null);
+  const [showNoExactMatchPrompt, setShowNoExactMatchPrompt] = useState(false);
 
   const stopStream = () => {
     const active = streamRef.current;
@@ -218,11 +249,19 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
     if (!capturedImage) return;
     setIsLoading(true);
     setError(null);
+    setShowNoExactMatchPrompt(false);
+    setPendingBestGuess(null);
 
     try {
       console.log('📸 Sending camera image to /api/identify...');
       const result = await sendImageToScraper(capturedImage);
       console.log('✅ Identify result:', result);
+
+      if (shouldPromptBeforeDraft(result)) {
+        setPendingBestGuess(result);
+        setShowNoExactMatchPrompt(true);
+        return;
+      }
 
       persistPendingAnalysisFromIdentify(result);
 
@@ -244,9 +283,26 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
     }
   };
 
+  const continueWithBestGuess = () => {
+    if (!pendingBestGuess?.product) return;
+    persistPendingAnalysisFromIdentify(pendingBestGuess);
+    if (pendingBestGuess.draftId != null) {
+      sessionStorage.setItem(
+        'identifyDraftId',
+        String(pendingBestGuess.draftId)
+      );
+    }
+    onScrapeSuccess?.(pendingBestGuess);
+    setShowNoExactMatchPrompt(false);
+    setPendingBestGuess(null);
+    navigate('/product-draft');
+  };
+
   const capturePhoto = async () => {
     if (!videoRef.current || !canvasRef.current || isLoading) return;
     setError(null);
+    setShowNoExactMatchPrompt(false);
+    setPendingBestGuess(null);
 
     try {
       captureVideoFrame(videoRef.current, canvasRef.current);
@@ -263,6 +319,8 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
   const retake = () => {
     setCapturedImage(null);
     setError(null);
+    setShowNoExactMatchPrompt(false);
+    setPendingBestGuess(null);
     startCamera();
   };
 
@@ -314,25 +372,61 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
             alt="Captured preview"
             className="w-full rounded border border-zinc-700"
           />
-          {isLoading && (
-            <p className="text-center text-sm text-zinc-400">Identifying product…</p>
+
+          {showNoExactMatchPrompt && (
+            <div className="rounded border border-amber-800/60 bg-amber-950/30 p-4 space-y-3">
+              <p className="text-sm text-amber-200/90">
+                We couldn&apos;t find an exact match for this product. Please
+                retake the photo with better lighting or try again.
+              </p>
+              <p className="text-xs text-amber-400/80">
+                Continuing with our best guess may be inaccurate (wrong brand or
+                price).
+              </p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={retake}
+                  className="flex-1 py-3 bg-zinc-800 rounded font-semibold hover:bg-zinc-700 transition-colors"
+                >
+                  Retake photo
+                </button>
+                <button
+                  type="button"
+                  onClick={continueWithBestGuess}
+                  className="flex-1 py-3 bg-amber-700 rounded font-semibold hover:bg-amber-600 transition-colors"
+                >
+                  Continue with best guess
+                </button>
+              </div>
+            </div>
           )}
-          <div className="flex gap-4">
-            <button
-              onClick={retake}
-              disabled={isLoading}
-              className="flex-1 py-3 bg-zinc-800 rounded font-semibold hover:bg-zinc-700 disabled:opacity-40 transition-colors"
-            >
-              Retake
-            </button>
-            <button
-              onClick={() => void identify()}
-              disabled={isLoading}
-              className="flex-1 py-3 bg-blue-600 rounded font-semibold hover:bg-blue-500 disabled:opacity-40 transition-colors"
-            >
-              {isLoading ? 'Identifying…' : 'Identify'}
-            </button>
-          </div>
+
+          {isLoading && (
+            <p className="text-center text-sm text-zinc-400">
+              Analyzing product – this may take up to 10 seconds for best
+              accuracy…
+            </p>
+          )}
+
+          {!showNoExactMatchPrompt && (
+            <div className="flex gap-4">
+              <button
+                onClick={retake}
+                disabled={isLoading}
+                className="flex-1 py-3 bg-zinc-800 rounded font-semibold hover:bg-zinc-700 disabled:opacity-40 transition-colors"
+              >
+                Retake
+              </button>
+              <button
+                onClick={() => void identify()}
+                disabled={isLoading}
+                className="flex-1 py-3 bg-blue-600 rounded font-semibold hover:bg-blue-500 disabled:opacity-40 transition-colors"
+              >
+                {isLoading ? 'Analyzing…' : 'Identify'}
+              </button>
+            </div>
+          )}
         </div>
       )}
       <canvas ref={canvasRef} className="hidden" />

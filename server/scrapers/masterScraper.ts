@@ -5,7 +5,6 @@ import {
 import { scrapeProduct as scrapeApify } from "./apify";
 import { scrapeProduct as scrapeGoogle } from "./googleShopping";
 import { scrapeProduct as scrapeRapidAPI } from "./rapidapi";
-import { scrapeProduct as scrapeOxylabs } from "./oxylabs";
 import {
   brandJaccard,
   brandsConflict,
@@ -17,16 +16,133 @@ import dotenv from "dotenv";
 dotenv.config();
 
 export type MatchType = "exact" | "similar" | "generic";
+export type MatchConfidence = "low" | "medium" | "high";
 
 export type ScrapeOptions = {
   vision?: VisionMatchContext;
 };
+
+const MIN_PARALLEL_WAIT_MS = 12_000;
+const SCRAPER_ATTEMPT_TIMEOUT_MS = 10_000;
+const SCRAPER_MAX_ATTEMPTS = 2;
+const HIGH_CONFIDENCE_SCORE = 80;
+const MEDIUM_CONFIDENCE_SCORE = 50;
+const HIGH_CONFIDENCE_THRESHOLD = 60;
+
+const LUXURY_WATCH_BRANDS = [
+  "breitling",
+  "rolex",
+  "omega",
+  "tag heuer",
+  "patek",
+  "cartier",
+  "iwc",
+  "panerai",
+  "hublot",
+  "audemars",
+];
+
+const GENERIC_TITLE_PATTERNS = [
+  /^analog\s+pilot\s+watch$/i,
+  /^men'?s?\s+watch$/i,
+  /^wrist\s+watch$/i,
+  /^analog\s+watch$/i,
+];
 
 const truncateDescription = (text: string, query: string): string => {
   if (!text || text.trim() === "") return "";
   const words = text.split(/\s+/);
   return words.length > 50 ? words.slice(0, 50).join(" ") + "..." : text;
 };
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function confidenceFromScore(score: number): MatchConfidence {
+  if (score >= HIGH_CONFIDENCE_SCORE) return "high";
+  if (score >= MEDIUM_CONFIDENCE_SCORE) return "medium";
+  return "low";
+}
+
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  label: string
+): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      setTimeout(
+        () => reject(new Error(`[${label}] timed out after ${ms}ms`)),
+        ms
+      );
+    }),
+  ]);
+}
+
+function isLuxuryWatchContext(vision: VisionMatchContext): boolean {
+  const brand = String(vision.visionBrand ?? "").toLowerCase();
+  const title = vision.visionTitle.toLowerCase();
+  if (LUXURY_WATCH_BRANDS.some((b) => brand.includes(b) || title.includes(b)))
+    return true;
+  return /\bwatch(es)?\b/.test(title) && brand.length > 0;
+}
+
+function isGenericTitle(title: string): boolean {
+  const t = title.trim().toLowerCase();
+  if (!t || t === "watch") return true;
+  return GENERIC_TITLE_PATTERNS.some((re) => re.test(t));
+}
+
+function brandAppearsInTitle(visionBrand: string, title: string): boolean {
+  const b = visionBrand.trim().toLowerCase();
+  if (!b) return false;
+  return title.toLowerCase().includes(b);
+}
+
+/** Accuracy-first scoring: brand+model in title, realistic luxury price, vision alignment */
+export function scoreResult(
+  vision: VisionMatchContext,
+  scraperData: Record<string, unknown>
+): { score: number; reasons: string[] } {
+  const base = scoreScraperCandidate(scraperData, vision);
+  let score = base.score;
+  const reasons = [...base.reasons];
+
+  const title = String(scraperData.title ?? "");
+  const brand = String(scraperData.brand ?? "");
+  const price = parsePrice(scraperData.price);
+  const visionBrand = String(vision.visionBrand ?? "").trim();
+  const luxury = isLuxuryWatchContext(vision);
+
+  if (visionBrand && brandAppearsInTitle(visionBrand, title)) {
+    score += 40;
+    reasons.push("vision_brand_in_title");
+  } else if (visionBrand && brand.toLowerCase() === visionBrand.toLowerCase()) {
+    score += 30;
+    reasons.push("vision_brand_match");
+  }
+
+  if (isGenericTitle(title)) {
+    score -= 50;
+    reasons.push("penalty_generic_title");
+  }
+
+  if (luxury) {
+    if (price >= 100) {
+      score += 25;
+      reasons.push("luxury_price_realistic");
+    } else if (price > 0 && price < 100) {
+      score -= 60;
+      reasons.push("penalty_luxury_low_price");
+    }
+  }
+
+  if (scraperData.isExactMatch === true) score += 15;
+
+  return { score, reasons };
+}
 
 function isPlaceholderDescription(text: string): boolean {
   const t = text.toLowerCase();
@@ -113,6 +229,17 @@ function validateProduct(data: unknown): data is Record<string, unknown> {
   return true;
 }
 
+function attachScrapeMeta(
+  result: Record<string, unknown>,
+  meta: {
+    timedOut: boolean;
+    matchConfidence: MatchConfidence;
+    matchScore: number;
+  }
+): Record<string, unknown> {
+  return { ...result, ...meta };
+}
+
 /** Exact marketplace listing — preserve fields as returned (no description trim). */
 function buildExactProduct(
   data: Record<string, unknown>,
@@ -138,10 +265,6 @@ function buildExactProduct(
   };
 }
 
-/**
- * Similar listing from marketplace (not exact SKU).
- * Enriches description with color/material when present.
- */
 export function mergeSimilarProduct(
   scraped: Record<string, unknown>,
   context?: { visionTitle?: string; visionCategory?: string }
@@ -175,7 +298,6 @@ export function mergeSimilarProduct(
   };
 }
 
-/** OpenAI text extraction — generic match type */
 function buildGenericProduct(
   data: Record<string, unknown>,
   query: string
@@ -230,6 +352,41 @@ async function runOpenAIScraper(
   );
 }
 
+async function runScraperWithRetry(
+  source: ScraperSource,
+  run: ScraperRunner["run"],
+  query: string,
+  vision: VisionMatchContext
+): Promise<{
+  source: ScraperSource;
+  value: Record<string, unknown> | null;
+  timedOut: boolean;
+}> {
+  let timedOut = false;
+  for (let attempt = 1; attempt <= SCRAPER_MAX_ATTEMPTS; attempt++) {
+    const t0 = Date.now();
+    try {
+      const value = await withTimeout(
+        run(query, vision),
+        SCRAPER_ATTEMPT_TIMEOUT_MS,
+        `${source}#${attempt}`
+      );
+      console.log(
+        `[MasterScraper] ${source} attempt ${attempt} finished in ${Date.now() - t0}ms`
+      );
+      return { source, value, timedOut };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.toLowerCase().includes("timed out")) timedOut = true;
+      console.warn(
+        `[MasterScraper] ${source} attempt ${attempt} failed (${Date.now() - t0}ms):`,
+        msg
+      );
+    }
+  }
+  return { source, value: null, timedOut };
+}
+
 export const scrapeProduct = async (
   query: string,
   options?: ScrapeOptions
@@ -243,21 +400,27 @@ export const scrapeProduct = async (
   const runners: ScraperRunner[] = [
     { source: "apify", run: scrapeApify },
     { source: "rapidapi", run: scrapeRapidAPI },
-    { source: "oxylabs", run: scrapeOxylabs },
     { source: "google", run: scrapeGoogle },
     { source: "openai", run: runOpenAIScraper },
   ];
 
   console.log(
-    `[MasterScraper] Running ${runners.length} scrapers in parallel:`,
+    `[MasterScraper] Running ${runners.length} scrapers (wait for all, min ${MIN_PARALLEL_WAIT_MS}ms):`,
     runners.map((r) => r.source).join(", ")
   );
 
-  const results = await Promise.allSettled(
-    runners.map(async ({ source, run }) => {
-      const value = await run(query, vision);
-      return { source, value };
-    })
+  let anyScraperTimedOut = false;
+  const parallelStart = Date.now();
+  const [settledResults] = await Promise.all([
+    Promise.allSettled(
+      runners.map(({ source, run }) =>
+        runScraperWithRetry(source, run, query, vision)
+      )
+    ),
+    sleep(MIN_PARALLEL_WAIT_MS),
+  ]);
+  console.log(
+    `[MasterScraper] All scrapers settled in ${Date.now() - parallelStart}ms`
   );
 
   type Candidate = {
@@ -269,12 +432,13 @@ export const scrapeProduct = async (
 
   const candidates: Candidate[] = [];
 
-  for (const res of results) {
+  for (const res of settledResults) {
     if (res.status !== "fulfilled") {
       console.warn("[MasterScraper] Scraper rejected:", res.reason);
       continue;
     }
-    const { source, value } = res.value;
+    const { source, value, timedOut } = res.value;
+    if (timedOut) anyScraperTimedOut = true;
     if (!value || !validateProduct(value)) {
       console.log(`[MasterScraper] ${source}: no valid product`);
       continue;
@@ -288,15 +452,15 @@ export const scrapeProduct = async (
       continue;
     }
 
-    const { score, reasons } = scoreScraperCandidate(value, vision);
+    const scored = scoreResult(vision, value);
     console.log(
-      `[MasterScraper] ${source}: score=${score} [${reasons.join(", ")}]`
+      `[MasterScraper] ${source}: score=${scored.score} [${scored.reasons.join(", ")}]`
     );
     candidates.push({
       source,
       product: { ...value, scraperSource: source },
-      score,
-      reasons,
+      score: scored.score,
+      reasons: scored.reasons,
     });
   }
 
@@ -304,12 +468,16 @@ export const scrapeProduct = async (
 
   if (candidates.length === 0) {
     console.log(
-      "[MasterScraper] No scraper returned vision-consistent data — caller should use vision fallback"
+      "[MasterScraper] No scraper returned vision-consistent data — caller should use vision fallback",
+      anyScraperTimedOut ? "(some scrapers timed out)" : ""
     );
     return null;
   }
 
   const winner = candidates[0];
+  const matchScore = winner.score;
+  const matchConfidence = confidenceFromScore(matchScore);
+
   console.log(
     `[MasterScraper] WINNER: ${winner.source} (score=${winner.score}) — ${winner.reasons.join(", ")}`
   );
@@ -326,7 +494,20 @@ export const scrapeProduct = async (
     );
   }
 
-  const raw = winner.product;
+  const meta = {
+    timedOut: anyScraperTimedOut,
+    matchConfidence,
+    matchScore,
+  };
+
+  let raw = winner.product;
+  if (matchScore < HIGH_CONFIDENCE_THRESHOLD) {
+    console.warn(
+      `[MasterScraper] Score ${matchScore} below threshold ${HIGH_CONFIDENCE_THRESHOLD} — isExactMatch=false`
+    );
+    raw = { ...raw, isExactMatch: false, matchType: "similar" };
+  }
+
   if (raw.isExactMatch === true) {
     const result = buildExactProduct(raw, query);
     console.log("[MasterScraper] Price stats:", {
@@ -336,8 +517,10 @@ export const scrapeProduct = async (
       scraperSource: result.scraperSource,
       brand: result.brand,
       title: result.title,
+      matchConfidence,
+      timedOut: anyScraperTimedOut,
     });
-    return result;
+    return attachScrapeMeta(result, meta);
   }
 
   const result = mergeSimilarProduct(raw, {
@@ -351,6 +534,8 @@ export const scrapeProduct = async (
     scraperSource: result.scraperSource,
     brand: result.brand,
     title: result.title,
+    matchConfidence,
+    timedOut: anyScraperTimedOut,
   });
-  return result;
+  return attachScrapeMeta(result, meta);
 };

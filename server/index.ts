@@ -44,42 +44,6 @@ function normalizeCondition(condition: unknown): string {
   return s;
 }
 
-/** Conservative last-resort defaults when scrape median unavailable (non-exact only) */
-const CATEGORY_DEFAULT_PRICE: Array<{ keywords: string[]; price: number }> = [
-  { keywords: ["home & kitchen", "kitchenware", "mug", "drinkware"], price: 10 },
-  { keywords: ["electronics", "phone", "smartphone", "tablet"], price: 200 },
-  { keywords: ["clothing", "apparel", "shoes", "sneakers"], price: 25 },
-  { keywords: ["accessories", "watch", "watches"], price: 40 },
-  { keywords: ["toys", "game"], price: 15 },
-];
-
-function lookupCategoryDefaultPrice(category: string): number {
-  const c = category.toLowerCase();
-  for (const row of CATEGORY_DEFAULT_PRICE) {
-    if (row.keywords.some((k) => c.includes(k))) return row.price;
-  }
-  return 0;
-}
-
-function applyCategoryPriceFallback(listing: ScrapedListing): ScrapedListing {
-  if (listing.isExactMatch) return listing;
-  const priceNum = parseFloat(String(listing.price ?? 0)) || 0;
-  if (priceNum > 0) return listing;
-  const category = coalesceCategory(listing.category);
-  if (!category) return listing;
-  const fallback = lookupCategoryDefaultPrice(category);
-  if (fallback <= 0) return listing;
-  console.log(
-    `[Identify] Category price fallback: "${category}" → $${fallback}`
-  );
-  return {
-    ...listing,
-    price: fallback,
-    allegroAvg: fallback,
-    ebayAvg: fallback,
-  };
-}
-
 interface ScrapedProduct {
  brand?: string;
  year?: string;
@@ -120,6 +84,9 @@ type ScrapedListing = ScrapedProduct & {
   ebayAvg?: string | number;
   scraperSource?: string;
   verificationWarning?: string;
+  timedOut?: boolean;
+  matchConfidence?: "low" | "medium" | "high";
+  matchScore?: number;
 };
 
 const VISION_IDENTIFY_PROMPT = `You are a product identification expert analyzing a product photo for a resale listing.
@@ -128,9 +95,10 @@ CRITICAL:
 - Identify ONLY the main physical product in focus (any item: apparel, electronics, home goods, toys, sports gear, tools, etc.).
 - IGNORE background clutter not part of the product.
 - USE text/logos printed ON the product (brand names, venue names, team names) for brand and title when they identify the item.
+- If you see a luxury watch brand name (e.g., Breitling, Rolex, Omega, Tag Heuer) on the dial or engraved, extract that as the brand and include it in the title (e.g. "Breitling Navitimer B13050").
 - Pay attention to any small text, serial numbers, or logos on the product – these are critical for exact match identification (e.g. watch dial text, model numbers, engraved markings).
 - Mentally "zoom in" on the sharpest legible text and logos; prefer readings from those details over guessing from shape alone.
-- Use a specific descriptive title for the actual product, not vague scene descriptions.
+- Use a specific descriptive title for the actual product (brand + model when visible), not vague scene descriptions like "analog pilot watch" when a brand name is visible.
 
 Return ONLY valid JSON:
 {
@@ -138,7 +106,7 @@ Return ONLY valid JSON:
   "brand": "brand or text on product if visible, else empty string",
   "category": "accurate marketplace category (e.g. Home & Kitchen, Electronics, Clothing — never \"General\")",
   "condition": "one of: New, Used, Like New",
-  "price": estimated USD resale price as a number, or null if unknown,
+  "price": resale price in USD as a number only if you are confident from visible context; otherwise null (never guess a low placeholder),
   "confidence": "high" | "medium" | "low",
   "description": "1-2 sentences for a resale listing: material, color, use case",
   "material": "primary material if visible or inferable (ceramic, glass, plastic, metal, wood, fabric, leather, etc.) or empty string",
@@ -147,16 +115,13 @@ Return ONLY valid JSON:
 }
 
 Guidance:
-- Pick category and price that fit THIS item (e.g. mug → Home & Kitchen; phone → Electronics).
+- Pick an accurate category (e.g. mug → Home & Kitchen; luxury watch → Watches).
+- Do NOT invent a conservative or placeholder price. Use null when resale value is unknown — marketplace scrapers will supply price.
 - Infer material from visible texture (glazed ceramic, stainless steel, cotton fabric).
 - Include color and style in description when helpful; keep description factual, not generic filler.
 - Include visible on-product text in brand/title when helpful (e.g. bar name on a cap).
 - Do not use the word "General" as category — choose a specific marketplace category.
-- confidence:
-  - "high": clear product, recognizable brand/model (e.g. iPhone in frame).
-  - "medium": identifiable type but limited detail (generic sneakers, unbranded mug).
-  - "low": unclear photo, unusual/generic object, or you cannot confidently name a specific SKU.
-    For low confidence use a simple generic title (e.g. "Eyeglass cleaning cloth"), set price to 0.
+- confidence: "high" = clear brand/model visible; "medium" = product type clear; "low" = very blurry. Always set price to null when unsure (not 0 for guessing).
 
 Examples (format only):
 
@@ -168,7 +133,9 @@ Small toy: { "title": "Yellow Stress Ball", "brand": "", "category": "Toys", "co
 
 Ceramic mug: { "title": "Two-Tone Ceramic Mug", "brand": "", "category": "Home & Kitchen", "condition": "New", "price": null, "confidence": "medium", "material": "ceramic", "color": "white and blue", "style": "two-tone glaze", "description": "A ceramic mug with a two-tone glaze, suitable for coffee or tea." }
 
-Cleaning cloth (blurry/generic): { "title": "Eyeglass cleaning cloth", "brand": "", "category": "Accessories", "condition": "Used", "price": 0, "confidence": "low", "material": "microfiber", "color": "", "style": "", "description": "Soft microfiber cloth for cleaning eyeglasses." }`;
+Cleaning cloth (blurry/generic): { "title": "Eyeglass cleaning cloth", "brand": "", "category": "Accessories", "condition": "Used", "price": 0, "confidence": "low", "material": "microfiber", "color": "", "style": "", "description": "Soft microfiber cloth for cleaning eyeglasses." }
+
+Luxury watch: { "title": "Breitling Navitimer B13050", "brand": "Breitling", "category": "Watches", "condition": "Used", "price": null, "confidence": "high", "description": "..." }`;
 
 function parseVisionResponse(content: string): VisionProduct | null {
   const trimmed = content.trim();
@@ -189,7 +156,10 @@ function parseVisionResponse(content: string): VisionProduct | null {
       brand: parsed.brand?.trim() || "",
       category: coalesceCategory(categoryFromVision),
       condition: parsed.condition || "Used",
-      price: parsed.price ?? 0,
+      price:
+        typeof parsed.price === "number" && parsed.price > 0
+          ? parsed.price
+          : null,
       description: parsed.description?.trim() || "",
       material: String(parsed.material ?? "").trim(),
       color: String(parsed.color ?? "").trim(),
@@ -279,9 +249,7 @@ function applyVisionEnrichment(
     vision.category
   );
   const scrapedPrice = parseFloat(String(listing.price ?? 0)) || 0;
-  const visionPrice =
-    vision.price != null && vision.price > 0 ? vision.price : 0;
-  const price = scrapedPrice > 0 ? scrapedPrice : visionPrice;
+  const price = scrapedPrice > 0 ? scrapedPrice : 0;
 
   let description = truncateWords(pickDescription(listing.description, vision), 50);
   if (!description || isPlaceholderDescription(description)) {
@@ -321,7 +289,7 @@ function buildGenericFromVision(
     color: String(vision.color ?? "").trim(),
     style: String(vision.style ?? "").trim(),
     description: truncateWords(vision.description ?? "", 50),
-    price: vision.price != null && vision.price > 0 ? vision.price : 0,
+    price: 0,
     allegroAvg: 0,
     ebayAvg: 0,
     isExactMatch: false,
@@ -345,6 +313,8 @@ function applyPriceSanityCheck(
   vision: VisionProduct
 ): ScrapedListing {
   const category = coalesceCategory(listing.category, vision.category);
+  const cat = category.toLowerCase();
+  if (cat.includes("watch")) return listing;
   const priceNum = parseFloat(String(listing.price ?? 0)) || 0;
   if (!isLowCostCategory(category) || priceNum <= 50) return listing;
   console.warn(
@@ -444,8 +414,36 @@ app.use("/api/marketplaces", marketplaceRoutes);
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const upload = multer({ storage: multer.memoryStorage() });
 
+const IDENTIFY_REQUEST_TIMEOUT_MS = 90_000;
+
+function applyScrapeMeta(
+  listing: ScrapedListing,
+  scrapedRaw: ScrapedListing | null
+): ScrapedListing {
+  return {
+    ...listing,
+    timedOut: scrapedRaw?.timedOut === true,
+    matchConfidence: scrapedRaw?.matchConfidence ?? "low",
+    matchScore: Number(scrapedRaw?.matchScore ?? 0),
+  };
+}
+
 // -------------------- IDENTIFY ROUTE (image -> scrape -> save to drafts) --------------------
-app.post('/api/identify', upload.single('image'), async (req: Request, res: Response) => {
+app.post(
+  "/api/identify",
+  (req, res, next) => {
+    req.setTimeout(IDENTIFY_REQUEST_TIMEOUT_MS);
+    res.setTimeout(IDENTIFY_REQUEST_TIMEOUT_MS);
+    next();
+  },
+  upload.single("image"),
+  async (req: Request, res: Response) => {
+ const identifyStart = Date.now();
+ const logStep = (label: string, since: number) => {
+   console.log(`[Identify] ${label}: ${Date.now() - since}ms`);
+   return Date.now();
+ };
+ let step = identifyStart;
  try {
    console.log("📸 [1/5] Image received. File size:", req.file?.size);
 
@@ -472,6 +470,7 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
    const visionRaw = response.choices[0].message.content || "";
    console.log("🔬 [Vision] Raw model response:", visionRaw);
    const vision = parseVisionResponse(visionRaw);
+   step = logStep("Vision complete", step);
    console.log(
      "🔬 [Vision] Parsed vision object:",
      vision ? JSON.stringify(vision, null, 2) : "(parse failed — no valid title)"
@@ -495,17 +494,16 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
 
    let listings: ScrapedListing;
 
-   if (vision.confidence === "low") {
-     console.log("⚠️ [4/5] Low vision confidence — skipping marketplace scraper");
-     listings = buildGenericFromVision(vision);
-   } else {
+   {
      console.log("🕸️ [4/5] Calling scraper with query:", searchQuery);
+     const scrapeStart = Date.now();
      const scrapedRaw = (await fetchMasterProductData(searchQuery, {
        vision: {
          visionTitle: vision.title,
          visionBrand: vision.brand ?? "",
        },
      })) as ScrapedListing | null;
+     step = logStep("Scraper race complete", scrapeStart);
 
      const visionBrand = normalizeBrand(vision.brand);
      const scraperTitle = String(scrapedRaw?.title ?? "").trim();
@@ -515,31 +513,45 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
        console.warn(
          "[Identify] All scrapers failed or conflicted with vision — vision-only fallback"
        );
-       listings = buildGenericFromVision(
-         vision,
-         visionBrand
-           ? `No marketplace data consistent with "${visionBrand}" — verify brand and model manually.`
-           : undefined
+       listings = applyScrapeMeta(
+         buildGenericFromVision(
+           vision,
+           visionBrand
+             ? `No marketplace data consistent with "${visionBrand}" — verify brand and model manually.`
+             : undefined
+         ),
+         scrapedRaw
        );
      } else if (brandsConflict(visionBrand, scraperBrand)) {
        console.warn(
          `[Identify] Scraper brand "${scraperBrand}" conflicts with vision "${visionBrand}" — vision fallback`
        );
-       listings = buildGenericFromVision(
-         vision,
-         `Scraper brand "${scraperBrand}" does not match vision "${visionBrand}" — manual verification required.`
+       listings = applyScrapeMeta(
+         buildGenericFromVision(
+           vision,
+           `Scraper brand "${scraperBrand}" does not match vision "${visionBrand}" — manual verification required.`
+         ),
+         scrapedRaw
        );
      } else if (scraperTitle && titlesAreVeryDifferent(vision.title, scraperTitle)) {
        console.warn(
          `[Identify] Scraper title "${scraperTitle}" conflicts with vision "${vision.title}" — generic fallback`
        );
-       listings = buildGenericFromVision(
-         vision,
-         "Scraper title did not match vision — manual verification recommended."
+       listings = applyScrapeMeta(
+         buildGenericFromVision(
+           vision,
+           "Scraper title did not match vision — manual verification recommended."
+         ),
+         scrapedRaw
        );
      } else {
-       listings = mergeListingWithVision(scrapedRaw, vision);
-       listings = applyPriceSanityCheck(listings, vision);
+       listings = applyScrapeMeta(
+         applyPriceSanityCheck(
+           mergeListingWithVision(scrapedRaw, vision),
+           vision
+         ),
+         scrapedRaw
+       );
        if (scrapedRaw.scraperSource) {
          listings.scraperSource = String(scrapedRaw.scraperSource);
        }
@@ -555,9 +567,10 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
      if (listings.verificationWarning) {
        console.warn("[Identify] Verification:", listings.verificationWarning);
      }
+     if (listings.timedOut) {
+       console.warn("[Identify] One or more scrapers timed out");
+     }
    }
-
-   listings = applyCategoryPriceFallback(listings);
 
    console.log("[Identify] Final listing price:", {
      price: listings.price,
@@ -615,7 +628,7 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
    // Normalized response for ProductDraft / sessionStorage (Task A)
    const capturedImage = `data:${req.file.mimetype};base64,${base64Image}`;
    const market = fillMarketAverages({
-     price: listings.price ?? vision.price ?? 0,
+     price: listings.price ?? 0,
      allegroAvg: listings.allegroAvg ?? listings.price,
      ebayAvg: listings.ebayAvg ?? listings.ebayPrice,
    });
@@ -623,12 +636,18 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
    const matchType: MatchType = listings.matchType ?? "generic";
    const isExactMatch = matchType === "exact";
 
+   logStep("Identify total", identifyStart);
+
    res.json({
      success: true,
      draftId: savedDraft.id ?? savedDraft,
      isExactMatch,
      matchType,
-     confidence: vision.confidence,
+     visionConfidence: vision.confidence,
+     matchConfidence: listings.matchConfidence ?? "low",
+     matchScore: listings.matchScore ?? 0,
+     timedOut: listings.timedOut === true,
+     confidence: listings.matchConfidence ?? "low",
      scraperSource: listings.scraperSource ?? null,
      verificationWarning: listings.verificationWarning ?? null,
      product: {
@@ -651,13 +670,15 @@ app.post('/api/identify', upload.single('image'), async (req: Request, res: Resp
        isExactMatch,
        matchType,
        scraperSource: listings.scraperSource,
+       matchConfidence: listings.matchConfidence,
      },
    });
  } catch (error) {
    console.error("❌ Identification Error:", error);
    res.status(500).json({ error: "Scraping or identification failed" });
  }
-});
+}
+);
 
 // -------------------- HEALTH CHECK ROUTE --------------------
 app.get('/api/health', (req: Request, res: Response) => {
