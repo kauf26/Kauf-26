@@ -2,6 +2,9 @@
 export type ScraperRunOptions = {
   signal?: AbortSignal;
   queryChain?: string[];
+  /** Raw base64 (no data: prefix) for Google Lens image search */
+  imageBase64?: string;
+  imageMimeType?: string;
 };
 
 export function throwIfAborted(signal?: AbortSignal, label?: string): void {

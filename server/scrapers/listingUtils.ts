@@ -25,6 +25,7 @@ export {
 export type ScraperSource =
   | "apify"
   | "google"
+  | "googleLens"
   | "openai"
   | "rapidapi"
   | "oxylabs"

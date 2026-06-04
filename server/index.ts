@@ -514,6 +514,8 @@ app.post(
          visionTitle: vision.title,
          visionBrand: vision.brand ?? "",
        },
+       imageBase64: base64Image,
+       imageMimeType: req.file.mimetype || "image/jpeg",
      })) as ScrapedListing | null;
      step = logStep("Scraper race complete", scrapeStart);
 
