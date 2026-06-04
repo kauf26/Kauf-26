@@ -139,6 +139,7 @@ export async function scrapeProduct(
         description: String(it.shortDescription ?? "").trim(),
         category: "Watches",
         condition: String(it.condition ?? "").trim(),
+        url: String(it.itemWebUrl ?? "").trim(),
       }))
       .filter((r) => r.title.length > 0);
 
@@ -147,10 +148,16 @@ export async function scrapeProduct(
     const aggregated = aggregateListings(listings, query, context);
     if (!aggregated) return null;
 
+    const link =
+      String(aggregated.link ?? aggregated.url ?? "") ||
+      items[0]?.itemWebUrl ||
+      "";
+
     return {
       ...aggregated,
       scraperSource: "ebay",
-      link: items[0]?.itemWebUrl ?? "",
+      link,
+      url: link,
     };
   } catch (err) {
     console.error("[eBay] Error:", err);

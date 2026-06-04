@@ -6,7 +6,10 @@ import { scrapeProduct as scrapeApify } from "./apify";
 import { scrapeProduct as scrapeGoogle } from "./googleShopping";
 import { scrapeProduct as scrapeRapidAPI } from "./rapidapi";
 import { scrapeProduct as scrapeEbay } from "./ebayBrowse";
-import { buildMarketplaceQuery } from "./marketplaceQuery";
+import {
+  buildBroadMarketplaceQuery,
+  buildExactMarketplaceQuery,
+} from "./marketplaceQuery";
 import {
   brandJaccard,
   brandsConflict,
@@ -38,26 +41,6 @@ const SCRAPER_TIMEOUT_MS: Record<ScraperSource, number> = {
 const HIGH_CONFIDENCE_SCORE = 80;
 const MEDIUM_CONFIDENCE_SCORE = 50;
 const HIGH_CONFIDENCE_THRESHOLD = 60;
-
-const LUXURY_WATCH_BRANDS = [
-  "breitling",
-  "rolex",
-  "omega",
-  "tag heuer",
-  "patek",
-  "cartier",
-  "iwc",
-  "panerai",
-  "hublot",
-  "audemars",
-];
-
-const GENERIC_TITLE_PATTERNS = [
-  /^analog\s+pilot\s+watch$/i,
-  /^men'?s?\s+watch$/i,
-  /^wrist\s+watch$/i,
-  /^analog\s+watch$/i,
-];
 
 const truncateDescription = (text: string, query: string): string => {
   if (!text || text.trim() === "") return "";
@@ -91,27 +74,7 @@ function withTimeout<T>(
   ]);
 }
 
-function isLuxuryWatchContext(vision: VisionMatchContext): boolean {
-  const brand = String(vision.visionBrand ?? "").toLowerCase();
-  const title = vision.visionTitle.toLowerCase();
-  if (LUXURY_WATCH_BRANDS.some((b) => brand.includes(b) || title.includes(b)))
-    return true;
-  return /\bwatch(es)?\b/.test(title) && brand.length > 0;
-}
-
-function isGenericTitle(title: string): boolean {
-  const t = title.trim().toLowerCase();
-  if (!t || t === "watch") return true;
-  return GENERIC_TITLE_PATTERNS.some((re) => re.test(t));
-}
-
-function brandAppearsInTitle(visionBrand: string, title: string): boolean {
-  const b = visionBrand.trim().toLowerCase();
-  if (!b) return false;
-  return title.toLowerCase().includes(b);
-}
-
-/** Accuracy-first scoring: brand+model in title, realistic luxury price, vision alignment */
+/** Rank scraper candidates: exact matches first, then vision token overlap */
 export function scoreResult(
   vision: VisionMatchContext,
   scraperData: Record<string, unknown>
@@ -120,36 +83,10 @@ export function scoreResult(
   let score = base.score;
   const reasons = [...base.reasons];
 
-  const title = String(scraperData.title ?? "");
-  const brand = String(scraperData.brand ?? "");
-  const price = parsePrice(scraperData.price);
-  const visionBrand = String(vision.visionBrand ?? "").trim();
-  const luxury = isLuxuryWatchContext(vision);
-
-  if (visionBrand && brandAppearsInTitle(visionBrand, title)) {
-    score += 40;
-    reasons.push("vision_brand_in_title");
-  } else if (visionBrand && brand.toLowerCase() === visionBrand.toLowerCase()) {
-    score += 30;
-    reasons.push("vision_brand_match");
+  if (scraperData.isExactMatch === true) {
+    score += 60;
+    reasons.push("exact_match_priority");
   }
-
-  if (isGenericTitle(title)) {
-    score -= 50;
-    reasons.push("penalty_generic_title");
-  }
-
-  if (luxury) {
-    if (price >= 100) {
-      score += 25;
-      reasons.push("luxury_price_realistic");
-    } else if (price > 0 && price < 100) {
-      score -= 60;
-      reasons.push("penalty_luxury_low_price");
-    }
-  }
-
-  if (scraperData.isExactMatch === true) score += 15;
 
   return { score, reasons };
 }
@@ -406,12 +343,10 @@ export const scrapeProduct = async (
     visionTitle: query,
     visionBrand: "",
   };
-  const marketplaceQuery = buildMarketplaceQuery(
-    query,
-    vision.visionBrand
-  );
+  const exactQuery = buildExactMarketplaceQuery(query, vision.visionBrand);
+  const broadQuery = buildBroadMarketplaceQuery(query, vision.visionBrand);
   console.log(
-    `[MasterScraper] Vision query: "${query}" → marketplace: "${marketplaceQuery}"`
+    `[MasterScraper] Vision: "${query}" | exact search: "${exactQuery}" | broad fallback: "${broadQuery}"`
   );
 
   const runners: ScraperRunner[] = [
@@ -432,7 +367,7 @@ export const scrapeProduct = async (
   const [settledResults] = await Promise.all([
     Promise.allSettled(
       runners.map(({ source, run }) =>
-        runScraperWithRetry(source, run, marketplaceQuery, vision)
+        runScraperWithRetry(source, run, exactQuery, vision)
       )
     ),
     sleep(MIN_PARALLEL_WAIT_MS),
@@ -482,7 +417,12 @@ export const scrapeProduct = async (
     });
   }
 
-  candidates.sort((a, b) => b.score - a.score);
+  candidates.sort((a, b) => {
+    const aExact = a.product.isExactMatch === true ? 1 : 0;
+    const bExact = b.product.isExactMatch === true ? 1 : 0;
+    if (bExact !== aExact) return bExact - aExact;
+    return b.score - a.score;
+  });
 
   if (candidates.length === 0) {
     console.log(
@@ -519,9 +459,12 @@ export const scrapeProduct = async (
   };
 
   let raw = winner.product;
-  if (matchScore < HIGH_CONFIDENCE_THRESHOLD) {
+  if (
+    matchScore < HIGH_CONFIDENCE_THRESHOLD &&
+    raw.isExactMatch !== true
+  ) {
     console.warn(
-      `[MasterScraper] Score ${matchScore} below threshold ${HIGH_CONFIDENCE_THRESHOLD} — isExactMatch=false`
+      `[MasterScraper] Score ${matchScore} below threshold ${HIGH_CONFIDENCE_THRESHOLD} — keeping as similar`
     );
     raw = { ...raw, isExactMatch: false, matchType: "similar" };
   }

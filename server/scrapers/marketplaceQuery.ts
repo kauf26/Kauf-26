@@ -1,46 +1,50 @@
-const LUXURY_WATCH_BRANDS = [
-  "breitling",
-  "rolex",
-  "omega",
-  "tag heuer",
-  "patek",
-  "cartier",
-  "iwc",
-  "panerai",
-  "hublot",
-  "audemars",
-  "tudor",
-  "longines",
-];
+import { extractReferenceNumbers, significantTokens } from "./visionMatch";
 
-function detectBrand(text: string): string {
-  const lower = text.toLowerCase();
-  for (const b of LUXURY_WATCH_BRANDS) {
-    if (lower.includes(b)) return b.replace(/\b\w/g, (c) => c.toUpperCase());
-  }
-  const m = text.match(/^([A-Z][a-zA-Z&'.-]+)/);
-  return m?.[1]?.trim() ?? "";
-}
+/**
+ * Search queries derived only from vision title + brand (no product allowlists).
+ */
 
-/** Marketplace-friendly query: brand + category, not long vision titles. */
-export function buildMarketplaceQuery(
+export function buildExactMarketplaceQuery(
   visionTitle: string,
   visionBrand?: string
 ): string {
   const title = visionTitle.trim();
-  const brand = (visionBrand?.trim() || detectBrand(title)).trim();
+  const brand = visionBrand?.trim() ?? "";
+  if (!title) return brand;
+  if (brand && !title.toLowerCase().includes(brand.toLowerCase())) {
+    return `${brand} ${title}`.trim();
+  }
+  return title;
+}
 
-  if (brand) {
-    const lower = title.toLowerCase();
-    if (/\bwatch(es)?\b/.test(lower) || LUXURY_WATCH_BRANDS.some((b) => lower.includes(b))) {
-      return `${brand} watch price`;
-    }
-    return `${brand} ${title.split(/\s+/).slice(0, 3).join(" ")} price`.trim();
+export function buildBroadMarketplaceQuery(
+  visionTitle: string,
+  visionBrand?: string
+): string {
+  const title = visionTitle.trim();
+  const brand = visionBrand?.trim() ?? "";
+  const refs = extractReferenceNumbers(title);
+  const tokens = significantTokens(title, brand);
+
+  if (brand && refs[0]) {
+    return `${brand} ${refs[0]}`.trim();
+  }
+
+  if (brand && tokens.length > 0) {
+    return `${brand} ${tokens.slice(0, 4).join(" ")}`.trim();
   }
 
   const words = title.split(/\s+/).filter(Boolean);
   if (words.length > 6) {
-    return `${words.slice(0, 5).join(" ")} price`;
+    return words.slice(0, 6).join(" ");
   }
-  return `${title} price`;
+  return title;
+}
+
+/** @deprecated Use buildExactMarketplaceQuery */
+export function buildMarketplaceQuery(
+  visionTitle: string,
+  visionBrand?: string
+): string {
+  return buildExactMarketplaceQuery(visionTitle, visionBrand);
 }

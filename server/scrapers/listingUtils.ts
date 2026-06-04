@@ -1,5 +1,21 @@
 /** Shared helpers: multi-listing price median + vision-based exact/similar scoring */
 
+import {
+  listingExactRank,
+  scoreListingMatch,
+  tokenOverlapRatio,
+} from "./visionMatch";
+
+export {
+  listingExactRank,
+  scoreListingMatch,
+  isCategoryListing,
+  isExactListing,
+  tokenOverlapRatio,
+  extractReferenceNumbers,
+  significantTokens,
+} from "./visionMatch";
+
 export type ScraperSource =
   | "apify"
   | "google"
@@ -20,6 +36,7 @@ export type RawListing = {
   condition?: string;
   material?: string;
   color?: string;
+  url?: string;
 };
 
 export type VisionMatchContext = {
@@ -168,15 +185,14 @@ export function scoreScraperCandidate(
     }
   }
 
-  const overlap = modelTokenOverlapRatio(
+  const overlap = tokenOverlapRatio(
     vision.visionTitle,
-    visionBrand.toLowerCase(),
-    normalize(title),
-    normalize(brand)
+    visionBrand,
+    `${title} ${brand}`
   );
   if (overlap >= 0.5) {
     score += 25;
-    reasons.push(`model_overlap=${overlap.toFixed(2)}`);
+    reasons.push(`token_overlap=${overlap.toFixed(2)}`);
   }
 
   if (hasModelNumber(title)) {
@@ -201,57 +217,6 @@ export function scoreScraperCandidate(
   }
 
   return { score, reasons };
-}
-
-/**
- * exact = strict brand + model match when vision has a brand; else title overlap
- * similar = returned by marketplace search but not exact
- */
-export function scoreListingMatch(
-  listing: RawListing,
-  ctx: VisionMatchContext
-): "exact" | "similar" {
-  const listingTitle = normalize(listing.title ?? "");
-  const listingBrand = normalize(listing.brand ?? "");
-  const visionBrand = normalize(ctx.visionBrand ?? "");
-
-  if (!listingTitle) return "similar";
-
-  if (visionBrand) {
-    const brandInTitle = listingTitle.includes(visionBrand);
-    const brandMatch =
-      listingBrand === visionBrand ||
-      listingBrand.includes(visionBrand) ||
-      visionBrand.includes(listingBrand) ||
-      brandInTitle;
-
-    if (!listingBrand && brandInTitle) {
-      const overlap = modelTokenOverlapRatio(
-        ctx.visionTitle,
-        visionBrand,
-        listingTitle,
-        visionBrand
-      );
-      return overlap >= 0.4 ? "exact" : "similar";
-    }
-
-    if (!brandMatch) return "similar";
-
-    const overlap = modelTokenOverlapRatio(
-      ctx.visionTitle,
-      visionBrand,
-      listingTitle,
-      listingBrand || visionBrand
-    );
-    return overlap >= 0.5 ? "exact" : "similar";
-  }
-
-  const vt = titleTokens(ctx.visionTitle, 4);
-  const lt = new Set(titleTokens(listing.title ?? "", 4));
-  if (vt.length === 0) return "similar";
-  const overlap = vt.filter((t) => lt.has(t)).length;
-  if (overlap / vt.length >= 0.6) return "exact";
-  return "similar";
 }
 
 function sanitizeBrand(brand: unknown): string {
@@ -284,7 +249,12 @@ export function aggregateListings(
     price: parseListingPrice(item.price),
   }));
 
-  const exactRows = scored.filter((s) => s.score === "exact");
+  const exactRows = scored
+    .filter((s) => s.score === "exact")
+    .sort(
+      (a, b) =>
+        listingExactRank(b.item, matchCtx) - listingExactRank(a.item, matchCtx)
+    );
   const hasExact = exactRows.length > 0;
   const pool = hasExact ? exactRows : scored;
   const pricedInPool = pool.filter((s) => s.price > 0);
@@ -294,6 +264,7 @@ export function aggregateListings(
     ? medianPrice(pricedInPool.map((s) => s.price))
     : 0;
   const rep = (hasExact ? exactRows[0] : scored[0]).item;
+  const bestLink = rep.url ?? "";
 
   console.log("[listingUtils] aggregateListings:", {
     totalItems: items.length,
@@ -316,8 +287,12 @@ export function aggregateListings(
     ebayAvg: priceReliable ? median : 0,
     allegroAvg: priceReliable ? median : 0,
     isExactMatch: hasExact,
+    matchType: hasExact ? "exact" : "similar",
     priceReliable,
     listingCount: items.length,
+    exactMatchCount: exactRows.length,
     samplesPriced: pricedCount,
+    link: bestLink,
+    url: bestLink,
   };
 }
