@@ -10,6 +10,11 @@ import { brandsConflict } from "./scrapers/listingUtils";
 import { productRoutes } from "./productsRoutes";
 import marketplaceRoutes from "./marketplaceRoutes";
 import { startMarketplaceWorker } from "./marketplaceWorker";
+import {
+  enqueueIdentifyJob,
+  IdentifyJobTimeoutError,
+  IDENTIFY_JOB_TIMEOUT_MS,
+} from "./identifyQueue";
 
 /** Skip vague scraper categories like "General" */
 function isWeakCategory(category: string): boolean {
@@ -404,16 +409,8 @@ function applyScrapeMeta(
   };
 }
 
-// -------------------- IDENTIFY ROUTE (image -> scrape -> save to drafts) --------------------
-app.post(
-  "/api/identify",
-  (req, res, next) => {
-    req.setTimeout(IDENTIFY_REQUEST_TIMEOUT_MS);
-    res.setTimeout(IDENTIFY_REQUEST_TIMEOUT_MS);
-    next();
-  },
-  upload.single("image"),
-  async (req: Request, res: Response) => {
+/** Vision + scrapers + draft save (runs inside identify queue). */
+async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
  const identifyStart = Date.now();
  const identifyAttempt = Math.min(
    1,
@@ -427,7 +424,7 @@ app.post(
    return Date.now();
  };
  let step = identifyStart;
- try {
+
    console.log(
      "📸 [1/5] Image received. File size:",
      req.file?.size,
@@ -437,7 +434,8 @@ app.post(
 
    if (!req.file) {
      console.log("❌ No file in request");
-     return res.status(400).json({ error: "No image uploaded" });
+     res.status(400).json({ error: "No image uploaded" });
+     return;
    }
 
    const base64Image = req.file.buffer.toString('base64');
@@ -462,9 +460,10 @@ app.post(
 
    if (!visionResponse) {
      console.warn(`[Identify] Vision timed out after ${VISION_TIMEOUT_MS}ms`);
-     return res.status(422).json({
+     res.status(422).json({
        message: "Vision identification timed out — try again",
      });
+     return;
    }
 
    const visionRaw = visionResponse.choices[0].message.content || "";
@@ -478,10 +477,11 @@ app.post(
 
    if (!vision?.title?.trim()) {
      console.warn("❌ Vision could not identify product from image");
-     return res.status(422).json({
+     res.status(422).json({
        message:
          "Could not identify product – please try again with better lighting",
      });
+     return;
    }
 
    console.log(
@@ -686,11 +686,37 @@ app.post(
        matchConfidence: listings.matchConfidence,
      },
    });
- } catch (error) {
-   console.error("❌ Identification Error:", error);
-   res.status(500).json({ error: "Scraping or identification failed" });
- }
 }
+
+// -------------------- IDENTIFY ROUTE (image -> scrape -> save to drafts) --------------------
+app.post(
+  "/api/identify",
+  (req, res, next) => {
+    const httpTimeout = Math.max(
+      IDENTIFY_REQUEST_TIMEOUT_MS,
+      IDENTIFY_JOB_TIMEOUT_MS + 2_000
+    );
+    req.setTimeout(httpTimeout);
+    res.setTimeout(httpTimeout);
+    next();
+  },
+  upload.single("image"),
+  async (req: Request, res: Response) => {
+    try {
+      await enqueueIdentifyJob(() => runIdentifyPipeline(req, res));
+    } catch (error) {
+      if (res.headersSent) return;
+      if (error instanceof IdentifyJobTimeoutError) {
+        console.warn("[Identify] Queue job timeout:", error.message);
+        return res.status(504).json({
+          error: "Gateway Timeout",
+          message: `Identification exceeded ${IDENTIFY_JOB_TIMEOUT_MS}ms — try again`,
+        });
+      }
+      console.error("❌ Identification Error:", error);
+      res.status(500).json({ error: "Scraping or identification failed" });
+    }
+  }
 );
 
 // -------------------- HEALTH CHECK ROUTE --------------------
