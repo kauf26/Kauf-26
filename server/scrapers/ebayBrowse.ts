@@ -8,6 +8,11 @@ import {
   SCRAPE_LISTING_LIMIT,
   type VisionMatchContext,
 } from "./listingUtils";
+import {
+  isAbortError,
+  type ScraperRunOptions,
+  throwIfAborted,
+} from "./scraperOptions";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -34,7 +39,9 @@ function ebayCredentials(): { clientId: string; clientSecret: string } | null {
   return { clientId, clientSecret };
 }
 
-async function getAccessToken(): Promise<string | null> {
+async function getAccessToken(
+  signal?: AbortSignal
+): Promise<string | null> {
   const creds = ebayCredentials();
   if (!creds) {
     console.warn(
@@ -50,6 +57,7 @@ async function getAccessToken(): Promise<string | null> {
   const auth = Buffer.from(`${creds.clientId}:${creds.clientSecret}`).toString(
     "base64"
   );
+  throwIfAborted(signal, "ebay-oauth");
   const res = await fetch(`${API_ROOT}/identity/v1/oauth2/token`, {
     method: "POST",
     headers: {
@@ -57,6 +65,7 @@ async function getAccessToken(): Promise<string | null> {
       Authorization: `Basic ${auth}`,
     },
     body: "grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope",
+    signal,
   });
 
   const data = (await res.json()) as {
@@ -82,9 +91,11 @@ async function getAccessToken(): Promise<string | null> {
 
 export async function scrapeProduct(
   query: string,
-  context?: VisionMatchContext
+  context?: VisionMatchContext,
+  opts?: ScraperRunOptions
 ): Promise<Record<string, unknown> | null> {
-  const token = await getAccessToken();
+  const signal = opts?.signal;
+  const token = await getAccessToken(signal);
   if (!token) return null;
 
   const url = new URL(`${API_ROOT}/buy/browse/v1/item_summary/search`);
@@ -94,11 +105,13 @@ export async function scrapeProduct(
   console.log(`[eBay] Browse search: ${query}`);
 
   try {
+    throwIfAborted(signal, "ebay-search");
     const res = await fetch(url.toString(), {
       headers: {
         Authorization: `Bearer ${token}`,
         "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
       },
+      signal,
     });
 
     const data = (await res.json()) as {
@@ -160,6 +173,7 @@ export async function scrapeProduct(
       url: link,
     };
   } catch (err) {
+    if (isAbortError(err)) throw err;
     console.error("[eBay] Error:", err);
     return null;
   }

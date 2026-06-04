@@ -10,9 +10,18 @@ import {
   buildBroadMarketplaceQuery,
   buildExactMarketplaceQuery,
 } from "./marketplaceQuery";
+import { buildQueryExpansionChain } from "./queryExpansion";
 import {
-  brandJaccard,
-  brandsConflict,
+  GLOBAL_EXACT_RACE_TIMEOUT_MS,
+  raceScrapersForExactMatch,
+  type ScraperRunner,
+} from "./scraperRace";
+import {
+  isAbortError,
+  type ScraperRunOptions,
+} from "./scraperOptions";
+import type { ListingRankDiagnostic } from "./visionMatch";
+import {
   scoreScraperCandidate,
   type ScraperSource,
   type VisionMatchContext,
@@ -25,9 +34,10 @@ export type MatchConfidence = "low" | "medium" | "high";
 
 export type ScrapeOptions = {
   vision?: VisionMatchContext;
+  /** User-editable term from draft re-search (prepended to expansion chain) */
+  searchQuery?: string;
 };
 
-const MIN_PARALLEL_WAIT_MS = 8_000;
 const SCRAPER_MAX_ATTEMPTS = 1;
 
 const SCRAPER_TIMEOUT_MS: Record<ScraperSource, number> = {
@@ -47,10 +57,6 @@ const truncateDescription = (text: string, query: string): string => {
   const words = text.split(/\s+/);
   return words.length > 50 ? words.slice(0, 50).join(" ") + "..." : text;
 };
-
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 export function confidenceFromScore(score: number): MatchConfidence {
   if (score >= HIGH_CONFIDENCE_SCORE) return "high";
@@ -269,19 +275,59 @@ function buildGenericProduct(
   };
 }
 
-type ScraperRunner = {
-  source: ScraperSource;
-  run: (
-    query: string,
-    vision?: VisionMatchContext
-  ) => Promise<Record<string, unknown> | null>;
-};
+function logNoExactMatchWarning(
+  vision: VisionMatchContext,
+  queries: { exact: string; broad: string; expansionChain: string[] },
+  winner: Record<string, unknown> | null,
+  candidates: Array<{ product: Record<string, unknown>; source: ScraperSource }>
+): void {
+  if (winner?.isExactMatch === true) return;
+
+  const fromWinner = winner?.similarMatches;
+  let topSimilar: ListingRankDiagnostic[] = [];
+  if (Array.isArray(fromWinner) && fromWinner.length > 0) {
+    topSimilar = fromWinner as ListingRankDiagnostic[];
+  } else {
+    topSimilar = candidates.slice(0, 3).map((c, i) => ({
+      index: i + 1,
+      title: String(c.product.title ?? ""),
+      brand: String(c.product.brand ?? ""),
+      price: String(c.product.price ?? "n/a"),
+      exactRank: Number(c.product.matchScore ?? 0),
+      meetsExactThreshold: false,
+      matchType: "similar" as const,
+    }));
+  }
+
+  console.warn(
+    "[MasterScraper] NO EXACT MATCH — verify product appears in search results:",
+    JSON.stringify(
+      {
+        visionTitle: vision.visionTitle,
+        visionBrand: vision.visionBrand ?? "",
+        exactQuery: queries.exact,
+        broadQuery: queries.broad,
+        expansionChain: queries.expansionChain,
+        winnerTitle: winner?.title ?? null,
+        topSimilarMatches: topSimilar.map((s) => ({
+          title: s.title,
+          brand: s.brand,
+          price: s.price,
+          exactRank: s.exactRank,
+        })),
+      },
+      null,
+      2
+    )
+  );
+}
 
 async function runOpenAIScraper(
   query: string,
-  _vision?: VisionMatchContext
+  _vision?: VisionMatchContext,
+  opts?: ScraperRunOptions
 ): Promise<Record<string, unknown> | null> {
-  const aiData = await scrapeOpenAI(query);
+  const aiData = await scrapeOpenAI(query, opts?.signal);
   if (!aiData || !validateProduct(aiData)) return null;
   const price = resolveOpenAIFallbackPrice(aiData);
   return buildGenericProduct(
@@ -303,36 +349,70 @@ async function runScraperWithRetry(
   source: ScraperSource,
   run: ScraperRunner["run"],
   query: string,
-  vision: VisionMatchContext
+  vision: VisionMatchContext,
+  opts?: ScraperRunOptions
 ): Promise<{
   source: ScraperSource;
   value: Record<string, unknown> | null;
   timedOut: boolean;
+  aborted: boolean;
+  elapsedMs: number;
 }> {
   let timedOut = false;
+  const t0 = Date.now();
   for (let attempt = 1; attempt <= SCRAPER_MAX_ATTEMPTS; attempt++) {
-    const t0 = Date.now();
+    if (opts?.signal?.aborted) {
+      return {
+        source,
+        value: null,
+        timedOut: false,
+        aborted: true,
+        elapsedMs: Date.now() - t0,
+      };
+    }
+    const attemptStart = Date.now();
     try {
       const timeoutMs = SCRAPER_TIMEOUT_MS[source] ?? 12_000;
       const value = await withTimeout(
-        run(query, vision),
+        run(query, vision, opts),
         timeoutMs,
         `${source}#${attempt}`
       );
       console.log(
-        `[MasterScraper] ${source} attempt ${attempt} finished in ${Date.now() - t0}ms`
+        `[MasterScraper] ${source} attempt ${attempt} finished in ${Date.now() - attemptStart}ms`
       );
-      return { source, value, timedOut };
+      return {
+        source,
+        value,
+        timedOut,
+        aborted: false,
+        elapsedMs: Date.now() - t0,
+      };
     } catch (err) {
+      if (isAbortError(err)) {
+        return {
+          source,
+          value: null,
+          timedOut: false,
+          aborted: true,
+          elapsedMs: Date.now() - t0,
+        };
+      }
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.toLowerCase().includes("timed out")) timedOut = true;
       console.warn(
-        `[MasterScraper] ${source} attempt ${attempt} failed (${Date.now() - t0}ms):`,
+        `[MasterScraper] ${source} attempt ${attempt} failed (${Date.now() - attemptStart}ms):`,
         msg
       );
     }
   }
-  return { source, value: null, timedOut };
+  return {
+    source,
+    value: null,
+    timedOut,
+    aborted: false,
+    elapsedMs: Date.now() - t0,
+  };
 }
 
 export const scrapeProduct = async (
@@ -343,10 +423,23 @@ export const scrapeProduct = async (
     visionTitle: query,
     visionBrand: "",
   };
-  const exactQuery = buildExactMarketplaceQuery(query, vision.visionBrand);
+  const manualQuery = options?.searchQuery?.trim();
+  const exactQuery =
+    manualQuery || buildExactMarketplaceQuery(query, vision.visionBrand);
   const broadQuery = buildBroadMarketplaceQuery(query, vision.visionBrand);
+  const expansionChain = manualQuery
+    ? [
+        manualQuery,
+        ...buildQueryExpansionChain(query, vision.visionBrand).filter(
+          (q) => q.toLowerCase() !== manualQuery.toLowerCase()
+        ),
+      ]
+    : buildQueryExpansionChain(query, vision.visionBrand);
+
+  const queryPlan = { exact: exactQuery, broad: broadQuery, expansionChain };
+  console.log("[MasterScraper] Search plan:", JSON.stringify(queryPlan, null, 2));
   console.log(
-    `[MasterScraper] Vision: "${query}" | exact search: "${exactQuery}" | broad fallback: "${broadQuery}"`
+    `[MasterScraper] Per-scraper primary query: apify=expansion(${expansionChain.length}), ebay/google/rapidapi="${exactQuery}"`
   );
 
   const runners: ScraperRunner[] = [
@@ -358,73 +451,33 @@ export const scrapeProduct = async (
   ];
 
   console.log(
-    `[MasterScraper] Running ${runners.length} scrapers (wait for all, min ${MIN_PARALLEL_WAIT_MS}ms):`,
+    `[MasterScraper] Racing ${runners.length} scrapers for exact match (global timeout ${GLOBAL_EXACT_RACE_TIMEOUT_MS}ms):`,
     runners.map((r) => r.source).join(", ")
   );
 
-  let anyScraperTimedOut = false;
-  const parallelStart = Date.now();
-  const [settledResults] = await Promise.all([
-    Promise.allSettled(
-      runners.map(({ source, run }) =>
-        runScraperWithRetry(source, run, exactQuery, vision)
-      )
-    ),
-    sleep(MIN_PARALLEL_WAIT_MS),
-  ]);
-  console.log(
-    `[MasterScraper] All scrapers settled in ${Date.now() - parallelStart}ms`
+  const race = await raceScrapersForExactMatch(
+    runners,
+    exactQuery,
+    vision,
+    (source, run, q, v, opts) =>
+      runScraperWithRetry(source, run, q, v, opts),
+    (source) =>
+      source === "apify" ? { queryChain: expansionChain } : {},
+    scoreResult
   );
 
-  type Candidate = {
-    source: ScraperSource;
-    product: Record<string, unknown>;
-    score: number;
-    reasons: string[];
-  };
+  console.log(
+    `[MasterScraper] Race finished in ${race.raceElapsedMs}ms` +
+      (race.exactFoundAtMs != null
+        ? ` (exact at ${race.exactFoundAtMs}ms)`
+        : " (no exact)")
+  );
 
-  const candidates: Candidate[] = [];
-
-  for (const res of settledResults) {
-    if (res.status !== "fulfilled") {
-      console.warn("[MasterScraper] Scraper rejected:", res.reason);
-      continue;
-    }
-    const { source, value, timedOut } = res.value;
-    if (timedOut) anyScraperTimedOut = true;
-    if (!value || !validateProduct(value)) {
-      console.log(`[MasterScraper] ${source}: no valid product`);
-      continue;
-    }
-
-    const listingBrand = String(value.brand ?? "");
-    if (brandsConflict(vision.visionBrand, listingBrand)) {
-      console.warn(
-        `[MasterScraper] ${source}: REJECTED brand conflict — vision="${vision.visionBrand}" vs listing="${listingBrand}" (jaccard=${brandJaccard(vision.visionBrand ?? "", listingBrand).toFixed(2)})`
-      );
-      continue;
-    }
-
-    const scored = scoreResult(vision, value);
-    console.log(
-      `[MasterScraper] ${source}: score=${scored.score} [${scored.reasons.join(", ")}]`
-    );
-    candidates.push({
-      source,
-      product: { ...value, scraperSource: source },
-      score: scored.score,
-      reasons: scored.reasons,
-    });
-  }
-
-  candidates.sort((a, b) => {
-    const aExact = a.product.isExactMatch === true ? 1 : 0;
-    const bExact = b.product.isExactMatch === true ? 1 : 0;
-    if (bExact !== aExact) return bExact - aExact;
-    return b.score - a.score;
-  });
+  const candidates = race.candidates;
+  const anyScraperTimedOut = race.anyTimedOut;
 
   if (candidates.length === 0) {
+    logNoExactMatchWarning(vision, queryPlan, null, []);
     console.log(
       "[MasterScraper] No scraper returned vision-consistent data — caller should use vision fallback",
       anyScraperTimedOut ? "(some scrapers timed out)" : ""
@@ -432,13 +485,15 @@ export const scrapeProduct = async (
     return null;
   }
 
-  const winner = candidates[0];
+  const winner = race.exactWinner ?? candidates[0];
   const matchScore = winner.score;
   const matchConfidence = confidenceFromScore(matchScore);
 
-  console.log(
-    `[MasterScraper] WINNER: ${winner.source} (score=${winner.score}) — ${winner.reasons.join(", ")}`
-  );
+  if (winner.product.isExactMatch !== true) {
+    console.log(
+      `[MasterScraper] WINNER (similar): ${winner.source} (score=${winner.score}) — ${winner.reasons.join(", ")}`
+    );
+  }
   console.log(
     `[MasterScraper] Winner preview — title: "${String(winner.product.title ?? "")}" brand: "${String(winner.product.brand ?? "")}" price: ${winner.product.price ?? 0}`
   );
@@ -468,6 +523,8 @@ export const scrapeProduct = async (
     );
     raw = { ...raw, isExactMatch: false, matchType: "similar" };
   }
+
+  logNoExactMatchWarning(vision, queryPlan, raw, candidates);
 
   if (raw.isExactMatch === true) {
     const result = buildExactProduct(raw, query);

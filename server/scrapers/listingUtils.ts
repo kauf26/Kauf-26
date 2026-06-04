@@ -2,8 +2,10 @@
 
 import {
   listingExactRank,
+  logListingRankDiagnostics,
   scoreListingMatch,
   tokenOverlapRatio,
+  topSimilarListings,
 } from "./visionMatch";
 
 export {
@@ -14,6 +16,10 @@ export {
   tokenOverlapRatio,
   extractReferenceNumbers,
   significantTokens,
+  logListingRankDiagnostics,
+  topSimilarListings,
+  EXACT_MATCH_MIN_RANK,
+  type ListingRankDiagnostic,
 } from "./visionMatch";
 
 export type ScraperSource =
@@ -249,6 +255,11 @@ export function aggregateListings(
     price: parseListingPrice(item.price),
   }));
 
+  logListingRankDiagnostics(items, matchCtx, {
+    label: "listingUtils",
+    limit: 5,
+  });
+
   const exactRows = scored
     .filter((s) => s.score === "exact")
     .sort(
@@ -266,6 +277,10 @@ export function aggregateListings(
   const rep = (hasExact ? exactRows[0] : scored[0]).item;
   const bestLink = rep.url ?? "";
 
+  const similarMatches = hasExact
+    ? []
+    : topSimilarListings(items, matchCtx, 3);
+
   console.log("[listingUtils] aggregateListings:", {
     totalItems: items.length,
     exactMatches: exactRows.length,
@@ -273,6 +288,10 @@ export function aggregateListings(
     pricedListingsUsed: pricedCount,
     medianPrice: median,
     priceReliable,
+    topSimilar: similarMatches.map((s) => ({
+      title: s.title,
+      exactRank: s.exactRank,
+    })),
   });
 
   return {
@@ -294,5 +313,6 @@ export function aggregateListings(
     samplesPriced: pricedCount,
     link: bestLink,
     url: bestLink,
+    similarMatches,
   };
 }

@@ -1,5 +1,6 @@
-// server/services/openai.ts
-import OpenAI from 'openai';
+// server/scrapers/openai.ts
+import OpenAI from "openai";
+import { raceWithAbortSignal, throwIfAborted } from "./scraperOptions";
 
 // This variable will hold the instance once created
 let openai: OpenAI | null = null;
@@ -37,7 +38,10 @@ function parsePriceField(price: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export const extractProductData = async (rawText: string) => {
+export const extractProductData = async (
+  rawText: string,
+  signal?: AbortSignal
+) => {
   const prompt = `Extract product listing details from this text. Return strictly valid JSON:
   {
     "title": "specific product name",
@@ -53,13 +57,17 @@ export const extractProductData = async (rawText: string) => {
   Text: ${rawText}`;
 
   try {
+    throwIfAborted(signal, "openai");
     const client = getOpenAI();
 
-    const completion = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [{ role: "user", content: prompt }],
-      response_format: { type: "json_object" }
-    });
+    const completion = await raceWithAbortSignal(
+      client.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [{ role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+      }),
+      signal
+    );
 
     const data = JSON.parse(completion.choices[0].message.content || "{}");
     const price = parsePriceField(data.price);

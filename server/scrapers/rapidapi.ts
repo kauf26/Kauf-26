@@ -4,11 +4,18 @@ import {
   SCRAPE_LISTING_LIMIT,
   type VisionMatchContext,
 } from "./listingUtils";
+import {
+  isAbortError,
+  type ScraperRunOptions,
+  throwIfAborted,
+} from "./scraperOptions";
 
 export const scrapeProduct = async (
   query: string,
-  context?: VisionMatchContext
+  context?: VisionMatchContext,
+  opts?: ScraperRunOptions
 ): Promise<Record<string, unknown> | null> => {
+  const signal = opts?.signal;
   try {
     if (!process.env.RAPIDAPI_KEY?.trim()) {
       console.warn("[RapidAPI] RAPIDAPI_KEY missing — skipping");
@@ -33,7 +40,8 @@ export const scrapeProduct = async (
       },
     };
 
-    const response = await fetch(url, options);
+    throwIfAborted(signal, "rapidapi");
+    const response = await fetch(url, { ...options, signal });
     if (!response.ok) throw new Error(`RapidAPI status ${response.status}`);
 
     const data = (await response.json()) as {
@@ -67,6 +75,7 @@ export const scrapeProduct = async (
       ),
     };
   } catch (error: unknown) {
+    if (isAbortError(error)) throw error;
     const msg = error instanceof Error ? error.message : String(error);
     console.error("❌ RapidAPI scraping error:", msg);
     return null;

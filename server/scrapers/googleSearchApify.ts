@@ -1,19 +1,22 @@
 /**
- * Uses apify/google-search-scraper — exact query first, broad fallback.
- * Match quality comes from vision↔listing scoring, not hardcoded product lists.
+ * Uses apify/google-search-scraper — query expansion until exact match or chain exhausted.
  */
 import { ApifyClient } from "apify-client";
 import {
   aggregateListings,
+  logListingRankDiagnostics,
   SCRAPE_LISTING_LIMIT,
   type RawListing,
   type VisionMatchContext,
 } from "./listingUtils";
-import {
-  buildBroadMarketplaceQuery,
-  buildExactMarketplaceQuery,
-} from "./marketplaceQuery";
+import { buildQueryExpansionChain } from "./queryExpansion";
 import { bestPriceFromText } from "./priceFromText";
+import {
+  isAbortError,
+  type ScraperRunOptions,
+  raceWithAbortSignal,
+  throwIfAborted,
+} from "./scraperOptions";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -63,8 +66,10 @@ function organicToListing(
 async function runGoogleSearch(
   searchQuery: string,
   visionTitle: string,
-  context?: VisionMatchContext
+  context?: VisionMatchContext,
+  signal?: AbortSignal
 ): Promise<Record<string, unknown> | null> {
+  throwIfAborted(signal, "googleSearchApify");
   const actorId =
     process.env.APIFY_GOOGLE_SEARCH_ACTOR_ID?.trim() || DEFAULT_ACTOR;
   const q = searchQuery.includes("price") ? searchQuery : `${searchQuery} price`;
@@ -79,9 +84,10 @@ async function runGoogleSearch(
 
   console.log(`[GoogleSearchApify] Actor: ${actorId} query: "${q}"`);
 
-  const run = await client.actor(actorId).call(input, {
-    waitSecs: RUN_TIMEOUT_SECS,
-  });
+  const run = await raceWithAbortSignal(
+    client.actor(actorId).call(input, { waitSecs: RUN_TIMEOUT_SECS }),
+    signal
+  );
 
   const { items } = await client
     .dataset(run.defaultDatasetId)
@@ -109,6 +115,12 @@ async function runGoogleSearch(
     visionTitle,
     visionBrand: visionBrand ?? "",
   };
+
+  logListingRankDiagnostics(listings, matchCtx, {
+    label: "GoogleSearchApify",
+    searchQuery: q,
+    limit: 5,
+  });
 
   const aggregated = aggregateListings(listings, visionTitle, matchCtx);
   if (!aggregated) return null;
@@ -140,13 +152,16 @@ async function runGoogleSearch(
     scraperSource: "apify",
     link: bestUrl,
     url: bestUrl,
+    searchQueryUsed: q,
   };
 }
 
 export async function scrapeViaGoogleSearch(
   _query: string,
-  context?: VisionMatchContext
+  context?: VisionMatchContext,
+  opts?: ScraperRunOptions
 ): Promise<Record<string, unknown> | null> {
+  const signal = opts?.signal;
   if (!process.env.APIFY_API_KEY?.trim()) {
     console.warn("[GoogleSearchApify] APIFY_API_KEY missing — skipping");
     return null;
@@ -154,37 +169,48 @@ export async function scrapeViaGoogleSearch(
 
   const visionTitle = context?.visionTitle?.trim() || _query.trim();
   const visionBrand = context?.visionBrand?.trim();
-  const exactQuery = buildExactMarketplaceQuery(visionTitle, visionBrand);
-  const broadQuery = buildBroadMarketplaceQuery(visionTitle, visionBrand);
+  const queryChain =
+    opts?.queryChain ??
+    buildQueryExpansionChain(visionTitle, visionBrand);
+
+  console.log(
+    `[GoogleSearchApify] Query expansion chain (${queryChain.length}):`,
+    queryChain.map((q, i) => `${i + 1}. "${q}"`).join(" | ")
+  );
+
+  let lastResult: Record<string, unknown> | null = null;
 
   try {
-    console.log(`[GoogleSearchApify] Phase 1 (exact): "${exactQuery}"`);
-    const exactResult = await runGoogleSearch(
-      exactQuery,
-      visionTitle,
-      context
-    );
-    if (exactResult?.isExactMatch === true) {
+    for (let i = 0; i < queryChain.length; i++) {
+      throwIfAborted(signal, "googleSearchApify");
+      const q = queryChain[i];
       console.log(
-        `[GoogleSearchApify] Exact match (${exactResult.exactMatchCount} row(s)) — "${exactResult.title}"`
+        `[GoogleSearchApify] Attempt ${i + 1}/${queryChain.length}: "${q}"`
       );
-      return exactResult;
+      const result = await runGoogleSearch(q, visionTitle, context, signal);
+      if (!result) continue;
+
+      lastResult = result;
+
+      if (result.isExactMatch === true) {
+        console.log(
+          `[GoogleSearchApify] Exact match on attempt ${i + 1} — "${result.title}"`
+        );
+        return result;
+      }
     }
 
-    console.log(`[GoogleSearchApify] Phase 2 (broad): "${broadQuery}"`);
-    const broadResult = await runGoogleSearch(
-      broadQuery,
-      visionTitle,
-      context
-    );
-    if (broadResult) {
-      broadResult.isExactMatch = false;
-      broadResult.matchType = "similar";
-      return broadResult;
+    if (lastResult) {
+      lastResult.isExactMatch = false;
+      lastResult.matchType = "similar";
+      console.log(
+        `[GoogleSearchApify] No exact after ${queryChain.length} queries — returning best similar`
+      );
     }
 
-    return exactResult;
+    return lastResult;
   } catch (err) {
+    if (isAbortError(err)) throw err;
     console.error("[GoogleSearchApify] Error:", err);
     return null;
   }

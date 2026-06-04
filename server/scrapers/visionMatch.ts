@@ -166,3 +166,87 @@ export function scoreListingMatch(
 ): "exact" | "similar" {
   return isExactListing(listing, ctx) ? "exact" : "similar";
 }
+
+export type ListingRankDiagnostic = {
+  index: number;
+  title: string;
+  brand: string;
+  price: string;
+  exactRank: number;
+  meetsExactThreshold: boolean;
+  matchType: "exact" | "similar";
+};
+
+/** Log per-row exact rank for debugging (first N listings). */
+export function logListingRankDiagnostics(
+  listings: RawListing[],
+  ctx: VisionMatchContext,
+  opts?: { label?: string; searchQuery?: string; limit?: number }
+): ListingRankDiagnostic[] {
+  const label = opts?.label ?? "visionMatch";
+  const limit = opts?.limit ?? 5;
+
+  console.log(
+    `[${label}] EXACT_MATCH_MIN_RANK=${EXACT_MATCH_MIN_RANK} visionTitle="${ctx.visionTitle}" visionBrand="${ctx.visionBrand ?? ""}"`
+  );
+  if (opts?.searchQuery) {
+    console.log(`[${label}] searchQuery="${opts.searchQuery}"`);
+  }
+
+  const diagnostics: ListingRankDiagnostic[] = [];
+
+  listings.slice(0, limit).forEach((row, i) => {
+    const rank = listingExactRank(row, ctx);
+    const meets = rank >= EXACT_MATCH_MIN_RANK;
+    const matchType = meets ? "exact" : "similar";
+    const brand = String(row.brand ?? "").trim();
+    const price =
+      row.price != null && row.price !== ""
+        ? String(row.price)
+        : "n/a";
+
+    diagnostics.push({
+      index: i + 1,
+      title: String(row.title ?? "").trim(),
+      brand,
+      price,
+      exactRank: rank,
+      meetsExactThreshold: meets,
+      matchType,
+    });
+
+    console.log(
+      `[${label}] row ${i + 1}/${Math.min(limit, listings.length)}: exactRank=${rank} meetsThreshold=${meets} (${matchType}) | title="${row.title ?? ""}" | brand="${brand || "—"}" | price=${price}`
+    );
+  });
+
+  if (listings.length === 0) {
+    console.log(`[${label}] no listings to rank`);
+  }
+
+  return diagnostics;
+}
+
+/** Top similar rows when nothing crosses exact threshold */
+export function topSimilarListings(
+  listings: RawListing[],
+  ctx: VisionMatchContext,
+  limit = 3
+): ListingRankDiagnostic[] {
+  return [...listings]
+    .map((item, index) => ({
+      index: index + 1,
+      title: String(item.title ?? "").trim(),
+      brand: String(item.brand ?? "").trim(),
+      price:
+        item.price != null && item.price !== ""
+          ? String(item.price)
+          : "n/a",
+      exactRank: listingExactRank(item, ctx),
+      meetsExactThreshold: false,
+      matchType: "similar" as const,
+    }))
+    .filter((r) => r.title.length > 0)
+    .sort((a, b) => b.exactRank - a.exactRank)
+    .slice(0, limit);
+}

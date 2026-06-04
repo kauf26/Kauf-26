@@ -7,6 +7,12 @@ import {
   type VisionMatchContext,
 } from "./listingUtils";
 import { scrapeViaGoogleSearch } from "./googleSearchApify";
+import {
+  isAbortError,
+  raceWithAbortSignal,
+  type ScraperRunOptions,
+  throwIfAborted,
+} from "./scraperOptions";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -75,17 +81,20 @@ function normalizeApifyItem(raw: Record<string, unknown>): RawListing {
 
 async function scrapeEcommerceTool(
   query: string,
-  context?: VisionMatchContext
+  context?: VisionMatchContext,
+  signal?: AbortSignal
 ): Promise<Record<string, unknown> | null> {
+  throwIfAborted(signal, "apify-ecommerce");
   const actorId = getEcommerceActorId();
   const input = buildEcommerceActorInput(query);
 
   console.log(`[Apify/Ecommerce] Actor: ${actorId}`);
   console.log("[Apify/Ecommerce] Input:", JSON.stringify(input, null, 2));
 
-  const run = await client.actor(actorId).call(input, {
-    waitSecs: RUN_TIMEOUT_SECS,
-  });
+  const run = await raceWithAbortSignal(
+    client.actor(actorId).call(input, { waitSecs: RUN_TIMEOUT_SECS }),
+    signal
+  );
 
   console.log("[Apify/Ecommerce] Run:", run.status, run.id);
 
@@ -118,7 +127,8 @@ async function scrapeEcommerceTool(
 
 export const scrapeProduct = async (
   query: string,
-  context?: VisionMatchContext
+  context?: VisionMatchContext,
+  opts?: ScraperRunOptions
 ): Promise<Record<string, unknown> | null> => {
   if (!process.env.APIFY_API_KEY?.trim()) {
     console.warn("[Apify] APIFY_API_KEY missing — skipping");
@@ -126,12 +136,15 @@ export const scrapeProduct = async (
   }
 
   try {
-    const google = await scrapeViaGoogleSearch(query, context);
+    throwIfAborted(opts?.signal, "apify");
+    const google = await scrapeViaGoogleSearch(query, context, opts);
     if (google) return google;
 
+    throwIfAborted(opts?.signal, "apify");
     console.log("[Apify] Google Search actor empty — trying e-commerce tool");
-    return await scrapeEcommerceTool(query, context);
+    return await scrapeEcommerceTool(query, context, opts?.signal);
   } catch (error) {
+    if (isAbortError(error)) throw error;
     console.error("❌ Apify Error:", error);
     return null;
   }

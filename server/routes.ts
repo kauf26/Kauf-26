@@ -17,13 +17,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log("[API] Received request for: /api/catalog/scrape");
     try {
       const query = req.body?.query ?? req.body?.imageUrl ?? req.body?.imageData;
+      const searchQuery =
+        typeof req.body?.searchQuery === "string"
+          ? req.body.searchQuery.trim()
+          : "";
+      const visionTitle =
+        typeof req.body?.visionTitle === "string"
+          ? req.body.visionTitle.trim()
+          : "";
+      const visionBrand =
+        typeof req.body?.visionBrand === "string"
+          ? req.body.visionBrand.trim()
+          : "";
 
-      if (!query || typeof query !== "string") {
+      const primaryQuery = (searchQuery || query) as string | undefined;
+
+      if (!primaryQuery || typeof primaryQuery !== "string") {
         return res.status(400).json({ message: "Product query (model name) is required" });
       }
 
       // GATEKEEPER: Prevent the scraper from running on AI failure messages
-      const lowerQuery = query.toLowerCase();
+      const lowerQuery = primaryQuery.toLowerCase();
       if (lowerQuery.includes("can't identify") || lowerQuery.includes("unable to identify")) {
         console.warn("[API] Aborting scrape: AI identification failed.");
         return res.status(422).json({ 
@@ -31,7 +45,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const productData = await fetchMasterProductData(query.trim());
+      const visionTitleResolved = visionTitle || primaryQuery;
+      console.log("[API] /api/catalog/scrape", {
+        searchQuery: searchQuery || null,
+        query: primaryQuery,
+        visionTitle: visionTitleResolved,
+        visionBrand: visionBrand || null,
+      });
+
+      const productData = await fetchMasterProductData(primaryQuery, {
+        vision: {
+          visionTitle: visionTitleResolved,
+          visionBrand,
+        },
+        searchQuery: searchQuery || undefined,
+      });
       
       if (!productData) {
         return res.status(404).json({ message: "Could not identify product" });

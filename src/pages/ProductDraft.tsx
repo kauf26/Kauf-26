@@ -116,6 +116,8 @@ const [product, setProduct] = useState<ProductDraftState>(DEFAULT_PRODUCT);
 const [verificationWarning, setVerificationWarning] = useState<string | null>(
   null
 );
+const [exactSearchTerm, setExactSearchTerm] = useState("");
+const [isRescraping, setIsRescraping] = useState(false);
 
 useEffect(() => {
   const warning = sessionStorage.getItem("identifyVerificationWarning");
@@ -127,6 +129,8 @@ useEffect(() => {
   try {
     const listing = parseListingSession(JSON.parse(saved));
     if (!listing) return;
+
+    setExactSearchTerm(listing.title);
 
     setProduct({
       isExactMatch: listing.isExactMatch ?? DEFAULT_PRODUCT.isExactMatch,
@@ -227,6 +231,91 @@ const update = (field: keyof ProductDraftState, val: string) => {
   setProduct(p => ({ ...p, [field]: val }));
 };
 
+const applyScrapeResult = (data: Record<string, unknown>) => {
+  const priceNum =
+    typeof data.price === "number"
+      ? data.price
+      : parseFloat(String(data.price ?? "0"));
+  const priceStr = priceNum > 0 ? priceNum.toFixed(2) : product.price;
+  const matchType =
+    data.matchType === "exact" ||
+    data.isExactMatch === true
+      ? "exact"
+      : data.matchType === "similar"
+        ? "similar"
+        : product.matchType;
+  const isExact = matchType === "exact";
+
+  setProduct((p) => ({
+    ...p,
+    title: String(data.title ?? p.title),
+    brand: sanitizeBrandDisplay(String(data.brand ?? p.brand)),
+    description: String(data.description ?? p.description),
+    price: priceStr,
+    category: String(data.category ?? p.category) || p.category,
+    condition: normalizeConditionForSelect(
+      String(data.condition ?? p.condition)
+    ),
+    allegroAverage: formatPrice(String(data.allegroAvg ?? data.allegroAverage ?? priceStr)),
+    ebayAverage: formatPrice(String(data.ebayAvg ?? data.ebayPrice ?? priceStr)),
+    isExactMatch: isExact,
+    matchType,
+    priceReliable: data.priceReliable !== false && priceNum > 0,
+  }));
+
+  if (isExact) {
+    setVerificationWarning(null);
+    sessionStorage.removeItem("identifyVerificationWarning");
+    toast({
+      title: "Exact match found",
+      description: "Listing updated from marketplace search.",
+    });
+  } else {
+    toast({
+      title: "No exact match yet",
+      description: "Best similar listing applied — check server logs for top matches.",
+      variant: "destructive",
+    });
+  }
+};
+
+const handleRescrapeExact = async () => {
+  const term = exactSearchTerm.trim();
+  if (!term) {
+    toast({ title: "Enter a search term", variant: "destructive" });
+    return;
+  }
+  setIsRescraping(true);
+  try {
+    const res = await fetch("/api/catalog/scrape", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: term,
+        searchQuery: term,
+        visionTitle: product.title || term,
+        visionBrand: product.brand,
+      }),
+    });
+    const data = (await res.json()) as Record<string, unknown> & {
+      message?: string;
+    };
+    if (!res.ok) {
+      throw new Error(data.message ?? `Search failed (${res.status})`);
+    }
+    applyScrapeResult(data);
+  } catch (err) {
+    console.error("Re-scrape failed:", err);
+    toast({
+      title: "Search failed",
+      description: err instanceof Error ? err.message : "Try again",
+      variant: "destructive",
+    });
+  } finally {
+    setIsRescraping(false);
+  }
+};
+
 return (
   <div className="max-w-3xl mx-auto p-6 bg-zinc-900 border border-zinc-800 rounded-lg text-zinc-100 space-y-6 my-6">
     {verificationWarning && (
@@ -273,6 +362,34 @@ return (
           Confirm title, brand, price, category, and condition before posting.
         </p>
       </div>
+    )}
+
+    {product.matchType !== "exact" && (
+      <section className="rounded-lg border border-zinc-700 bg-zinc-950/80 p-4 space-y-3">
+        <h2 className="text-sm font-semibold text-zinc-200">
+          Search again for exact match
+        </h2>
+        <p className="text-xs text-zinc-500">
+          Edit the search term (model number, spelling, fewer words) and re-run
+          marketplace scrapers.
+        </p>
+        <input
+          type="text"
+          value={exactSearchTerm}
+          onChange={(e) => setExactSearchTerm(e.target.value)}
+          className="w-full rounded-md border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-zinc-100"
+          placeholder="e.g. Breitling Navitimer B13050"
+          disabled={isRescraping}
+        />
+        <button
+          type="button"
+          onClick={handleRescrapeExact}
+          disabled={isRescraping}
+          className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+        >
+          {isRescraping ? "Searching…" : "Search again for exact match"}
+        </button>
+      </section>
     )}
 
     <section className="rounded-lg border border-zinc-800 bg-zinc-950/80 p-4">

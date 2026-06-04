@@ -5,6 +5,11 @@ import {
   type RawListing,
   type VisionMatchContext,
 } from "./listingUtils";
+import {
+  isAbortError,
+  type ScraperRunOptions,
+  throwIfAborted,
+} from "./scraperOptions";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -61,8 +66,10 @@ function normalizeGoogleItem(item: GoogleSearchItem): RawListing | null {
  */
 export const scrapeProduct = async (
   query: string,
-  context?: VisionMatchContext
+  context?: VisionMatchContext,
+  opts?: ScraperRunOptions
 ): Promise<Record<string, unknown> | null> => {
+  const signal = opts?.signal;
   const apiKey = process.env.GOOGLE_API_KEY?.trim();
   const cx = process.env.GOOGLE_CX?.trim();
 
@@ -80,13 +87,15 @@ export const scrapeProduct = async (
     url.searchParams.set("searchType", "shopping");
 
     console.log(`[Google] Custom Search query: ${query}`);
-    let res = await fetch(url.toString());
+    throwIfAborted(signal, "google");
+    let res = await fetch(url.toString(), { signal });
     if (!res.ok && res.status === 400) {
       console.warn(
         "[Google] searchType=shopping rejected — retrying without searchType"
       );
       url.searchParams.delete("searchType");
-      res = await fetch(url.toString());
+      throwIfAborted(signal, "google");
+      res = await fetch(url.toString(), { signal });
     }
     if (!res.ok) {
       const body = await res.text();
@@ -122,6 +131,7 @@ export const scrapeProduct = async (
       link: items[0]?.link ?? "",
     };
   } catch (err) {
+    if (isAbortError(err)) throw err;
     console.error("[Google] Error:", err);
     return null;
   }
