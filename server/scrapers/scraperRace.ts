@@ -6,8 +6,9 @@ import {
 } from "./listingUtils";
 import type { ScraperRunOptions } from "./scraperOptions";
 
+/** Stage 2 keyword race budget (Apify / Google Shopping) */
 export const GLOBAL_EXACT_RACE_TIMEOUT_MS = Number(
-  process.env.SCRAPER_GLOBAL_TIMEOUT_MS ?? 10_000
+  process.env.SCRAPER_GLOBAL_TIMEOUT_MS ?? 3_000
 );
 
 export type ScraperRunner = {
@@ -142,9 +143,20 @@ export async function raceScrapersForExactMatch(
     return runScraper(source, run, query, vision, mergedOpts).then((result) => {
       if (result.timedOut) anyTimedOut = true;
 
+      const status = result.aborted
+        ? "aborted"
+        : result.timedOut
+          ? "timeout"
+          : result.value
+            ? "ok"
+            : "empty";
+      console.log(
+        `[MasterScraper] ${result.source} ${status} in ${result.elapsedMs}ms`
+      );
+
       if (winnerLocked && result.source !== winnerSource) {
         console.log(
-          `[MasterScraper] Aborted ${result.source} – winner already found`
+          `[MasterScraper] ${result.source} aborted — winner ${winnerSource} already locked`
         );
         return { ...result, aborted: true };
       }

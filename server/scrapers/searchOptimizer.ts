@@ -4,9 +4,8 @@ import {
   significantTokens,
 } from "./visionMatch";
 
-/** Alphanumeric model / SKU / ref tokens (letters+digits, dots, hyphens) */
-const MODEL_TOKEN_RE =
-  /\b([A-Za-z]{1,4}[-.]?\d{2,}[A-Za-z0-9.-]{0,12})\b|\b(\d{4,}[A-Za-z0-9.-]{0,8})\b/g;
+/** Model / SKU tokens: letters+digits with optional dot/hyphen segment */
+const MODEL_TOKEN_RE = /\b([A-Z0-9]{2,}[.-]?[A-Z0-9]{2,})\b/gi;
 
 export function extractModelNumbers(term: string): string[] {
   const found = new Set<string>();
@@ -18,8 +17,8 @@ export function extractModelNumbers(term: string): string[] {
   }
 
   for (const m of term.matchAll(MODEL_TOKEN_RE)) {
-    const r = (m[1] ?? m[2] ?? "").replace(/\s+/g, "").toLowerCase();
-    if (r.length >= 3) found.add(r);
+    const r = (m[1] ?? "").replace(/\s+/g, "").toLowerCase();
+    if (r.length >= 4) found.add(r);
   }
 
   return [...found];

@@ -191,13 +191,40 @@ export default function SelectMarketplaces() {
         <div className="lg:col-span-2 bg-zinc-900 border border-zinc-800 rounded-lg p-6 space-y-4">
           <h2 className="text-lg font-semibold text-zinc-200">Edit Listing Details</h2>
 
-          {draft.brand && (
-            <p className="text-xs text-zinc-500">
-              {draft.brand}
-              {draft.category ? ` · ${draft.category}` : ""}
-              {draft.condition ? ` · ${draft.condition}` : ""}
-            </p>
-          )}
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-zinc-400 mb-2">
+            <div>
+              <dt className="text-zinc-500">Brand</dt>
+              <dd>{draft.brand.trim() || "Not available"}</dd>
+            </div>
+            <div>
+              <dt className="text-zinc-500">Category</dt>
+              <dd>{draft.category.trim() || "Not available"}</dd>
+            </div>
+            <div>
+              <dt className="text-zinc-500">Condition</dt>
+              <dd>{draft.condition.trim() || "Not available"}</dd>
+            </div>
+            <div>
+              <dt className="text-zinc-500">eBay avg</dt>
+              <dd>
+                {parseFloat(draft.product.ebayAvg || "0") > 0
+                  ? `$${draft.product.ebayAvg}`
+                  : "Not available"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-zinc-500">Allegro avg</dt>
+              <dd>
+                {parseFloat(draft.product.allegroAvg || "0") > 0
+                  ? `$${draft.product.allegroAvg}`
+                  : "Not available"}
+              </dd>
+            </div>
+            <div className="col-span-2">
+              <dt className="text-zinc-500">Exact match</dt>
+              <dd>{draft.isExactMatch ? "Yes" : "No (similar / generic)"}</dd>
+            </div>
+          </dl>
 
           <div className="space-y-1">
             <label className="text-xs text-zinc-500">Title</label>

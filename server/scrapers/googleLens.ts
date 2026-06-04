@@ -24,7 +24,8 @@ dotenv.config();
 const ACTOR_ID =
   process.env.APIFY_GOOGLE_LENS_ACTOR_ID?.trim() ||
   "prodiger/google-lens-scraper";
-const RUN_TIMEOUT_SECS = Number(process.env.GOOGLE_LENS_TIMEOUT_SECS ?? 45);
+/** Apify actor wait — keep ≤4s for Stage 1 budget */
+const RUN_TIMEOUT_SECS = Number(process.env.GOOGLE_LENS_TIMEOUT_SECS ?? 4);
 
 const client = new ApifyClient({ token: process.env.APIFY_API_KEY });
 

@@ -106,6 +106,49 @@ function sanitizeBrandDisplay(brand: string): string {
   return s.toUpperCase() === "N/A" ? "" : s;
 }
 
+function sessionPriceToInput(price: string): string {
+  const n = parseFloat(price);
+  return Number.isFinite(n) && n > 0 ? n.toFixed(2) : "";
+}
+
+function sessionAvgToInput(value: string | undefined, fallbackPrice: string): string {
+  const n = parseFloat(String(value ?? ""));
+  if (Number.isFinite(n) && n > 0) return n.toFixed(2);
+  return sessionPriceToInput(fallbackPrice);
+}
+
+/** Map identify/session payload → draft fields (no placeholder defaults). */
+function draftStateFromListing(listing: ListingSession): ProductDraftState {
+  const p = listing.product;
+  const price = sessionPriceToInput(listing.price);
+  return {
+    isExactMatch: listing.isExactMatch === true,
+    matchType:
+      listing.matchType ?? (listing.isExactMatch ? "exact" : "generic"),
+    title: listing.title.trim(),
+    brand: sanitizeBrandDisplay(listing.brand),
+    description: listing.description.trim(),
+    price,
+    category: listing.category.trim(),
+    condition: normalizeConditionForSelect(listing.condition),
+    modelNumber: String(
+      (listing as { modelNumber?: string }).modelNumber ??
+        (listing as { refNumber?: string }).refNumber ??
+        ""
+    ).trim(),
+    material: (listing.material ?? p.material ?? "").trim(),
+    color: (listing.color ?? p.color ?? "").trim(),
+    productUrl: String(listing.productUrl ?? p.productUrl ?? "").trim(),
+    allegroAverage: sessionAvgToInput(p.allegroAvg, listing.price),
+    ebayAverage: sessionAvgToInput(p.ebayAvg, listing.price),
+    capturedImage: listing.capturedImage,
+    priceReliable:
+      listing.priceReliable === true ||
+      p.priceReliable === true ||
+      parseFloat(listing.price) > 0,
+  };
+}
+
 function priceHint(product: ProductDraftState): string | null {
   if (!product.priceReliable) {
     return "Price estimate unavailable – set manually";
@@ -139,38 +182,7 @@ useEffect(() => {
 
     setExactSearchTerm(listing.title);
 
-    setProduct({
-      isExactMatch: listing.isExactMatch ?? DEFAULT_PRODUCT.isExactMatch,
-      matchType:
-        listing.matchType ??
-        (listing.isExactMatch ? "exact" : "generic"),
-      title: listing.title,
-      brand: sanitizeBrandDisplay(listing.brand),
-      description: listing.description,
-      price: listing.price,
-      category: listing.category || DEFAULT_PRODUCT.category,
-      condition: normalizeConditionForSelect(listing.condition),
-      modelNumber: String(
-        (listing as { modelNumber?: string }).modelNumber ??
-          (listing as { refNumber?: string }).refNumber ??
-          ""
-      ).trim(),
-      material: (listing.material ?? listing.product.material ?? "").trim(),
-      color: (listing.color ?? listing.product.color ?? "").trim(),
-      productUrl: String(
-        listing.productUrl ?? listing.product.productUrl ?? ""
-      ).trim(),
-      allegroAverage: listing.product.allegroAvg,
-      ebayAverage: listing.product.ebayAvg,
-      capturedImage: listing.capturedImage,
-      priceReliable:
-        listing.priceReliable === false ||
-        listing.product.priceReliable === false
-          ? false
-          : listing.priceReliable === true ||
-            listing.product.priceReliable === true ||
-            parseFloat(listing.price) > 0,
-    });
+    setProduct(draftStateFromListing(listing));
   } catch (e) {
     console.error("Error parsing product draft data:", e);
   }

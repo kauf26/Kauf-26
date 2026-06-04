@@ -385,7 +385,12 @@ app.use("/api/marketplaces", marketplaceRoutes);
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const upload = multer({ storage: multer.memoryStorage() });
 
-const IDENTIFY_REQUEST_TIMEOUT_MS = 90_000;
+/** vision ~1s + scrapers ~4s + buffer */
+const IDENTIFY_REQUEST_TIMEOUT_MS = Number(
+  process.env.IDENTIFY_REQUEST_TIMEOUT_MS ?? 6_000
+);
+const VISION_TIMEOUT_MS = Number(process.env.VISION_TIMEOUT_MS ?? 1_000);
+const SCRAPE_CALL_TIMEOUT_MS = Number(process.env.SCRAPE_CALL_TIMEOUT_MS ?? 4_000);
 
 function applyScrapeMeta(
   listing: ScrapedListing,
@@ -437,20 +442,32 @@ app.post(
 
    const base64Image = req.file.buffer.toString('base64');
 
-   console.log("🤖 [2/5] Calling OpenAI vision to identify product...");
-   const response = await openai.chat.completions.create({
-     model: "gpt-4o",
-     response_format: { type: "json_object" },
-     messages: [{
-       role: "user",
-       content: [
-         { type: "text", text: VISION_IDENTIFY_PROMPT },
-         { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}` } }
-       ]
-     }],
-   });
+   console.log(`🤖 [2/5] Calling OpenAI vision (max ${VISION_TIMEOUT_MS}ms)...`);
+   const visionResponse = await Promise.race([
+     openai.chat.completions.create({
+       model: "gpt-4o",
+       response_format: { type: "json_object" },
+       messages: [{
+         role: "user",
+         content: [
+           { type: "text", text: VISION_IDENTIFY_PROMPT },
+           { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}` } }
+         ]
+       }],
+     }),
+     new Promise<null>((resolve) =>
+       setTimeout(() => resolve(null), VISION_TIMEOUT_MS)
+     ),
+   ]);
 
-   const visionRaw = response.choices[0].message.content || "";
+   if (!visionResponse) {
+     console.warn(`[Identify] Vision timed out after ${VISION_TIMEOUT_MS}ms`);
+     return res.status(422).json({
+       message: "Vision identification timed out — try again",
+     });
+   }
+
+   const visionRaw = visionResponse.choices[0].message.content || "";
    console.log("🔬 [Vision] Raw model response:", visionRaw);
    const vision = parseVisionResponse(visionRaw);
    step = logStep("Vision complete", step);
@@ -480,14 +497,24 @@ app.post(
    {
      console.log("🕸️ [4/5] Calling scraper with query:", searchQuery);
      const scrapeStart = Date.now();
-     const scrapedRaw = (await fetchMasterProductData(searchQuery, {
-       vision: {
-         visionTitle: vision.title,
-         visionBrand: vision.brand ?? "",
-       },
-       imageBase64: base64Image,
-       imageMimeType: req.file.mimetype || "image/jpeg",
-     })) as ScrapedListing | null;
+     const scrapedRaw = (await Promise.race([
+       fetchMasterProductData(searchQuery, {
+         vision: {
+           visionTitle: vision.title,
+           visionBrand: vision.brand ?? "",
+         },
+         imageBase64: base64Image,
+         imageMimeType: req.file.mimetype || "image/jpeg",
+       }),
+       new Promise<null>((resolve) =>
+         setTimeout(() => resolve(null), SCRAPE_CALL_TIMEOUT_MS)
+       ),
+     ])) as ScrapedListing | null;
+     if (!scrapedRaw) {
+       console.warn(
+         `[Identify] Scrape finished with no result within ${SCRAPE_CALL_TIMEOUT_MS}ms`
+       );
+     }
      step = logStep("Scraper race complete", scrapeStart);
 
      const visionBrand = normalizeBrand(vision.brand);

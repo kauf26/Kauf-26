@@ -20,7 +20,7 @@ dotenv.config();
 const client = new ApifyClient({ token: process.env.APIFY_API_KEY });
 
 const ECOMMERCE_ACTOR_ID = "apify/e-commerce-scraping-tool";
-const RUN_TIMEOUT_SECS = Number(process.env.APIFY_RUN_TIMEOUT_SECS ?? 45);
+const RUN_TIMEOUT_SECS = Number(process.env.APIFY_RUN_TIMEOUT_SECS ?? 3);
 
 const LOG_SAMPLE_ITEMS = 3;
 

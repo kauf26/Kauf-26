@@ -4,8 +4,6 @@ import {
 } from "./openai";
 import { scrapeProduct as scrapeApify } from "./apify";
 import { scrapeProduct as scrapeGoogle } from "./googleShopping";
-import { scrapeProduct as scrapeRapidAPI } from "./rapidapi";
-import { scrapeProduct as scrapeEbay } from "./ebayBrowse";
 import {
   scrapeProduct as scrapeGoogleLens,
   lensVisualExactProduct,
@@ -57,18 +55,21 @@ export type ScrapeOptions = {
 
 const SCRAPER_MAX_ATTEMPTS = 1;
 
+/** Total scrape budget after vision (Lens + keyword stage) */
+const SCRAPE_BUDGET_MS = Number(process.env.SCRAPE_BUDGET_MS ?? 4_000);
+
 const SCRAPER_TIMEOUT_MS: Record<ScraperSource, number> = {
-  apify: 32_000,
-  googleLens: Number(process.env.GOOGLE_LENS_TIMEOUT_MS ?? 45_000),
-  ebay: 12_000,
-  google: 8_000,
-  rapidapi: 8_000,
-  openai: 12_000,
-  oxylabs: 5_000,
+  apify: Number(process.env.APIFY_SCRAPER_TIMEOUT_MS ?? 3_000),
+  googleLens: Number(process.env.GOOGLE_LENS_TIMEOUT_MS ?? 4_000),
+  google: Number(process.env.GOOGLE_SHOPPING_TIMEOUT_MS ?? 3_000),
+  ebay: 3_000,
+  rapidapi: 3_000,
+  openai: 3_000,
+  oxylabs: 3_000,
 };
 
 const GOOGLE_LENS_PHASE_TIMEOUT_MS = Number(
-  process.env.GOOGLE_LENS_TIMEOUT_MS ?? 45_000
+  process.env.GOOGLE_LENS_TIMEOUT_MS ?? 4_000
 );
 const HIGH_CONFIDENCE_SCORE = 80;
 const MEDIUM_CONFIDENCE_SCORE = 50;
@@ -414,30 +415,39 @@ async function runScraperWithRetry(
         timeoutMs,
         `${source}#${attempt}`
       );
+      const elapsedMs = Date.now() - t0;
+      const exact =
+        value &&
+        typeof value === "object" &&
+        (value as Record<string, unknown>).isExactMatch === true;
       console.log(
-        `[MasterScraper] ${source} attempt ${attempt} finished in ${Date.now() - attemptStart}ms`
+        `[MasterScraper] ${source} ok in ${elapsedMs}ms` +
+          (exact ? " (exact match)" : "")
       );
       return {
         source,
         value,
         timedOut,
         aborted: false,
-        elapsedMs: Date.now() - t0,
+        elapsedMs,
       };
     } catch (err) {
       if (isAbortError(err)) {
+        const elapsedMs = Date.now() - t0;
+        console.log(`[MasterScraper] ${source} aborted in ${elapsedMs}ms`);
         return {
           source,
           value: null,
           timedOut: false,
           aborted: true,
-          elapsedMs: Date.now() - t0,
+          elapsedMs,
         };
       }
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.toLowerCase().includes("timed out")) timedOut = true;
+      const elapsedMs = Date.now() - t0;
       console.warn(
-        `[MasterScraper] ${source} attempt ${attempt} failed (${Date.now() - attemptStart}ms):`,
+        `[MasterScraper] ${source} ${timedOut ? "timeout" : "failed"} in ${elapsedMs}ms:`,
         msg
       );
     }
@@ -554,19 +564,27 @@ export const scrapeProduct = async (
   };
   console.log("[MasterScraper] Search plan:", JSON.stringify(queryPlan, null, 2));
 
+  const scrapeBudgetStart = Date.now();
+  const scrapeRemainingMs = () =>
+    Math.max(0, SCRAPE_BUDGET_MS - (Date.now() - scrapeBudgetStart));
+
   const lensBase64 = options?.imageBase64?.trim();
-  if (lensBase64 && process.env.APIFY_API_KEY?.trim()) {
+  if (lensBase64 && process.env.APIFY_API_KEY?.trim() && scrapeRemainingMs() > 0) {
     const lensStart = Date.now();
     console.log(
       "[MasterScraper] Stage 1: Google Lens visual exact-match (product-search + exactMatch)"
     );
     try {
+      const lensTimeoutMs = Math.min(
+        GOOGLE_LENS_PHASE_TIMEOUT_MS,
+        scrapeRemainingMs()
+      );
       const lensRaw = await withTimeout(
         scrapeGoogleLens(exactQuery, matchVision, {
           imageBase64: lensBase64,
           imageMimeType: options?.imageMimeType ?? "image/jpeg",
         }),
-        GOOGLE_LENS_PHASE_TIMEOUT_MS,
+        lensTimeoutMs,
         "googleLens-phase"
       );
 
@@ -609,8 +627,15 @@ export const scrapeProduct = async (
     }
   }
 
+  if (scrapeRemainingMs() <= 0) {
+    console.log(
+      `[MasterScraper] Scrape budget ${SCRAPE_BUDGET_MS}ms exhausted after Stage 1 — no Stage 2`
+    );
+    return null;
+  }
+
   console.log(
-    `[MasterScraper] Stage 2 keyword queries (${keywordQueries.length}):`,
+    `[MasterScraper] Stage 2 (${scrapeRemainingMs()}ms left) queries:`,
     keywordQueries.join(" | ")
   );
 
@@ -620,34 +645,14 @@ export const scrapeProduct = async (
       run: wrapParallelOptimizedQueries(
         "apify",
         scrapeApify,
-        expansionChain
+        keywordQueries
       ),
-    },
-    {
-      source: "ebay",
-      run: wrapParallelOptimizedQueries("ebay", scrapeEbay, keywordQueries),
     },
     {
       source: "google",
       run: wrapParallelOptimizedQueries(
         "google",
         scrapeGoogle,
-        keywordQueries
-      ),
-    },
-    {
-      source: "rapidapi",
-      run: wrapParallelOptimizedQueries(
-        "rapidapi",
-        scrapeRapidAPI,
-        keywordQueries
-      ),
-    },
-    {
-      source: "openai",
-      run: wrapParallelOptimizedQueries(
-        "openai",
-        runOpenAIScraper,
         keywordQueries
       ),
     },
