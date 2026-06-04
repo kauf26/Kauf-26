@@ -1,9 +1,11 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation } from "wouter";
 import ProductCamera from "./components/ProductCamera";
 
+const IDENTIFICATION_RESULTS_PAYLOAD_KEY = "identificationResultsPayload";
+
 const Welcome = () => {
- const navigate = useNavigate();
+ const [, setLocation] = useLocation();
  const [showCamera, setShowCamera] = useState(false);
 
  return (
@@ -25,7 +27,11 @@ const Welcome = () => {
          <div className="w-full h-full rounded-3xl overflow-hidden border-4 border-gray-100 shadow-2xl">
            {/* The component below should now initiate the camera feed immediately */}
            <ProductCamera onScrapeSuccess={(result) => {
-             navigate("/identification-results", { state: { productData: result } });
+             sessionStorage.setItem(
+               IDENTIFICATION_RESULTS_PAYLOAD_KEY,
+               JSON.stringify({ productData: result })
+             );
+             setLocation("/identification-results");
            }} />
          </div>
        ) : (
