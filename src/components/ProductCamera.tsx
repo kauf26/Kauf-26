@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { useLocation } from 'wouter';
+import { useNavigate } from 'react-router-dom';
 import { saveListingSession, type MatchType } from '@/lib/pendingAnalysis';
 
 const MAX_EXPORT_DIM = 1024;
@@ -181,7 +181,7 @@ interface ProductCameraProps {
 }
 
 const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
-  const [, setLocation] = useLocation();
+  const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -250,7 +250,7 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
       console.log('Draft saved with ID:', result.draftId);
     }
     onScrapeSuccess?.(result);
-    setLocation('/product-draft');
+    navigate('/product-draft');
   };
 
   const identify = async () => {

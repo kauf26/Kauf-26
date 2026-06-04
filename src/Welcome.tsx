@@ -1,7 +1,9 @@
 import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import ProductCamera from "./components/ProductCamera";
 
 const Welcome = () => {
+ const navigate = useNavigate();
  const [showCamera, setShowCamera] = useState(false);
 
  return (
@@ -22,7 +24,9 @@ const Welcome = () => {
        {showCamera ? (
          <div className="w-full h-full rounded-3xl overflow-hidden border-4 border-gray-100 shadow-2xl">
            {/* The component below should now initiate the camera feed immediately */}
-           <ProductCamera />
+           <ProductCamera onScrapeSuccess={(result) => {
+             navigate("/identification-results", { state: { productData: result } });
+           }} />
          </div>
        ) : (
          <img

@@ -20,6 +20,7 @@ import PricingPage from "./pages/pricing";
 import Terms from "./pages/terms";
 import Privacy from "./pages/privacy";
 import SettingsPage from "./pages/settings";
+import { IdentificationResultsPage } from "./pages/IdentificationResults";
 
 function App() {
   return (
@@ -30,6 +31,7 @@ function App() {
             <Switch>
               <Route path="/product-draft" component={ProductDraftPage} />
               <Route path="/select-marketplaces" component={SelectMarketPlaces} />
+              <Route path="/identification-results" component={IdentificationResultsPage} />
               <Route path="/dashboard" component={Dashboard} />
               <Route path="/inventory" component={Inventory} />
               <Route path="/listings" component={Listings} />

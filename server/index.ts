@@ -390,11 +390,11 @@ app.use("/api/marketplaces", marketplaceRoutes);
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const upload = multer({ storage: multer.memoryStorage() });
 
-/** vision ~1s + scrapers ~4s + buffer */
+/** vision ~10s + scrapers ~4s + buffer */
 const IDENTIFY_REQUEST_TIMEOUT_MS = Number(
   process.env.IDENTIFY_REQUEST_TIMEOUT_MS ?? 6_000
 );
-const VISION_TIMEOUT_MS = Number(process.env.VISION_TIMEOUT_MS ?? 1_000);
+const VISION_TIMEOUT_MS = Number(process.env.VISION_TIMEOUT_MS ?? 10_000);
 const SCRAPE_CALL_TIMEOUT_MS = Number(process.env.SCRAPE_CALL_TIMEOUT_MS ?? 4_000);
 
 function applyScrapeMeta(
