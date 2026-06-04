@@ -6,12 +6,19 @@ import { scrapeProduct as scrapeApify } from "./apify";
 import { scrapeProduct as scrapeGoogle } from "./googleShopping";
 import { scrapeProduct as scrapeRapidAPI } from "./rapidapi";
 import { scrapeProduct as scrapeEbay } from "./ebayBrowse";
-import { scrapeProduct as scrapeGoogleLens } from "./googleLens";
+import {
+  scrapeProduct as scrapeGoogleLens,
+  lensVisualExactProduct,
+} from "./googleLens";
 import {
   buildBroadMarketplaceQuery,
   buildExactMarketplaceQuery,
 } from "./marketplaceQuery";
 import { buildQueryExpansionChain } from "./queryExpansion";
+import {
+  extractModelNumbers,
+  optimizeSearchTerm,
+} from "./searchOptimizer";
 import {
   GLOBAL_EXACT_RACE_TIMEOUT_MS,
   raceScrapersForExactMatch,
@@ -21,7 +28,12 @@ import {
   isAbortError,
   type ScraperRunOptions,
 } from "./scraperOptions";
-import type { ListingRankDiagnostic } from "./visionMatch";
+import {
+  buildMatchContext,
+  EXACT_MATCH_MIN_RANK,
+  listingExactRank,
+  type ListingRankDiagnostic,
+} from "./visionMatch";
 import {
   brandsConflict,
   scoreScraperCandidate,
@@ -102,6 +114,14 @@ export function scoreResult(
   if (scraperData.isExactMatch === true) {
     score += 60;
     reasons.push("exact_match_priority");
+  }
+
+  if (
+    scraperData.scraperSource === "googleLens" ||
+    scraperData.visualSearchLead === true
+  ) {
+    score += 70;
+    reasons.push("visual_search_lead");
   }
 
   return { score, reasons };
@@ -222,6 +242,9 @@ function buildExactProduct(
     allegroAvg: parsePrice(data.allegroAvg ?? data.price),
     ebayAvg: parsePrice(data.ebayAvg ?? data.ebayPrice ?? data.price),
     description: buildListingDescription(data, String(data.title ?? query)),
+    productUrl: String(
+      data.productUrl ?? data.url ?? data.link ?? ""
+    ).trim(),
     isExactMatch: true,
     matchType: "exact" satisfies MatchType,
     scraperSource: data.scraperSource,
@@ -255,6 +278,9 @@ export function mergeSimilarProduct(
     allegroAvg,
     ebayAvg,
     description,
+    productUrl: String(
+      scraped.productUrl ?? scraped.url ?? scraped.link ?? ""
+    ).trim(),
     isExactMatch: false,
     matchType: "similar" satisfies MatchType,
     scraperSource: scraped.scraperSource,
@@ -425,39 +451,118 @@ async function runScraperWithRetry(
   };
 }
 
+/** Keyword scrapers: fire each optimized query in parallel, keep best / first exact */
+function wrapParallelOptimizedQueries(
+  source: ScraperSource,
+  run: ScraperRunner["run"],
+  queryStrings: string[]
+): ScraperRunner["run"] {
+  if (source === "apify") {
+    return async (primary, vision, opts) =>
+      run(primary, vision, { ...opts, queryChain: queryStrings });
+  }
+
+  return async (_primary, vision, opts) => {
+    const ctx: VisionMatchContext = vision ?? {
+      visionTitle: _primary,
+      visionBrand: "",
+    };
+    if (queryStrings.length === 0) return null;
+    if (queryStrings.length === 1) {
+      return run(queryStrings[0], ctx, opts);
+    }
+
+    const outcomes = await Promise.all(
+      queryStrings.map(async (q) => {
+        try {
+          return await run(q, ctx, opts);
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    let best: Record<string, unknown> | null = null;
+    let bestScore = -1;
+
+    for (const raw of outcomes) {
+      if (!raw || !validateProduct(raw)) continue;
+      if (raw.isExactMatch === true) return raw;
+      const { score } = scoreResult(ctx, raw);
+      if (score > bestScore) {
+        bestScore = score;
+        best = raw;
+      }
+    }
+    return best;
+  };
+}
+
 export const scrapeProduct = async (
   query: string,
   options?: ScrapeOptions
 ): Promise<Record<string, unknown> | null> => {
-  const vision: VisionMatchContext = options?.vision ?? {
+  const visionInput: VisionMatchContext = options?.vision ?? {
     visionTitle: query,
     visionBrand: "",
   };
+  const optimizedQueries = optimizeSearchTerm(
+    visionInput.visionTitle || query,
+    visionInput.visionBrand
+  );
+  const modelNumbers = extractModelNumbers(
+    visionInput.visionTitle || query
+  );
+  const matchVision = buildMatchContext(
+    visionInput.visionTitle,
+    visionInput.visionBrand,
+    {
+      ...visionInput,
+      modelNumbers,
+    }
+  );
+
   const manualQuery = options?.searchQuery?.trim();
   const exactQuery =
-    manualQuery || buildExactMarketplaceQuery(query, vision.visionBrand);
-  const broadQuery = buildBroadMarketplaceQuery(query, vision.visionBrand);
-  const expansionChain = manualQuery
+    manualQuery || buildExactMarketplaceQuery(query, matchVision.visionBrand);
+  const broadQuery = buildBroadMarketplaceQuery(query, matchVision.visionBrand);
+
+  const keywordQueries = manualQuery
     ? [
         manualQuery,
-        ...buildQueryExpansionChain(query, vision.visionBrand).filter(
+        ...optimizedQueries.filter(
           (q) => q.toLowerCase() !== manualQuery.toLowerCase()
         ),
-      ]
-    : buildQueryExpansionChain(query, vision.visionBrand);
+      ].slice(0, 3)
+    : optimizedQueries.length > 0
+      ? optimizedQueries
+      : buildQueryExpansionChain(query, matchVision.visionBrand).slice(0, 3);
 
-  const queryPlan = { exact: exactQuery, broad: broadQuery, expansionChain };
+  const expansionChain = [
+    ...keywordQueries,
+    ...buildQueryExpansionChain(query, matchVision.visionBrand).filter(
+      (q) => !keywordQueries.some((o) => o.toLowerCase() === q.toLowerCase())
+    ),
+  ];
+
+  const queryPlan = {
+    exact: exactQuery,
+    broad: broadQuery,
+    optimized: keywordQueries,
+    modelNumbers,
+    expansionChain,
+  };
   console.log("[MasterScraper] Search plan:", JSON.stringify(queryPlan, null, 2));
 
   const lensBase64 = options?.imageBase64?.trim();
   if (lensBase64 && process.env.APIFY_API_KEY?.trim()) {
     const lensStart = Date.now();
     console.log(
-      "[MasterScraper] Phase 0: Google Lens (products mode) — priority before keyword scrapers"
+      "[MasterScraper] Stage 1: Google Lens visual exact-match (product-search + exactMatch)"
     );
     try {
       const lensRaw = await withTimeout(
-        scrapeGoogleLens(exactQuery, vision, {
+        scrapeGoogleLens(exactQuery, matchVision, {
           imageBase64: lensBase64,
           imageMimeType: options?.imageMimeType ?? "image/jpeg",
         }),
@@ -465,43 +570,39 @@ export const scrapeProduct = async (
         "googleLens-phase"
       );
 
-      if (lensRaw && validateProduct(lensRaw)) {
+      if (lensRaw && lensVisualExactProduct(lensRaw)) {
         const listingBrand = String(lensRaw.brand ?? "");
-        if (!brandsConflict(vision.visionBrand, listingBrand)) {
-          if (lensRaw.isExactMatch === true) {
-            const lensMs = Date.now() - lensStart;
-            console.log(
-              `[MasterScraper] WINNER (exact match) from googleLens in ${lensMs}ms — skipping keyword scrapers`
-            );
-            const scored = scoreResult(vision, lensRaw);
-            const meta = {
-              timedOut: false,
-              matchConfidence: confidenceFromScore(scored.score),
-              matchScore: scored.score,
-            };
-            const result = buildExactProduct(
-              { ...lensRaw, scraperSource: "googleLens" },
-              query
-            );
-            return attachScrapeMeta(result, meta);
-          }
+        if (!brandsConflict(matchVision.visionBrand, listingBrand)) {
+          const lensMs = Date.now() - lensStart;
           console.log(
-            `[MasterScraper] Google Lens finished in ${Date.now() - lensStart}ms — similar only, running keyword scrapers`
+            `[MasterScraper] Stage 1 WIN — googleLens product URL in ${lensMs}ms; skipping keyword scrapers`
           );
-        } else {
-          console.warn(
-            "[MasterScraper] Google Lens brand conflict with vision — running keyword scrapers"
-          );
+          const lensLead = {
+            ...lensRaw,
+            scraperSource: "googleLens",
+            visualSearchLead: true,
+            isExactMatch: true,
+            matchType: "exact",
+          };
+          const scored = scoreResult(matchVision, lensLead);
+          return attachScrapeMeta(buildExactProduct(lensLead, query), {
+            timedOut: false,
+            matchConfidence: confidenceFromScore(scored.score),
+            matchScore: scored.score,
+          });
         }
+        console.warn(
+          "[MasterScraper] Google Lens brand conflict — Stage 2 keyword race"
+        );
       } else {
         console.log(
-          `[MasterScraper] Google Lens no valid product (${Date.now() - lensStart}ms) — running keyword scrapers`
+          `[MasterScraper] Stage 1: no visual product URL (${Date.now() - lensStart}ms) — Stage 2`
         );
       }
     } catch (err) {
       if (!isAbortError(err)) {
         console.warn(
-          "[MasterScraper] Google Lens phase failed:",
+          "[MasterScraper] Google Lens failed:",
           err instanceof Error ? err.message : err
         );
       }
@@ -509,30 +610,61 @@ export const scrapeProduct = async (
   }
 
   console.log(
-    `[MasterScraper] Per-scraper primary query: apify=expansion(${expansionChain.length}), ebay/google/rapidapi="${exactQuery}"`
+    `[MasterScraper] Stage 2 keyword queries (${keywordQueries.length}):`,
+    keywordQueries.join(" | ")
   );
 
   const runners: ScraperRunner[] = [
-    { source: "apify", run: scrapeApify },
-    { source: "ebay", run: scrapeEbay },
-    { source: "google", run: scrapeGoogle },
-    { source: "rapidapi", run: scrapeRapidAPI },
-    { source: "openai", run: runOpenAIScraper },
+    {
+      source: "apify",
+      run: wrapParallelOptimizedQueries(
+        "apify",
+        scrapeApify,
+        expansionChain
+      ),
+    },
+    {
+      source: "ebay",
+      run: wrapParallelOptimizedQueries("ebay", scrapeEbay, keywordQueries),
+    },
+    {
+      source: "google",
+      run: wrapParallelOptimizedQueries(
+        "google",
+        scrapeGoogle,
+        keywordQueries
+      ),
+    },
+    {
+      source: "rapidapi",
+      run: wrapParallelOptimizedQueries(
+        "rapidapi",
+        scrapeRapidAPI,
+        keywordQueries
+      ),
+    },
+    {
+      source: "openai",
+      run: wrapParallelOptimizedQueries(
+        "openai",
+        runOpenAIScraper,
+        keywordQueries
+      ),
+    },
   ];
 
   console.log(
-    `[MasterScraper] Racing ${runners.length} scrapers for exact match (global timeout ${GLOBAL_EXACT_RACE_TIMEOUT_MS}ms):`,
+    `[MasterScraper] Stage 2 race (${runners.length} scrapers, timeout ${GLOBAL_EXACT_RACE_TIMEOUT_MS}ms):`,
     runners.map((r) => r.source).join(", ")
   );
 
   const race = await raceScrapersForExactMatch(
     runners,
     exactQuery,
-    vision,
+    matchVision,
     (source, run, q, v, opts) =>
       runScraperWithRetry(source, run, q, v, opts),
-    (source) =>
-      source === "apify" ? { queryChain: expansionChain } : {},
+  () => ({}),
     scoreResult
   );
 
@@ -547,7 +679,7 @@ export const scrapeProduct = async (
   const anyScraperTimedOut = race.anyTimedOut;
 
   if (candidates.length === 0) {
-    logNoExactMatchWarning(vision, queryPlan, null, []);
+    logNoExactMatchWarning(matchVision, queryPlan, null, []);
     console.log(
       "[MasterScraper] No scraper returned vision-consistent data — caller should use vision fallback",
       anyScraperTimedOut ? "(some scrapers timed out)" : ""
@@ -555,7 +687,29 @@ export const scrapeProduct = async (
     return null;
   }
 
-  const winner = race.exactWinner ?? candidates[0];
+  let winner = race.exactWinner ?? candidates[0];
+  let raw = winner.product;
+
+  if (raw.isExactMatch !== true) {
+    const rank = listingExactRank(
+      {
+        title: String(raw.title ?? ""),
+        brand: String(raw.brand ?? ""),
+        description: String(raw.description ?? ""),
+        url: String(raw.productUrl ?? raw.url ?? raw.link ?? ""),
+        price: raw.price,
+      },
+      matchVision
+    );
+    if (rank >= EXACT_MATCH_MIN_RANK) {
+      raw = { ...raw, isExactMatch: true, matchType: "exact" };
+      winner = { ...winner, product: raw };
+      console.log(
+        `[MasterScraper] Stage 2 exact via rank=${rank} (threshold ${EXACT_MATCH_MIN_RANK})`
+      );
+    }
+  }
+
   const matchScore = winner.score;
   const matchConfidence = confidenceFromScore(matchScore);
 
@@ -583,7 +737,7 @@ export const scrapeProduct = async (
     matchScore,
   };
 
-  let raw = winner.product;
+  raw = winner.product;
   if (
     matchScore < HIGH_CONFIDENCE_THRESHOLD &&
     raw.isExactMatch !== true
@@ -594,7 +748,7 @@ export const scrapeProduct = async (
     raw = { ...raw, isExactMatch: false, matchType: "similar" };
   }
 
-  logNoExactMatchWarning(vision, queryPlan, raw, candidates);
+  logNoExactMatchWarning(matchVision, queryPlan, raw, candidates);
 
   if (raw.isExactMatch === true) {
     const result = buildExactProduct(raw, query);
@@ -612,7 +766,7 @@ export const scrapeProduct = async (
   }
 
   const result = mergeSimilarProduct(raw, {
-    visionTitle: vision.visionTitle,
+    visionTitle: matchVision.visionTitle,
     visionCategory: undefined,
   });
   console.log("[MasterScraper] Price stats:", {

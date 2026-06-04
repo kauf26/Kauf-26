@@ -63,8 +63,10 @@ export type ListingSession = {
     isExactMatch?: boolean;
     matchType?: MatchType;
     priceReliable?: boolean;
+    productUrl?: string;
   };
   title: string;
+  productUrl?: string;
   description: string;
   price: string;
   brand: string;
@@ -116,11 +118,15 @@ export function parseListingSession(raw: unknown): ListingSession | null {
     isExactMatch: Boolean(data.isExactMatch ?? p.isExactMatch ?? false),
     matchType: resolveMatchType(data, p),
     priceReliable: resolvePriceReliable(data, p, price),
+    productUrl: String(
+      p.productUrl ?? data.productUrl ?? p.url ?? data.url ?? ""
+    ).trim(),
   };
 
   return {
     ...product,
     product,
+    productUrl: product.productUrl,
     matchType: product.matchType,
     priceReliable: product.priceReliable,
   };

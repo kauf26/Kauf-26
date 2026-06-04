@@ -150,7 +150,7 @@ export async function scrapeProduct(
         brand: context?.visionBrand?.trim() ?? "",
         price: it.price?.value,
         description: String(it.shortDescription ?? "").trim(),
-        category: "Watches",
+        category: "",
         condition: String(it.condition ?? "").trim(),
         url: String(it.itemWebUrl ?? "").trim(),
       }))

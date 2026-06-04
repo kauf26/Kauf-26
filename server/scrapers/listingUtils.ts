@@ -1,11 +1,15 @@
 /** Shared helpers: multi-listing price median + vision-based exact/similar scoring */
 
 import {
+  computePriceBand,
+  isProductPageUrl,
   listingExactRank,
   logListingRankDiagnostics,
+  normalizeText,
   scoreListingMatch,
   tokenOverlapRatio,
   topSimilarListings,
+  type PriceBand,
 } from "./visionMatch";
 
 export {
@@ -49,6 +53,12 @@ export type RawListing = {
 export type VisionMatchContext = {
   visionTitle: string;
   visionBrand?: string;
+  /** Model / reference numbers from search optimizer (e.g. b13050) */
+  modelNumbers?: string[];
+  /** Dynamic band from peer listing prices in this scrape batch */
+  priceBand?: PriceBand | null;
+  /** Google Lens or other visual search — boost ranking */
+  visualSearchLead?: boolean;
 };
 
 const STOP_WORDS = new Set([
@@ -207,6 +217,26 @@ export function scoreScraperCandidate(
     reasons.push("model_number_in_title");
   }
 
+  const modelNumbers = vision.modelNumbers ?? [];
+  const titleNorm = normalizeText(title);
+  if (
+    modelNumbers.some(
+      (m) => m.length >= 4 && titleNorm.includes(m.toLowerCase())
+    )
+  ) {
+    score += 28;
+    reasons.push("optimizer_model_in_title");
+  }
+
+  const listingUrl = String(product.url ?? product.link ?? "");
+  if (isProductPageUrl(listingUrl)) {
+    score += 22;
+    reasons.push("product_page_url");
+  } else if (listingUrl && /\/search(\?|$)/i.test(listingUrl)) {
+    score -= 15;
+    reasons.push("search_results_url");
+  }
+
   const price = parseListingPrice(product.price);
   if (price > 0) {
     score += 8;
@@ -245,9 +275,20 @@ export function aggregateListings(
 ): Record<string, unknown> | null {
   if (!items.length) return null;
 
-  const matchCtx: VisionMatchContext = ctx ?? {
+  const baseCtx: VisionMatchContext = ctx ?? {
     visionTitle: query,
     visionBrand: "",
+  };
+
+  const peerPrices = items
+    .map((item) => parseListingPrice(item.price))
+    .filter((p) => p > 0);
+  const priceBand =
+    baseCtx.priceBand ?? computePriceBand(peerPrices) ?? null;
+
+  const matchCtx: VisionMatchContext = {
+    ...baseCtx,
+    priceBand,
   };
 
   const scored = items.map((item) => ({

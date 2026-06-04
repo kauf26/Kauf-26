@@ -83,6 +83,7 @@ type ScrapedListing = ScrapedProduct & {
   allegroAvg?: string | number;
   ebayAvg?: string | number;
   scraperSource?: string;
+  productUrl?: string;
   verificationWarning?: string;
   timedOut?: boolean;
   matchConfidence?: "low" | "medium" | "high";
@@ -95,8 +96,7 @@ CRITICAL:
 - Identify ONLY the main physical product in focus (any item: apparel, electronics, home goods, toys, sports gear, tools, etc.).
 - IGNORE background clutter not part of the product.
 - USE text/logos printed ON the product (brand names, venue names, team names) for brand and title when they identify the item.
-- If you see a luxury watch brand name (e.g., Breitling, Rolex, Omega, Tag Heuer) on the dial or engraved, extract that as the brand and include it in the title (e.g. "Breitling Navitimer B13050").
-- Pay attention to any small text, serial numbers, or logos on the product – these are critical for exact match identification (e.g. watch dial text, model numbers, engraved markings).
+- Pay attention to any small text, serial numbers, model numbers, or logos on the product — include them in the title when legible.
 - Mentally "zoom in" on the sharpest legible text and logos; prefer readings from those details over guessing from shape alone.
 - Use a specific descriptive title for the actual product (brand + model when visible), not vague scene descriptions like "analog pilot watch" when a brand name is visible.
 
@@ -115,7 +115,7 @@ Return ONLY valid JSON:
 }
 
 Guidance:
-- Pick an accurate category (e.g. mug → Home & Kitchen; luxury watch → Watches).
+- Pick an accurate marketplace category for the item type (e.g. mug → Home & Kitchen; phone → Electronics).
 - Do NOT invent a conservative or placeholder price. Use null when resale value is unknown — marketplace scrapers will supply price.
 - Infer material from visible texture (glazed ceramic, stainless steel, cotton fabric).
 - Include color and style in description when helpful; keep description factual, not generic filler.
@@ -135,7 +135,7 @@ Ceramic mug: { "title": "Two-Tone Ceramic Mug", "brand": "", "category": "Home &
 
 Cleaning cloth (blurry/generic): { "title": "Eyeglass cleaning cloth", "brand": "", "category": "Accessories", "condition": "Used", "price": 0, "confidence": "low", "material": "microfiber", "color": "", "style": "", "description": "Soft microfiber cloth for cleaning eyeglasses." }
 
-Luxury watch: { "title": "Breitling Navitimer B13050", "brand": "Breitling", "category": "Watches", "condition": "Used", "price": null, "confidence": "high", "description": "..." }`;
+Mug example: { "title": "Starbucks 16oz Ceramic Mug", "brand": "Starbucks", "category": "Home & Kitchen", "condition": "Used", "price": null, "confidence": "high", "description": "..." }`;
 
 function parseVisionResponse(content: string): VisionProduct | null {
   const trimmed = content.trim();
@@ -298,35 +298,6 @@ function buildGenericFromVision(
     verificationWarning:
       warning ??
       "No marketplace listing matched vision — manual verification recommended.",
-  };
-}
-
-const LOW_COST_CATEGORY_KEYWORDS = ["accessories", "clothing", "toys", "apparel"];
-
-function isLowCostCategory(category: string): boolean {
-  const c = category.toLowerCase();
-  return LOW_COST_CATEGORY_KEYWORDS.some((k) => c.includes(k));
-}
-
-function applyPriceSanityCheck(
-  listing: ScrapedListing,
-  vision: VisionProduct
-): ScrapedListing {
-  const category = coalesceCategory(listing.category, vision.category);
-  const cat = category.toLowerCase();
-  if (cat.includes("watch")) return listing;
-  const priceNum = parseFloat(String(listing.price ?? 0)) || 0;
-  if (!isLowCostCategory(category) || priceNum <= 50) return listing;
-  console.warn(
-    `[Identify] Price sanity: ${priceNum} → 0 for low-cost category "${category}"`
-  );
-  return {
-    ...listing,
-    price: 0,
-    allegroAvg: 0,
-    ebayAvg: 0,
-    isExactMatch: false,
-    matchType: "generic",
   };
 }
 
@@ -560,12 +531,11 @@ app.post(
        );
      } else {
        listings = applyScrapeMeta(
-         applyPriceSanityCheck(
-           mergeListingWithVision(scrapedRaw, vision),
-           vision
-         ),
+         mergeListingWithVision(scrapedRaw, vision),
          scrapedRaw
        );
+       const scrapedUrl = String(scrapedRaw.productUrl ?? "").trim();
+       if (scrapedUrl) listings.productUrl = scrapedUrl;
        if (scrapedRaw.scraperSource) {
          listings.scraperSource = String(scrapedRaw.scraperSource);
        }
@@ -664,6 +634,7 @@ app.post(
      confidence: listings.matchConfidence ?? "low",
      scraperSource: listings.scraperSource ?? null,
      verificationWarning: listings.verificationWarning ?? null,
+     productUrl: listings.productUrl ?? "",
      product: {
        title: listings.title ?? searchQuery,
        description: listings.description ?? vision.description ?? "",
@@ -681,6 +652,7 @@ app.post(
        allegroAvg: market.allegroAvg,
        ebayAvg: market.ebayAvg,
        capturedImage,
+       productUrl: listings.productUrl ?? "",
        isExactMatch,
        matchType,
        scraperSource: listings.scraperSource,

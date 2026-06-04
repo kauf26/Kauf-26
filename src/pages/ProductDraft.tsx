@@ -20,6 +20,7 @@ condition: string;
 modelNumber: string;
 material: string;
 color: string;
+productUrl: string;
 allegroAverage: string;
 ebayAverage: string;
 capturedImage: string;
@@ -51,9 +52,10 @@ description: "Detailed product description goes here...",
 price: "0.00",
 category: "",
 condition: "New",
-modelNumber: "N/A",
+modelNumber: "",
 material: "",
 color: "",
+productUrl: "",
 allegroAverage: "0.00",
 ebayAverage: "0.00",
 capturedImage: "",
@@ -73,8 +75,13 @@ function isPriceUnset(value: string): boolean {
 }
 
 function formatPriceDisplay(value: string): string {
-  if (isPriceUnset(value)) return "Price not available";
+  if (isPriceUnset(value)) return "Price not found";
   return `$${formatPrice(value)}`;
+}
+
+function displayOrUnavailable(value: string): string {
+  const s = value.trim();
+  return s || "Not available";
 }
 
 function formatMarketAvg(value: string): string {
@@ -143,9 +150,16 @@ useEffect(() => {
       price: listing.price,
       category: listing.category || DEFAULT_PRODUCT.category,
       condition: normalizeConditionForSelect(listing.condition),
-      modelNumber: DEFAULT_PRODUCT.modelNumber,
+      modelNumber: String(
+        (listing as { modelNumber?: string }).modelNumber ??
+          (listing as { refNumber?: string }).refNumber ??
+          ""
+      ).trim(),
       material: (listing.material ?? listing.product.material ?? "").trim(),
       color: (listing.color ?? listing.product.color ?? "").trim(),
+      productUrl: String(
+        listing.productUrl ?? listing.product.productUrl ?? ""
+      ).trim(),
       allegroAverage: listing.product.allegroAvg,
       ebayAverage: listing.product.ebayAvg,
       capturedImage: listing.capturedImage,
@@ -177,6 +191,7 @@ const handleContinue = async () => {
     condition: product.condition,
     material: product.material,
     color: product.color,
+    productUrl: product.productUrl,
     capturedImage: product.capturedImage,
     priceReliable: product.priceReliable,
     isExactMatch: product.isExactMatch,
@@ -190,6 +205,7 @@ const handleContinue = async () => {
       condition: product.condition,
       material: product.material,
       color: product.color,
+      productUrl: product.productUrl,
       capturedImage: product.capturedImage,
       priceReliable: product.priceReliable,
       allegroAvg: product.allegroAverage,
@@ -253,6 +269,9 @@ const applyScrapeResult = (data: Record<string, unknown>) => {
     description: String(data.description ?? p.description),
     price: priceStr,
     category: String(data.category ?? p.category) || p.category,
+    productUrl: String(
+      data.productUrl ?? data.url ?? data.link ?? p.productUrl
+    ).trim(),
     condition: normalizeConditionForSelect(
       String(data.condition ?? p.condition)
     ),
@@ -411,7 +430,26 @@ return (
         </div>
         <div>
           <dt className="text-zinc-500">Category</dt>
-          <dd className="font-medium text-zinc-100">{product.category || "—"}</dd>
+          <dd className="font-medium text-zinc-100">
+            {displayOrUnavailable(product.category)}
+          </dd>
+        </div>
+        <div className="sm:col-span-2">
+          <dt className="text-zinc-500">Product URL</dt>
+          <dd className="font-medium text-zinc-100 break-all">
+            {product.productUrl ? (
+              <a
+                href={product.productUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-400 hover:underline"
+              >
+                {product.productUrl}
+              </a>
+            ) : (
+              "Not available"
+            )}
+          </dd>
         </div>
         <div className="sm:col-span-2">
           <dt className="text-zinc-500">Condition</dt>

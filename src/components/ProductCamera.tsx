@@ -108,8 +108,10 @@ type IdentifyApiResponse = {
     isExactMatch?: boolean;
     matchType?: MatchType;
     priceReliable?: boolean;
+    productUrl?: string;
     matchConfidence?: MatchConfidence;
   };
+  productUrl?: string;
   priceReliable?: boolean;
 };
 
@@ -144,6 +146,7 @@ function persistPendingAnalysisFromIdentify(result: IdentifyApiResponse) {
     isExactMatch,
     matchType,
     priceReliable: result.priceReliable === true || p.priceReliable === true,
+    productUrl: String(result.productUrl ?? p.productUrl ?? "").trim(),
     product: {
       title: p.title ?? '',
       description: p.description ?? '',
@@ -160,6 +163,7 @@ function persistPendingAnalysisFromIdentify(result: IdentifyApiResponse) {
       isExactMatch,
       matchType,
       priceReliable: result.priceReliable === true || p.priceReliable === true,
+      productUrl: String(result.productUrl ?? p.productUrl ?? "").trim(),
     },
   });
   if (result.draftId != null) {

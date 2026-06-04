@@ -1,9 +1,9 @@
 /**
  * Vision ↔ listing matching with no product-category or brand allowlists.
- * Uses only what vision returns (title, brand) and scraper row content.
  */
 
 import type { RawListing, VisionMatchContext } from "./listingUtils";
+import { extractModelNumbers } from "./searchOptimizer";
 
 const STOP_WORDS = new Set([
   "with",
@@ -30,15 +30,21 @@ const CATEGORY_TITLE_RE =
   /\b(collections?\s+online|shop\s+all|all\s+\w+\s+(online|for\s+sale)|buy\s+the\s+\w+\s+(collections?|online))\b/i;
 
 const CATEGORY_URL_RE =
-  /\/(collections?|categories?|catalog|shop)\/|index\.htm(l)?(\?|$)|\/search\?/i;
+  /\/(collections?|categories?|catalog|shop)\/|index\.htm(l)?(\?|$)|\/search(\?|$)/i;
 
-const PRODUCT_URL_RE =
-  /\/(item|listing|product|p|dp|itm|offer|sku|goods)\/|\/\d{6,}|[?&](item|product|sku)=/i;
+/** Product listing pages (ebay /itm/, amazon /dp/, etc.) */
+export const PRODUCT_URL_RE =
+  /\/(item|listing|product|p|dp|itm|offer|sku|goods)\b|\/\d{6,}|[?&](item|product|sku)=/i;
 
-/** Minimum listingExactRank to treat a row as exact (tunable via env) */
 export const EXACT_MATCH_MIN_RANK = Number(
   process.env.EXACT_MATCH_MIN_RANK ?? 42
 );
+
+export type PriceBand = {
+  min: number;
+  max: number;
+  median: number;
+};
 
 export function normalizeText(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").trim();
@@ -69,6 +75,59 @@ export function extractReferenceNumbers(text: string): string[] {
   return [...refs];
 }
 
+export function buildMatchContext(
+  visionTitle: string,
+  visionBrand?: string,
+  extras?: Partial<VisionMatchContext>
+): VisionMatchContext {
+  const modelNumbers =
+    extras?.modelNumbers?.length
+      ? extras.modelNumbers
+      : extractModelNumbers(visionTitle);
+
+  return {
+    visionTitle,
+    visionBrand: visionBrand?.trim() ?? "",
+    modelNumbers,
+    priceBand: extras?.priceBand ?? null,
+    visualSearchLead: extras?.visualSearchLead ?? false,
+  };
+}
+
+/** Dynamic acceptable price range from scraped listing prices */
+export function computePriceBand(prices: number[]): PriceBand | null {
+  const valid = prices.filter((p) => p > 0).sort((a, b) => a - b);
+  if (valid.length < 2) return null;
+
+  const mid = Math.floor(valid.length / 2);
+  const median =
+    valid.length % 2 === 0
+      ? (valid[mid - 1] + valid[mid]) / 2
+      : valid[mid];
+
+  const min = Math.max(1, median * 0.2);
+  const max = median * 5;
+
+  return { min, max, median };
+}
+
+export function parseListingPriceValue(price: unknown): number {
+  const str = String(price ?? "").replace(/[^0-9.]/g, "");
+  const parsed = parseFloat(str);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function titleContainsModelNumber(
+  blob: string,
+  modelNumbers: string[]
+): boolean {
+  const norm = normalizeText(blob);
+  return modelNumbers.some((m) => {
+    const token = m.toLowerCase();
+    return token.length >= 4 && norm.includes(token);
+  });
+}
+
 export function tokenOverlapRatio(
   visionTitle: string,
   visionBrand: string,
@@ -81,7 +140,6 @@ export function tokenOverlapRatio(
   return hits / tokens.length;
 }
 
-/** Category / hub pages — not a specific product row */
 export function isCategoryListing(
   listing: Pick<RawListing, "title" | "description" | "url">,
   ctx: VisionMatchContext
@@ -116,7 +174,22 @@ export function isCategoryListing(
   return false;
 }
 
-/** 0–100 similarity of listing to vision (higher = more exact) */
+export function isProductPageUrl(url: string): boolean {
+  if (!url) return false;
+  return PRODUCT_URL_RE.test(url);
+}
+
+function scorePriceAgainstBand(
+  price: number,
+  band: PriceBand | null | undefined
+): number {
+  if (!band || price <= 0) return 0;
+  if (price >= band.min && price <= band.max) return 18;
+  if (price >= band.min * 0.5 && price <= band.max * 1.5) return 8;
+  return -30;
+}
+
+/** 0–100 — higher = more likely exact match */
 export function listingExactRank(
   listing: RawListing,
   ctx: VisionMatchContext
@@ -124,33 +197,48 @@ export function listingExactRank(
   if (isCategoryListing(listing, ctx)) return 0;
 
   const blob = `${listing.title ?? ""} ${listing.description ?? ""}`;
+  const normBlob = normalizeText(blob);
   const visionBrand = normalizeText(ctx.visionBrand ?? "");
+  const modelNumbers =
+    ctx.modelNumbers?.length
+      ? ctx.modelNumbers
+      : extractModelNumbers(ctx.visionTitle);
+
   let rank = 0;
+
+  if (ctx.visualSearchLead) rank += 15;
 
   const overlap = tokenOverlapRatio(
     ctx.visionTitle,
     ctx.visionBrand ?? "",
     blob
   );
-  rank += Math.round(overlap * 55);
+  rank += Math.round(overlap * 45);
 
-  if (visionBrand && normalizeText(blob).includes(visionBrand)) {
-    rank += 20;
+  if (visionBrand && normBlob.includes(visionBrand)) {
+    rank += 18;
   }
 
-  for (const ref of extractReferenceNumbers(ctx.visionTitle)) {
-    if (normalizeText(blob).includes(ref)) rank += 45;
+  if (titleContainsModelNumber(blob, modelNumbers)) {
+    rank += 55;
+  } else {
+    for (const ref of extractReferenceNumbers(ctx.visionTitle)) {
+      if (normBlob.includes(ref)) rank += 35;
+    }
   }
 
   const url = String(listing.url ?? "");
-  if (url && PRODUCT_URL_RE.test(url)) rank += 8;
-
-  const priceStr = String(listing.price ?? "");
-  if (priceStr && parseFloat(priceStr.replace(/[^0-9.]/g, "")) > 0) {
-    rank += 5;
+  if (url && isProductPageUrl(url)) {
+    rank += 32;
+  } else if (url && CATEGORY_URL_RE.test(url)) {
+    rank -= 25;
   }
 
-  return Math.min(100, rank);
+  const price = parseListingPriceValue(listing.price);
+  rank += scorePriceAgainstBand(price, ctx.priceBand);
+  if (price > 0) rank += 5;
+
+  return Math.min(100, Math.max(0, rank));
 }
 
 export function isExactListing(
@@ -177,7 +265,6 @@ export type ListingRankDiagnostic = {
   matchType: "exact" | "similar";
 };
 
-/** Log per-row exact rank for debugging (first N listings). */
 export function logListingRankDiagnostics(
   listings: RawListing[],
   ctx: VisionMatchContext,
@@ -187,10 +274,15 @@ export function logListingRankDiagnostics(
   const limit = opts?.limit ?? 5;
 
   console.log(
-    `[${label}] EXACT_MATCH_MIN_RANK=${EXACT_MATCH_MIN_RANK} visionTitle="${ctx.visionTitle}" visionBrand="${ctx.visionBrand ?? ""}"`
+    `[${label}] EXACT_MATCH_MIN_RANK=${EXACT_MATCH_MIN_RANK} visionTitle="${ctx.visionTitle}" modelNumbers=[${(ctx.modelNumbers ?? []).join(", ")}]`
   );
   if (opts?.searchQuery) {
     console.log(`[${label}] searchQuery="${opts.searchQuery}"`);
+  }
+  if (ctx.priceBand) {
+    console.log(
+      `[${label}] priceBand=$${ctx.priceBand.min.toFixed(0)}–$${ctx.priceBand.max.toFixed(0)} (median $${ctx.priceBand.median.toFixed(0)})`
+    );
   }
 
   const diagnostics: ListingRankDiagnostic[] = [];
@@ -216,7 +308,7 @@ export function logListingRankDiagnostics(
     });
 
     console.log(
-      `[${label}] row ${i + 1}/${Math.min(limit, listings.length)}: exactRank=${rank} meetsThreshold=${meets} (${matchType}) | title="${row.title ?? ""}" | brand="${brand || "—"}" | price=${price}`
+      `[${label}] row ${i + 1}/${Math.min(limit, listings.length)}: exactRank=${rank} meetsThreshold=${meets} (${matchType}) productUrl=${isProductPageUrl(String(row.url ?? ""))} | title="${row.title ?? ""}" | price=${price}`
     );
   });
 
@@ -227,7 +319,6 @@ export function logListingRankDiagnostics(
   return diagnostics;
 }
 
-/** Top similar rows when nothing crosses exact threshold */
 export function topSimilarListings(
   listings: RawListing[],
   ctx: VisionMatchContext,

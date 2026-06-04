@@ -2,6 +2,7 @@ import {
   buildBroadMarketplaceQuery,
   buildExactMarketplaceQuery,
 } from "./marketplaceQuery";
+import { optimizeSearchTerm } from "./searchOptimizer";
 import { extractReferenceNumbers, significantTokens } from "./visionMatch";
 
 function dedupeQueries(queries: string[]): string[] {
@@ -29,6 +30,10 @@ export function buildQueryExpansionChain(
   const title = visionTitle.trim();
   const brand = visionBrand?.trim() ?? "";
   const chain: string[] = [];
+
+  for (const q of optimizeSearchTerm(title, brand)) {
+    chain.push(q);
+  }
 
   chain.push(buildExactMarketplaceQuery(title, brand));
 

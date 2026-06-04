@@ -62,6 +62,7 @@ function listingToProductData(draft: ListingSession) {
     capturedImage: draft.capturedImage,
     matchType: draft.matchType,
     isExactMatch: draft.isExactMatch,
+    productUrl: draft.productUrl ?? draft.product.productUrl ?? "",
     allegroAvg: draft.product.allegroAvg,
     ebayAvg: draft.product.ebayAvg,
   };
