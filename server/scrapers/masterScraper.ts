@@ -28,7 +28,6 @@ import {
 } from "./scraperOptions";
 import {
   buildMatchContext,
-  EXACT_MATCH_MIN_RANK,
   listingExactRank,
   type ListingRankDiagnostic,
 } from "./visionMatch";
@@ -71,6 +70,12 @@ const SCRAPER_TIMEOUT_MS: Record<ScraperSource, number> = {
 const GOOGLE_LENS_PHASE_TIMEOUT_MS = Number(
   process.env.GOOGLE_LENS_TIMEOUT_MS ?? 4_000
 );
+
+/** Stage 2 rank threshold for exact match (default 50; env EXACT_MATCH_MIN_RANK) */
+const EXACT_MATCH_RANK_THRESHOLD = Number(
+  process.env.EXACT_MATCH_MIN_RANK ?? 50
+);
+
 const HIGH_CONFIDENCE_SCORE = 80;
 const MEDIUM_CONFIDENCE_SCORE = 50;
 const HIGH_CONFIDENCE_THRESHOLD = 60;
@@ -126,6 +131,47 @@ export function scoreResult(
   }
 
   return { score, reasons };
+}
+
+function listingRowFromProduct(
+  product: Record<string, unknown>
+): {
+  title: string;
+  brand: string;
+  description: string;
+  url: string;
+  price: unknown;
+} {
+  return {
+    title: String(product.title ?? ""),
+    brand: String(product.brand ?? ""),
+    description: String(product.description ?? ""),
+    url: String(product.productUrl ?? product.url ?? product.link ?? ""),
+    price: product.price,
+  };
+}
+
+/** Log vision exactRank for each listing/candidate (masterScraper threshold). */
+function logListingExactRanks(
+  items: Array<{ label: string; product: Record<string, unknown> }>,
+  ctx: VisionMatchContext,
+  threshold: number
+): void {
+  console.log(
+    `[MasterScraper] exactRank per listing (threshold=${threshold}) visionTitle="${ctx.visionTitle}"`
+  );
+  for (const { label, product } of items) {
+    const rank = listingExactRank(listingRowFromProduct(product), ctx);
+    console.log(
+      `[MasterScraper]   ${label}: exactRank=${rank} meetsThreshold=${rank >= threshold} isExactMatch=${product.isExactMatch === true} scraperSource=${String(product.scraperSource ?? "n/a")} title="${String(product.title ?? "").slice(0, 100)}"`
+    );
+  }
+}
+
+function lensQualifiesAsExact(lensRaw: Record<string, unknown>): boolean {
+  return (
+    lensRaw.isExactMatch === true || lensVisualExactProduct(lensRaw)
+  );
 }
 
 function isPlaceholderDescription(text: string): boolean {
@@ -588,12 +634,23 @@ export const scrapeProduct = async (
         "googleLens-phase"
       );
 
-      if (lensRaw && lensVisualExactProduct(lensRaw)) {
+      if (lensRaw) {
+        logListingExactRanks(
+          [{ label: "googleLens-stage1", product: lensRaw }],
+          matchVision,
+          EXACT_MATCH_RANK_THRESHOLD
+        );
+        console.log(
+          `[MasterScraper] Stage 1 Lens flags: isExactMatch=${lensRaw.isExactMatch === true} visualExact=${lensVisualExactProduct(lensRaw)}`
+        );
+      }
+
+      if (lensRaw && lensQualifiesAsExact(lensRaw)) {
         const listingBrand = String(lensRaw.brand ?? "");
         if (!brandsConflict(matchVision.visionBrand, listingBrand)) {
           const lensMs = Date.now() - lensStart;
           console.log(
-            `[MasterScraper] Stage 1 WIN — googleLens product URL in ${lensMs}ms; skipping keyword scrapers`
+            `[MasterScraper] Stage 1 WIN — googleLens exact (isExactMatch=${lensRaw.isExactMatch === true}) in ${lensMs}ms; skipping keyword scrapers`
           );
           const lensLead = {
             ...lensRaw,
@@ -692,27 +749,38 @@ export const scrapeProduct = async (
     return null;
   }
 
+  logListingExactRanks(
+    candidates.map((c, i) => ({
+      label: `stage2-candidate-${i + 1}-${c.source}`,
+      product: c.product,
+    })),
+    matchVision,
+    EXACT_MATCH_RANK_THRESHOLD
+  );
+
   let winner = race.exactWinner ?? candidates[0];
   let raw = winner.product;
 
   if (raw.isExactMatch !== true) {
-    const rank = listingExactRank(
-      {
-        title: String(raw.title ?? ""),
-        brand: String(raw.brand ?? ""),
-        description: String(raw.description ?? ""),
-        url: String(raw.productUrl ?? raw.url ?? raw.link ?? ""),
-        price: raw.price,
-      },
-      matchVision
+    const rank = listingExactRank(listingRowFromProduct(raw), matchVision);
+    console.log(
+      `[MasterScraper] Stage 2 winner pre-rank: exactRank=${rank} threshold=${EXACT_MATCH_RANK_THRESHOLD}`
     );
-    if (rank >= EXACT_MATCH_MIN_RANK) {
+    if (rank >= EXACT_MATCH_RANK_THRESHOLD) {
       raw = { ...raw, isExactMatch: true, matchType: "exact" };
       winner = { ...winner, product: raw };
       console.log(
-        `[MasterScraper] Stage 2 exact via rank=${rank} (threshold ${EXACT_MATCH_MIN_RANK})`
+        `[MasterScraper] Stage 2 exact via rank=${rank} (threshold ${EXACT_MATCH_RANK_THRESHOLD})`
+      );
+    } else {
+      console.log(
+        `[MasterScraper] Stage 2 winner below exact threshold: rank=${rank} < ${EXACT_MATCH_RANK_THRESHOLD}`
       );
     }
+  } else {
+    console.log(
+      `[MasterScraper] Stage 2 winner already exact (isExactMatch=true, source=${winner.source})`
+    );
   }
 
   const matchScore = winner.score;
