@@ -1,11 +1,7 @@
 import React, { useState } from "react";
-import { useLocation } from "wouter";
 import ProductCamera from "./components/ProductCamera";
 
-const IDENTIFICATION_RESULTS_PAYLOAD_KEY = "identificationResultsPayload";
-
 const Welcome = () => {
- const [, setLocation] = useLocation();
  const [showCamera, setShowCamera] = useState(false);
 
  return (
@@ -26,13 +22,7 @@ const Welcome = () => {
        {showCamera ? (
          <div className="w-full h-full rounded-3xl overflow-hidden border-4 border-gray-100 shadow-2xl">
            {/* The component below should now initiate the camera feed immediately */}
-           <ProductCamera onScrapeSuccess={(result) => {
-             sessionStorage.setItem(
-               IDENTIFICATION_RESULTS_PAYLOAD_KEY,
-               JSON.stringify({ productData: result })
-             );
-             setLocation("/identification-results");
-           }} />
+           <ProductCamera />
          </div>
        ) : (
          <img
