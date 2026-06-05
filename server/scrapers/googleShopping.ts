@@ -131,7 +131,12 @@ export const scrapeProduct = async (
       link: items[0]?.link ?? "",
     };
   } catch (err) {
-    if (isAbortError(err)) throw err;
+    if (isAbortError(err)) {
+      console.log(
+        "[Google] Aborted — parallel race exact match won elsewhere"
+      );
+      throw err;
+    }
     console.error("[Google] Error:", err);
     return null;
   }

@@ -253,7 +253,12 @@ export async function scrapeProduct(
 
     return row;
   } catch (err) {
-    if (isAbortError(err)) throw err;
+    if (isAbortError(err)) {
+      console.log(
+        "[GoogleLens] Aborted — parallel race exact match won elsewhere"
+      );
+      throw err;
+    }
     console.error("[GoogleLens] Error:", err);
     return null;
   }

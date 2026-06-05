@@ -210,7 +210,12 @@ export async function scrapeViaGoogleSearch(
 
     return lastResult;
   } catch (err) {
-    if (isAbortError(err)) throw err;
+    if (isAbortError(err)) {
+      console.log(
+        "[GoogleSearchApify] Aborted — parallel race exact match won elsewhere"
+      );
+      throw err;
+    }
     console.error("[GoogleSearchApify] Error:", err);
     return null;
   }
