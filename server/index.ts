@@ -102,6 +102,10 @@ type ScrapedListing = ScrapedProduct & {
   timedOut?: boolean;
   matchConfidence?: "low" | "medium" | "high";
   matchScore?: number;
+  _scraperMetadata?: {
+    source?: string | null;
+    matchValidation?: string | null;
+  };
 };
 
 const HIGH_CONFIDENCE_MATCH_SCORE = 80;
@@ -121,46 +125,68 @@ function isHighConfidenceScraperMatch(scraped: ScrapedListing): boolean {
   );
 }
 
-function buildListingFromScraper(
-  scraped: ScrapedListing,
-  vision: VisionProduct
-): ScrapedListing {
-  const scrapedPrice =
-    parseFloat(String(scraped.medianPrice ?? scraped.price ?? 0)) || 0;
-  const shortDesc = pickDescription(scraped.description, vision);
-  const longDesc = String(scraped.longDescription ?? "").trim();
-  const scrapedUrl = String(
-    scraped.productUrl ?? scraped.url ?? scraped.link ?? ""
-  ).trim();
-
+function visionToListing(vision: VisionProduct): ScrapedListing {
   return {
-    ...scraped,
-    title: String(scraped.title ?? vision.title).trim(),
-    brand: normalizeBrand(scraped.brand) || normalizeBrand(vision.brand),
-    model: String(scraped.model ?? "").trim(),
-    category: coalesceCategory(scraped.category, vision.category),
-    material: String(scraped.material ?? vision.material ?? "").trim(),
-    color: String(scraped.color ?? vision.color ?? "").trim(),
-    style: String(scraped.style ?? vision.style ?? "").trim(),
-    condition:
-      normalizeCondition(scraped.condition) ||
-      normalizeCondition(vision.condition) ||
-      "Used",
-    description: truncateWords(shortDesc, 50),
-    longDescription: longDesc,
-    price: scrapedPrice,
-    medianPrice: scrapedPrice,
-    allegroAvg:
-      parseFloat(String(scraped.allegroAvg ?? scrapedPrice)) || scrapedPrice,
-    ebayAvg:
-      parseFloat(
-        String(scraped.ebayAvg ?? scraped.ebayPrice ?? scrapedPrice)
-      ) || scrapedPrice,
-    isExactMatch: true,
-    matchType: "exact",
-    priceReliable: scraped.priceReliable === true,
-    productUrl: scrapedUrl,
+    title: vision.title,
+    brand: normalizeBrand(vision.brand),
+    category: coalesceCategory(vision.category) || "",
+    condition: normalizeCondition(vision.condition) || "Used",
+    material: String(vision.material ?? "").trim(),
+    color: String(vision.color ?? "").trim(),
+    style: String(vision.style ?? "").trim(),
+    description: truncateWords(vision.description ?? "", 50),
+    price:
+      typeof vision.price === "number" && vision.price > 0 ? vision.price : 0,
+    priceReliable: false,
+    isExactMatch: false,
+    matchType: "generic",
   };
+}
+
+/** Vision-first merge: scraper supplies reliable price + longDescription only */
+function mergeVisionAndScraper(
+  vision: VisionProduct,
+  scraper: ScrapedListing
+): ScrapedListing {
+  const final: ScrapedListing = visionToListing(vision);
+
+  const scrapedPrice = parseFloat(String(scraper.price ?? 0)) || 0;
+  if (scraper.priceReliable === true && scrapedPrice > 0) {
+    final.price = scrapedPrice;
+    final.medianPrice =
+      parseFloat(String(scraper.medianPrice ?? scrapedPrice)) || scrapedPrice;
+    final.priceReliable = true;
+    final.allegroAvg =
+      parseFloat(String(scraper.allegroAvg ?? scrapedPrice)) || scrapedPrice;
+    final.ebayAvg =
+      parseFloat(
+        String(scraper.ebayAvg ?? scraper.ebayPrice ?? scrapedPrice)
+      ) || scrapedPrice;
+  }
+
+  const scraperLong = String(scraper.longDescription ?? "").trim();
+  final.longDescription =
+    scraperLong || String(vision.description ?? "").trim();
+
+  delete final.link;
+  delete final.productUrl;
+  delete final.url;
+
+  final._scraperMetadata = {
+    source: scraper.scraperSource ?? null,
+    matchValidation: scraper.matchValidation ?? null,
+  };
+
+  if (scraper.isExactMatch === true || scraper.matchType === "exact") {
+    final.isExactMatch = true;
+    final.matchType = "exact";
+  } else if (scraper.matchType === "similar") {
+    final.matchType = "similar";
+  }
+  final.matchValidation = scraper.matchValidation;
+  final.scraperSource = scraper.scraperSource;
+
+  return final;
 }
 
 const VISION_IDENTIFY_PROMPT = `You are a product identification expert analyzing a product photo for a resale listing.
@@ -611,24 +637,14 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
          scrapedRaw
        );
      } else if (isHighConfidenceScraperMatch(scrapedRaw)) {
-       const visionDiffers =
-         brandsConflict(visionBrand, scraperBrand) ||
-         (scraperTitle &&
-           titlesAreVeryDifferent(vision.title, scraperTitle));
-
-       console.warn(
-         `[Identify] Scraper overrides vision (exact match) — vision: title="${vision.title}" brand="${visionBrand}" | scraper: title="${scraperTitle}" brand="${scraperBrand}" model="${String(scrapedRaw.model ?? "")}" matchValidation=${scrapedRaw.matchValidation} score=${scrapedRaw.matchScore ?? 0} price=${scrapedRaw.price ?? 0} priceReliable=${scrapedRaw.priceReliable}`
+       console.log(
+         `[Identify] mergeVisionAndScraper — vision: title="${vision.title}" brand="${visionBrand}" | scraper: title="${scraperTitle}" price=${scrapedRaw.price ?? 0} priceReliable=${scrapedRaw.priceReliable} matchValidation=${scrapedRaw.matchValidation} score=${scrapedRaw.matchScore ?? 0}`
        );
 
        listings = applyScrapeMeta(
-         buildListingFromScraper(scrapedRaw, vision),
+         mergeVisionAndScraper(vision, scrapedRaw),
          scrapedRaw
        );
-
-       if (visionDiffers) {
-         listings.verificationWarning =
-           "Vision and marketplace disagree on brand/title — high-confidence scraper match used.";
-       }
      } else if (brandsConflict(visionBrand, scraperBrand)) {
        console.warn(
          `[Identify] Scraper brand "${scraperBrand}" conflicts with vision "${visionBrand}" — vision fallback`
@@ -652,68 +668,15 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
          scrapedRaw
        );
      } else {
-       const useMarketplaceLead =
-         scrapedRaw.isExactMatch === true ||
-         scrapedRaw.matchType === "exact" ||
-         (scrapedRaw.priceReliable === true &&
-           (parseFloat(String(scrapedRaw.price ?? 0)) || 0) > 0);
+       console.log(
+         `[Identify] mergeVisionAndScraper — vision: title="${vision.title}" | scraper: title="${scraperTitle}" priceReliable=${scrapedRaw.priceReliable}`
+       );
 
        listings = applyScrapeMeta(
-         mergeListingWithVision(scrapedRaw, vision),
+         mergeVisionAndScraper(vision, scrapedRaw),
          scrapedRaw
        );
 
-       const scrapedPrice = parseFloat(String(scrapedRaw.price ?? 0)) || 0;
-       const scraperExact =
-         scrapedRaw.isExactMatch === true ||
-         scrapedRaw.matchType === "exact" ||
-         scrapedRaw.matchValidation === "high_reference" ||
-         scrapedRaw.matchValidation === "exact_brand_model";
-
-       if (scraperExact && scrapedPrice > 0) {
-         listings.isExactMatch = true;
-         listings.matchType = "exact";
-         listings.title = scraperTitle || listings.title;
-         listings.brand = scraperBrand || listings.brand;
-         listings.price = scrapedPrice;
-         listings.allegroAvg =
-           parseFloat(String(scrapedRaw.allegroAvg ?? scrapedPrice)) ||
-           scrapedPrice;
-         listings.ebayAvg =
-           parseFloat(
-             String(scrapedRaw.ebayAvg ?? scrapedRaw.ebayPrice ?? scrapedPrice)
-           ) || scrapedPrice;
-         listings.priceReliable = scrapedRaw.priceReliable !== false;
-         if (scrapedRaw.matchValidation) {
-           listings.matchValidation = String(scrapedRaw.matchValidation);
-         }
-       } else if (useMarketplaceLead) {
-         listings.isExactMatch =
-           scrapedRaw.isExactMatch === true || scrapedRaw.matchType === "exact";
-         listings.matchType = listings.isExactMatch ? "exact" : "similar";
-         if (scrapedPrice > 0) {
-           listings.price = scrapedPrice;
-           listings.allegroAvg =
-             parseFloat(String(scrapedRaw.allegroAvg ?? scrapedPrice)) ||
-             scrapedPrice;
-           listings.ebayAvg =
-             parseFloat(
-               String(scrapedRaw.ebayAvg ?? scrapedRaw.ebayPrice ?? scrapedPrice)
-             ) || scrapedPrice;
-         }
-         listings.priceReliable = scrapedRaw.priceReliable === true;
-         if (scrapedRaw.matchValidation) {
-           listings.matchValidation = String(scrapedRaw.matchValidation);
-         }
-       }
-
-       const scrapedUrl = String(
-         scrapedRaw.productUrl ?? scrapedRaw.url ?? scrapedRaw.link ?? ""
-       ).trim();
-       if (scrapedUrl) listings.productUrl = scrapedUrl;
-       if (scrapedRaw.scraperSource) {
-         listings.scraperSource = String(scrapedRaw.scraperSource);
-       }
        if (listings.matchType !== "exact") {
          listings.verificationWarning =
            "Marketplace match is approximate — confirm brand and model before listing.";
@@ -774,6 +737,7 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
        matchType: listings.matchType ?? "generic",
        isExactMatch: listings.isExactMatch === true,
        scraperSource: listings.scraperSource ?? null,
+       scraperMetadata: listings._scraperMetadata ?? null,
        identifiedAt: new Date().toISOString()
      }
    };
@@ -818,8 +782,8 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
      timedOut: listings.timedOut === true,
      confidence: listings.matchConfidence ?? "low",
      scraperSource: listings.scraperSource ?? null,
+     scraperMetadata: listings._scraperMetadata ?? null,
      verificationWarning: listings.verificationWarning ?? null,
-     productUrl: listings.productUrl ?? "",
      product: {
        title: listings.title ?? searchQuery,
        description: listings.description ?? vision.description ?? "",
@@ -844,7 +808,6 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
        allegroAvg: market.allegroAvg,
        ebayAvg: market.ebayAvg,
        capturedImage,
-       productUrl: listings.productUrl ?? "",
        isExactMatch,
        matchType,
        scraperSource: listings.scraperSource,

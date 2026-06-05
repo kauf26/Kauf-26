@@ -24,6 +24,10 @@ function normalizeDraftAttributes(
     matchType: String(a.matchType ?? "generic"),
     longDescription: String(a.longDescription ?? a.aiDescription ?? "").trim(),
     medianPrice: String(a.medianPrice ?? recommended),
+    scraperMetadata:
+      (a.scraperMetadata as Record<string, unknown> | undefined) ??
+      (a._scraperMetadata as Record<string, unknown> | undefined) ??
+      null,
     marketPrices: {
       allegroAvg: marketPrices.allegroAvg ?? "0.00",
       ebayAvg: marketPrices.ebayAvg ?? "0.00",
