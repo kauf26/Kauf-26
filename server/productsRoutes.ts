@@ -5,10 +5,16 @@ import { eq } from 'drizzle-orm';
 
 const router = express.Router();
 
+const STRIPPED_ATTRIBUTE_KEYS = ["productUrl", "url", "link"] as const;
+
 function normalizeDraftAttributes(
   attributes: Record<string, unknown> | undefined
 ): Record<string, unknown> {
-  const a = attributes ?? {};
+  const a = { ...(attributes ?? {}) };
+  for (const key of STRIPPED_ATTRIBUTE_KEYS) {
+    delete a[key];
+  }
+
   const marketPrices =
     (a.marketPrices as Record<string, string> | undefined) ?? {};
   const recommended =
@@ -247,7 +253,45 @@ router.get("/drafts/:id", async (req, res) => {
  }
 });
 
-// --- 7. UPDATE DRAFT STATUS (PATCH) ---
+// --- 7. PARTIAL DRAFT UPDATE (PATCH) ---
+router.patch("/drafts/:id", async (req, res) => {
+ try {
+   const draftId = Number(req.params.id);
+   const [existingDraft] = await db.select()
+     .from(productDrafts)
+     .where(eq(productDrafts.id, draftId));
+
+   if (!existingDraft) {
+     return res.status(404).json({ error: "Draft not found" });
+   }
+
+   const { title, sku, status, images, attributes } = req.body ?? {};
+   const mergedAttributes = normalizeDraftAttributes({
+     ...(existingDraft.attributes as Record<string, unknown>),
+     ...(attributes ?? {}),
+   });
+
+   const [updatedDraft] = await db.update(productDrafts)
+     .set({
+       ...(title !== undefined ? { title } : {}),
+       ...(sku !== undefined ? { sku } : {}),
+       ...(status !== undefined ? { status } : {}),
+       ...(images !== undefined ? { images } : {}),
+       attributes: mergedAttributes,
+       updatedAt: new Date(),
+     })
+     .where(eq(productDrafts.id, draftId))
+     .returning();
+
+   console.log(`[KAUF26] Patched draft ID: ${updatedDraft.id}`);
+   return res.status(200).json(updatedDraft);
+ } catch (error) {
+   console.error("[KAUF26] Error patching draft:", error);
+   return res.status(500).json({ error: "Internal Server Error" });
+ }
+});
+
+// --- 8. UPDATE DRAFT STATUS (PATCH) ---
 router.patch("/drafts/:id/status", async (req, res) => {
  try {
    const draftId = req.params.id;
@@ -277,7 +321,7 @@ router.patch("/drafts/:id/status", async (req, res) => {
  }
 });
 
-// --- 8. DELETE DRAFT (DELETE) ---
+// --- 9. DELETE DRAFT (DELETE) ---
 router.delete("/drafts/:id", async (req, res) => {
  try {
    const draftId = req.params.id;
@@ -297,7 +341,7 @@ router.delete("/drafts/:id", async (req, res) => {
  }
 });
 
-// --- 9. DEBUG: Get all drafts with detailed info ---
+// --- 10. DEBUG: Get all drafts with detailed info ---
 router.get("/debug/all-drafts", async (_req, res) => {
  try {
    const allDrafts = await db.select().from(productDrafts);
