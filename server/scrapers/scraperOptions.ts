@@ -1,7 +1,7 @@
 /** Shared options for parallel scraper runs (masterScraper race). */
 export type ScraperRunOptions = {
   signal?: AbortSignal;
-  /** Per-run timeout override (parallel race uses SCRAPER_RACE_TIMEOUT_MS) */
+  /** Per-run timeout override (parallel race uses SCRAPER_RACE_PER_SOURCE_TIMEOUT_MS) */
   timeoutMs?: number;
   queryChain?: string[];
   /** Raw base64 (no data: prefix) for Google Lens image search */

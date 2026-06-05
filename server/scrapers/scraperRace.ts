@@ -11,13 +11,25 @@ import {
   type MatchConfidence,
 } from "./validateMatch";
 
-/** Parallel race window — first exact validation match wins; per-source timeout */
-export const SCRAPER_RACE_TIMEOUT_MS = Number(
-  process.env.SCRAPER_RACE_TIMEOUT_MS ?? 7_000
+/** Per-scraper timeout during parallel race (Apify default 20s) */
+export const SCRAPER_RACE_PER_SOURCE_TIMEOUT_MS = Number(
+  process.env.SCRAPER_RACE_PER_SOURCE_TIMEOUT_MS ??
+    process.env.APIFY_SCRAPER_TIMEOUT_MS ??
+    20_000
 );
 
-/** @deprecated Use SCRAPER_RACE_TIMEOUT_MS */
-export const GLOBAL_EXACT_RACE_TIMEOUT_MS = SCRAPER_RACE_TIMEOUT_MS;
+/** Total race window before falling back to best similar (default 23s) */
+export const SCRAPER_RACE_WINDOW_MS = Number(
+  process.env.SCRAPER_RACE_WINDOW_MS ??
+    process.env.SCRAPER_RACE_TIMEOUT_MS ??
+    23_000
+);
+
+/** @deprecated Use SCRAPER_RACE_WINDOW_MS */
+export const SCRAPER_RACE_TIMEOUT_MS = SCRAPER_RACE_WINDOW_MS;
+
+/** @deprecated Use SCRAPER_RACE_WINDOW_MS */
+export const GLOBAL_EXACT_RACE_TIMEOUT_MS = SCRAPER_RACE_WINDOW_MS;
 
 const EXACT_WIN_CONFIDENCES = new Set<MatchConfidence>([
   "high_reference",
@@ -147,7 +159,7 @@ export type RaceScrapersResult = {
 };
 
 /**
- * Run scrapers in parallel with SCRAPER_RACE_TIMEOUT_MS per source.
+ * Run scrapers in parallel with SCRAPER_RACE_PER_SOURCE_TIMEOUT_MS per source.
  * First high_reference / exact_brand_model (or isExactMatch) wins and aborts the rest.
  * If no exact within the race window, wait for all finishes and return best similar.
  */
@@ -179,7 +191,7 @@ export async function raceScrapersForExactMatch(
 
   console.log(
     `[ScraperRace] Parallel race start sources=[${runners.map((r) => r.source).join(", ")}] ` +
-      `perSourceTimeout=${SCRAPER_RACE_TIMEOUT_MS}ms raceWindow=${SCRAPER_RACE_TIMEOUT_MS}ms`
+      `perSourceTimeout=${SCRAPER_RACE_PER_SOURCE_TIMEOUT_MS}ms raceWindow=${SCRAPER_RACE_WINDOW_MS}ms`
   );
 
   const combineSignals = (a: AbortSignal, b: AbortSignal): AbortSignal => {
@@ -199,7 +211,7 @@ export async function raceScrapersForExactMatch(
     const opts = buildOpts(source);
     const mergedOpts: ScraperRunOptions = {
       ...opts,
-      timeoutMs: opts.timeoutMs ?? SCRAPER_RACE_TIMEOUT_MS,
+      timeoutMs: opts.timeoutMs ?? SCRAPER_RACE_PER_SOURCE_TIMEOUT_MS,
       signal: opts.signal
         ? combineSignals(opts.signal, masterAbort.signal)
         : masterAbort.signal,
@@ -272,11 +284,11 @@ export async function raceScrapersForExactMatch(
       if (!settled) {
         settled = true;
         console.log(
-          `[ScraperRace] ${SCRAPER_RACE_TIMEOUT_MS}ms race window elapsed — no exact match yet, waiting for best result`
+          `[ScraperRace] ${SCRAPER_RACE_WINDOW_MS}ms race window elapsed — no exact match yet, waiting for best result`
         );
         resolve(null);
       }
-    }, SCRAPER_RACE_TIMEOUT_MS);
+    }, SCRAPER_RACE_WINDOW_MS);
 
     Promise.allSettled(promises).then(() => {
       clearTimeout(globalTimer);
@@ -288,7 +300,7 @@ export async function raceScrapersForExactMatch(
   });
 
   const raceDeadline = new Promise<null>((resolve) => {
-    setTimeout(() => resolve(null), SCRAPER_RACE_TIMEOUT_MS);
+    setTimeout(() => resolve(null), SCRAPER_RACE_WINDOW_MS);
   });
 
   const exactWinner = await Promise.race([firstExactPromise, raceDeadline]);

@@ -19,7 +19,8 @@ import {
 } from "./searchOptimizer";
 import {
   GLOBAL_EXACT_RACE_TIMEOUT_MS,
-  SCRAPER_RACE_TIMEOUT_MS,
+  SCRAPER_RACE_PER_SOURCE_TIMEOUT_MS,
+  SCRAPER_RACE_WINDOW_MS,
   raceScrapersForExactMatch,
   type ScraperRunner,
 } from "./scraperRace";
@@ -56,10 +57,10 @@ export type ScrapeOptions = {
 const SCRAPER_MAX_ATTEMPTS = 1;
 
 /** Total scrape budget after vision (Lens + keyword stage) */
-const SCRAPE_BUDGET_MS = Number(process.env.SCRAPE_BUDGET_MS ?? 4_000);
+const SCRAPE_BUDGET_MS = Number(process.env.SCRAPE_BUDGET_MS ?? 23_000);
 
 const SCRAPER_TIMEOUT_MS: Record<ScraperSource, number> = {
-  apify: Number(process.env.APIFY_SCRAPER_TIMEOUT_MS ?? 3_000),
+  apify: Number(process.env.APIFY_SCRAPER_TIMEOUT_MS ?? 20_000),
   googleLens: Number(process.env.GOOGLE_LENS_TIMEOUT_MS ?? 4_000),
   google: Number(process.env.GOOGLE_SHOPPING_TIMEOUT_MS ?? 3_000),
   ebay: 3_000,
@@ -463,7 +464,9 @@ async function runScraperWithRetry(
     const attemptStart = Date.now();
     try {
       const timeoutMs =
-        opts?.timeoutMs ?? SCRAPER_TIMEOUT_MS[source] ?? SCRAPER_RACE_TIMEOUT_MS;
+        opts?.timeoutMs ??
+        SCRAPER_TIMEOUT_MS[source] ??
+        SCRAPER_RACE_PER_SOURCE_TIMEOUT_MS;
       const value = await withTimeout(
         run(query, vision, opts),
         timeoutMs,
@@ -770,7 +773,7 @@ export const scrapeProduct = async (
   ];
 
   console.log(
-    `[MasterScraper] Stage 2 race (${runners.length} scrapers, ${SCRAPER_RACE_TIMEOUT_MS}ms per source / race window):`,
+    `[MasterScraper] Stage 2 race (${runners.length} scrapers, ${SCRAPER_RACE_PER_SOURCE_TIMEOUT_MS}ms per source, ${SCRAPER_RACE_WINDOW_MS}ms window):`,
     runners.map((r) => r.source).join(", ")
   );
 
@@ -780,7 +783,10 @@ export const scrapeProduct = async (
     matchVision,
     (source, run, q, v, opts) =>
       runScraperWithRetry(source, run, q, v, opts),
-    () => ({ timeoutMs: SCRAPER_RACE_TIMEOUT_MS }),
+    (source) => ({
+      timeoutMs:
+        SCRAPER_TIMEOUT_MS[source] ?? SCRAPER_RACE_PER_SOURCE_TIMEOUT_MS,
+    }),
     scoreResult
   );
 
