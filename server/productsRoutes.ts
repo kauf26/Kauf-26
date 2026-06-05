@@ -5,12 +5,40 @@ import { eq } from 'drizzle-orm';
 
 const router = express.Router();
 
+function normalizeDraftAttributes(
+  attributes: Record<string, unknown> | undefined
+): Record<string, unknown> {
+  const a = attributes ?? {};
+  const marketPrices =
+    (a.marketPrices as Record<string, string> | undefined) ?? {};
+  const recommended =
+    marketPrices.recommendedPrice ??
+    String(a.medianPrice ?? a.price ?? "0.00");
+
+  return {
+    ...a,
+    brand: String(a.brand ?? "").trim(),
+    model: String(a.model ?? "").trim(),
+    priceReliable: a.priceReliable === true,
+    isExactMatch: a.isExactMatch === true,
+    matchType: String(a.matchType ?? "generic"),
+    longDescription: String(a.longDescription ?? a.aiDescription ?? "").trim(),
+    medianPrice: String(a.medianPrice ?? recommended),
+    marketPrices: {
+      allegroAvg: marketPrices.allegroAvg ?? "0.00",
+      ebayAvg: marketPrices.ebayAvg ?? "0.00",
+      recommendedPrice: recommended,
+    },
+  };
+}
+
 // --- 1. SAVE OR UPDATE A DRAFT (POST) ---
 router.post("/drafts", async (req, res) => {
  console.log("[KAUF26] Draft received in productsRoutes:", req.body);
 
  try {
    const { id, title, sku, status, images, attributes } = req.body;
+   const normalizedAttributes = normalizeDraftAttributes(attributes);
 
    if (!title) {
      return res.status(400).json({ error: "Title is required to save a draft" });
@@ -29,7 +57,7 @@ router.post("/drafts", async (req, res) => {
            sku: sku || null,
            status: status || 'draft',
            images: images || [],
-           attributes: attributes || {},
+           attributes: normalizedAttributes,
            updatedAt: new Date()
          })
          .where(eq(productDrafts.id, Number(id)))
@@ -47,7 +75,7 @@ router.post("/drafts", async (req, res) => {
        sku: sku || null,
        status: status || 'draft',
        images: images || [],
-       attributes: attributes || {},
+       attributes: normalizedAttributes,
      })
      .returning();
 

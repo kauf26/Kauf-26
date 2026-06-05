@@ -52,6 +52,7 @@ function normalizeCondition(condition: unknown): string {
 
 interface ScrapedProduct {
  brand?: string;
+ model?: string;
  year?: string;
  condition?: string;
  material?: string;
@@ -59,7 +60,11 @@ interface ScrapedProduct {
  style?: string;
  refNumber?: string;
  description?: string;
+ longDescription?: string;
  price?: string | number;
+ medianPrice?: string | number;
+ priceMin?: string | number;
+ priceMax?: string | number;
  ebayPrice?: string | number;
 }
 
@@ -98,6 +103,65 @@ type ScrapedListing = ScrapedProduct & {
   matchConfidence?: "low" | "medium" | "high";
   matchScore?: number;
 };
+
+const HIGH_CONFIDENCE_MATCH_SCORE = 80;
+
+function isHighConfidenceScraperMatch(scraped: ScrapedListing): boolean {
+  const isExact =
+    scraped.isExactMatch === true || scraped.matchType === "exact";
+  if (!isExact) return false;
+
+  const validation = String(scraped.matchValidation ?? "");
+  const score = Number(scraped.matchScore ?? 0);
+  return (
+    validation === "high_reference" ||
+    validation === "exact_brand_model" ||
+    validation === "hierarchical" ||
+    score >= HIGH_CONFIDENCE_MATCH_SCORE
+  );
+}
+
+function buildListingFromScraper(
+  scraped: ScrapedListing,
+  vision: VisionProduct
+): ScrapedListing {
+  const scrapedPrice =
+    parseFloat(String(scraped.medianPrice ?? scraped.price ?? 0)) || 0;
+  const shortDesc = pickDescription(scraped.description, vision);
+  const longDesc = String(scraped.longDescription ?? "").trim();
+  const scrapedUrl = String(
+    scraped.productUrl ?? scraped.url ?? scraped.link ?? ""
+  ).trim();
+
+  return {
+    ...scraped,
+    title: String(scraped.title ?? vision.title).trim(),
+    brand: normalizeBrand(scraped.brand) || normalizeBrand(vision.brand),
+    model: String(scraped.model ?? "").trim(),
+    category: coalesceCategory(scraped.category, vision.category),
+    material: String(scraped.material ?? vision.material ?? "").trim(),
+    color: String(scraped.color ?? vision.color ?? "").trim(),
+    style: String(scraped.style ?? vision.style ?? "").trim(),
+    condition:
+      normalizeCondition(scraped.condition) ||
+      normalizeCondition(vision.condition) ||
+      "Used",
+    description: truncateWords(shortDesc, 50),
+    longDescription: longDesc,
+    price: scrapedPrice,
+    medianPrice: scrapedPrice,
+    allegroAvg:
+      parseFloat(String(scraped.allegroAvg ?? scrapedPrice)) || scrapedPrice,
+    ebayAvg:
+      parseFloat(
+        String(scraped.ebayAvg ?? scraped.ebayPrice ?? scrapedPrice)
+      ) || scrapedPrice,
+    isExactMatch: true,
+    matchType: "exact",
+    priceReliable: scraped.priceReliable === true,
+    productUrl: scrapedUrl,
+  };
+}
 
 const VISION_IDENTIFY_PROMPT = `You are a product identification expert analyzing a product photo for a resale listing.
 
@@ -272,6 +336,7 @@ function applyVisionEnrichment(
     ...listing,
     title: listing.title ?? vision.title,
     brand: normalizeBrand(listing.brand) || normalizeBrand(vision.brand),
+    model: String(listing.model ?? "").trim(),
     category,
     material: String(listing.material ?? vision.material ?? "").trim(),
     color: String(listing.color ?? vision.color ?? "").trim(),
@@ -281,7 +346,10 @@ function applyVisionEnrichment(
       normalizeCondition(vision.condition) ||
       "Used",
     description,
+    longDescription: String(listing.longDescription ?? "").trim(),
     price,
+    medianPrice:
+      parseFloat(String(listing.medianPrice ?? listing.price ?? 0)) || price,
   };
 }
 
@@ -542,6 +610,25 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
          ),
          scrapedRaw
        );
+     } else if (isHighConfidenceScraperMatch(scrapedRaw)) {
+       const visionDiffers =
+         brandsConflict(visionBrand, scraperBrand) ||
+         (scraperTitle &&
+           titlesAreVeryDifferent(vision.title, scraperTitle));
+
+       console.warn(
+         `[Identify] Scraper overrides vision (exact match) — vision: title="${vision.title}" brand="${visionBrand}" | scraper: title="${scraperTitle}" brand="${scraperBrand}" model="${String(scrapedRaw.model ?? "")}" matchValidation=${scrapedRaw.matchValidation} score=${scrapedRaw.matchScore ?? 0} price=${scrapedRaw.price ?? 0} priceReliable=${scrapedRaw.priceReliable}`
+       );
+
+       listings = applyScrapeMeta(
+         buildListingFromScraper(scrapedRaw, vision),
+         scrapedRaw
+       );
+
+       if (visionDiffers) {
+         listings.verificationWarning =
+           "Vision and marketplace disagree on brand/title — high-confidence scraper match used.";
+       }
      } else if (brandsConflict(visionBrand, scraperBrand)) {
        console.warn(
          `[Identify] Scraper brand "${scraperBrand}" conflicts with vision "${visionBrand}" — vision fallback`
@@ -662,6 +749,7 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
      images: [`data:${req.file.mimetype};base64,${base64Image}`],
      attributes: {
        brand: normalizeBrand(listings.brand) || normalizeBrand(vision.brand),
+       model: String(listings.model ?? "").trim(),
        year: listings.year || new Date().getFullYear().toString(),
        condition:
          normalizeCondition(listings.condition) ||
@@ -671,6 +759,12 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
        color: String(listings.color ?? vision.color ?? "").trim(),
        style: String(vision.style ?? "").trim(),
        aiDescription: listings.description || `KAUF-AI identified as: ${searchQuery}`,
+       longDescription:
+         listings.longDescription ||
+         listings.description ||
+         `KAUF-AI identified as: ${searchQuery}`,
+       priceReliable: listings.priceReliable === true,
+       medianPrice: String(listings.medianPrice ?? listings.price ?? "0.00"),
        marketPrices: {
          allegroAvg: String(listings.allegroAvg ?? listings.price ?? "0.00"),
          ebayAvg: String(listings.ebayAvg ?? listings.ebayPrice ?? "0.00"),
@@ -729,9 +823,16 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
      product: {
        title: listings.title ?? searchQuery,
        description: listings.description ?? vision.description ?? "",
+       longDescription:
+         listings.longDescription ??
+         listings.description ??
+         vision.description ??
+         "",
        price: String(market.price),
        priceReliable: listings.priceReliable === true,
+       medianPrice: String(listings.medianPrice ?? market.price),
        brand: normalizeBrand(listings.brand) || normalizeBrand(vision.brand),
+       model: String(listings.model ?? "").trim(),
        category: coalesceCategory(listings.category, vision.category),
        condition:
          normalizeCondition(listings.condition) ||

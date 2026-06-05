@@ -42,6 +42,158 @@ type OrganicResult = {
   displayedUrl?: string;
 };
 
+const TITLE_TRAILING_NOISE_RE =
+  /\s*[»|–—-]\s*.+$|\s+for sale.*$|\s+check prices.*$|\s+price breakdown.*$/i;
+
+/** Parse marketplace title → brand + model (e.g. "IWC Pilot Chronograph watches" → IWC / Pilot Chronograph) */
+export function extractBrandModelFromTitle(title: string): {
+  brand: string;
+  model: string;
+} {
+  let t = String(title ?? "")
+    .replace(TITLE_TRAILING_NOISE_RE, "")
+    .replace(/\bwatches?\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const parts = t.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return { brand: "", model: "" };
+
+  const brand = parts[0].replace(/['']s$/i, "");
+  let model = parts.slice(1).join(" ").trim();
+  const ref = t.match(/\b([A-Z]{1,4}[-]?\d{4,}[A-Z0-9-]*)\b/);
+  if (ref && !model.toUpperCase().includes(ref[1].toUpperCase())) {
+    model = model ? `${model} ${ref[1]}` : ref[1];
+  }
+  return { brand, model };
+}
+
+function deriveCanonicalBrandModel(listings: RawListing[]): {
+  brand: string;
+  model: string;
+} {
+  const brandCounts = new Map<string, number>();
+  let firstModel = "";
+
+  for (const row of listings.slice(0, 6)) {
+    const { brand, model } = extractBrandModelFromTitle(String(row.title ?? ""));
+    if (brand) {
+      const key = brand.toLowerCase();
+      brandCounts.set(key, (brandCounts.get(key) ?? 0) + 1);
+    }
+    if (!firstModel && model) firstModel = model;
+  }
+
+  let topBrand = "";
+  let topCount = 0;
+  for (const [key, count] of brandCounts) {
+    if (count > topCount) {
+      topCount = count;
+      const sample = listings.find((l) =>
+        extractBrandModelFromTitle(String(l.title ?? "")).brand
+          .toLowerCase()
+          .startsWith(key)
+      );
+      topBrand = sample
+        ? extractBrandModelFromTitle(String(sample.title ?? "")).brand
+        : key;
+    }
+  }
+
+  if (!topBrand && listings[0]?.title) {
+    const parsed = extractBrandModelFromTitle(String(listings[0].title));
+    topBrand = parsed.brand;
+    firstModel = parsed.model;
+  }
+
+  return { brand: topBrand, model: firstModel };
+}
+
+function extractSpecLines(blob: string): string[] {
+  const specs: string[] = [];
+  if (/automatic|self[- ]?winding/i.test(blob)) {
+    specs.push("Movement: automatic");
+  }
+  if (/quartz/i.test(blob)) specs.push("Movement: quartz");
+  if (/stainless steel/i.test(blob)) specs.push("Case material: stainless steel");
+  if (/titanium/i.test(blob)) specs.push("Case material: titanium");
+  if (/ceramic/i.test(blob)) specs.push("Case material: ceramic");
+  if (/chronograph/i.test(blob)) specs.push("Complications: chronograph");
+  if (/gmt/i.test(blob)) specs.push("Complications: GMT");
+  if (/\d+\s*mm/i.test(blob)) {
+    const mm = blob.match(/(\d{2})\s*mm/i);
+    if (mm) specs.push(`Case size: ${mm[1]} mm`);
+  }
+  return specs;
+}
+
+/** Up to 30 lines: description, pricing band, specs, comparable listings */
+export function buildLongDescription(
+  rep: RawListing,
+  listings: RawListing[],
+  meta: {
+    brand?: string;
+    model?: string;
+    medianPrice?: number;
+    priceMin?: number;
+    priceMax?: number;
+    priceReliable?: boolean;
+  }
+): string {
+  const lines: string[] = [];
+  const headline = [meta.brand, meta.model].filter(Boolean).join(" ").trim();
+  if (headline) lines.push(headline);
+  if (rep.title) lines.push(String(rep.title));
+
+  const desc = String(rep.description ?? "").trim();
+  if (desc) {
+    lines.push("");
+    lines.push(desc);
+  }
+
+  if (meta.medianPrice && meta.medianPrice > 0) {
+    lines.push("");
+    lines.push("Market pricing (USD):");
+    if (
+      meta.priceMin &&
+      meta.priceMax &&
+      meta.priceMin > 0 &&
+      meta.priceMax > meta.priceMin
+    ) {
+      lines.push(`  Range: $${meta.priceMin} – $${meta.priceMax}`);
+    }
+    lines.push(
+      `  Median: $${meta.medianPrice}${
+        meta.priceReliable ? "" : " (limited sample size)"
+      }`
+    );
+  }
+
+  const blob = listings
+    .map((l) => `${l.title ?? ""} ${l.description ?? ""}`)
+    .join(" ");
+  const specs = extractSpecLines(blob);
+  if (specs.length > 0) {
+    lines.push("");
+    lines.push("Key specs:");
+    for (const s of specs) lines.push(`  ${s}`);
+  }
+
+  const comps = listings
+    .filter((l) => l.title && l.title !== rep.title)
+    .slice(0, 4);
+  if (comps.length > 0) {
+    lines.push("");
+    lines.push("Comparable marketplace listings:");
+    for (const c of comps) {
+      const p =
+        c.price != null && Number(c.price) > 0 ? ` — $${c.price}` : "";
+      lines.push(`  • ${c.title}${p}`);
+    }
+  }
+
+  return lines.slice(0, 30).join("\n");
+}
+
 function titleMatchesQueryKeywords(
   title: string,
   searchQuery: string,
@@ -84,9 +236,13 @@ function organicToListing(
       `keywordMatch=${keywordMatch} price=${price} productUrl=${looksLikeProduct}`
   );
 
+  const { brand: parsedBrand, model: parsedModel } =
+    extractBrandModelFromTitle(title);
+
   return {
     title,
-    brand: visionBrand?.trim() ?? "",
+    brand: parsedBrand || visionBrand?.trim() || "",
+    model: parsedModel,
     description: String(row.description ?? "").trim(),
     price: price > 0 ? price : undefined,
     category: "",
@@ -168,14 +324,33 @@ async function runGoogleSearch(
   let aggregated = aggregateListings(listings, visionTitle, matchCtx);
   if (!aggregated) return null;
 
+  const canonical = deriveCanonicalBrandModel(listings);
+  if (canonical.brand) aggregated.brand = canonical.brand;
+  if (canonical.model) aggregated.model = canonical.model;
+
+  const repTitle = String(aggregated.title ?? "");
+  const repListing =
+    listings.find((l) => l.title === repTitle) ?? listings[0];
+
+  aggregated.longDescription = buildLongDescription(repListing, listings, {
+    brand: String(aggregated.brand ?? canonical.brand),
+    model: String(aggregated.model ?? canonical.model),
+    medianPrice: Number(aggregated.medianPrice ?? aggregated.price ?? 0),
+    priceMin: Number(aggregated.priceMin ?? 0),
+    priceMax: Number(aggregated.priceMax ?? 0),
+    priceReliable: aggregated.priceReliable === true,
+  });
+
   const target = buildMatchTargetFromContext(matchCtx);
-  const repListing = {
-    title: String(aggregated.title ?? ""),
-    brand: String(aggregated.brand ?? ""),
-    description: String(aggregated.description ?? ""),
-    url: String(aggregated.url ?? aggregated.link ?? ""),
-  };
-  const validation = validateMatch(repListing, target);
+  const validation = validateMatch(
+    {
+      title: String(aggregated.title ?? ""),
+      brand: String(aggregated.brand ?? ""),
+      description: String(aggregated.description ?? ""),
+      url: String(aggregated.url ?? aggregated.link ?? ""),
+    },
+    target
+  );
   aggregated = applyValidationToProduct(aggregated, validation);
   if (validation.accepted) {
     console.log(
@@ -183,19 +358,22 @@ async function runGoogleSearch(
     );
   }
 
-  const priced = listings.filter((l) => l.price != null).length;
+  const priced = listings.filter(
+    (l) => l.price != null && Number(l.price) > 0
+  ).length;
   if (priced < 2) {
     aggregated.priceReliable = false;
-    if (!aggregated.price || aggregated.price === 0) {
-      const fallback = bestPriceFromText(
-        listings.map((l) => `${l.title} ${l.description}`).join(" "),
-        0
-      );
-      if (fallback > 0) {
-        aggregated.price = fallback;
-        aggregated.ebayAvg = fallback;
-        aggregated.allegroAvg = fallback;
-      }
+  }
+  if (!aggregated.price || aggregated.price === 0) {
+    const fallback = bestPriceFromText(
+      listings.map((l) => `${l.title} ${l.description}`).join(" "),
+      0
+    );
+    if (fallback > 0) {
+      aggregated.price = fallback;
+      aggregated.medianPrice = fallback;
+      aggregated.ebayAvg = fallback;
+      aggregated.allegroAvg = fallback;
     }
   }
 

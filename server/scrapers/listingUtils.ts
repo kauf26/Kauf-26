@@ -41,6 +41,7 @@ const MIN_PRICED_LISTINGS = 2;
 export type RawListing = {
   title?: string;
   brand?: string;
+  model?: string;
   description?: string;
   price?: unknown;
   category?: string;
@@ -313,9 +314,12 @@ export function aggregateListings(
   const pricedInPool = pool.filter((s) => s.price > 0);
   const pricedCount = pricedInPool.length;
   const priceReliable = pricedCount >= MIN_PRICED_LISTINGS;
-  const median = priceReliable
-    ? medianPrice(pricedInPool.map((s) => s.price))
-    : 0;
+  const pricedForMedian =
+    pricedInPool.length > 0
+      ? pricedInPool.map((s) => s.price)
+      : peerPrices;
+  const median =
+    pricedForMedian.length > 0 ? medianPrice(pricedForMedian) : 0;
   const rep = (hasExact ? exactRows[0] : scored[0]).item;
   const bestLink = rep.url ?? "";
 
@@ -344,9 +348,12 @@ export function aggregateListings(
     condition: String(rep.condition ?? "").trim(),
     material: String(rep.material ?? "").trim(),
     color: String(rep.color ?? "").trim(),
-    price: priceReliable ? median : 0,
-    ebayAvg: priceReliable ? median : 0,
-    allegroAvg: priceReliable ? median : 0,
+    price: median,
+    medianPrice: median,
+    ebayAvg: median,
+    allegroAvg: median,
+    priceMin: priceBand?.min ?? (pricedForMedian.length ? Math.min(...pricedForMedian) : 0),
+    priceMax: priceBand?.max ?? (pricedForMedian.length ? Math.max(...pricedForMedian) : 0),
     isExactMatch: hasExact,
     matchType: hasExact ? "exact" : "similar",
     priceReliable,
