@@ -718,7 +718,8 @@ export const scrapeProduct = async (
 
       if (lensRaw && lensQualifiesAsExact(lensRaw)) {
         const listingBrand = String(lensRaw.brand ?? "");
-        if (!brandsConflict(matchVision.visionBrand, listingBrand)) {
+        const listingTitle = String(lensRaw.title ?? "");
+        if (!brandsConflict(matchVision.visionBrand, listingBrand, listingTitle)) {
           const lensMs = Date.now() - lensStart;
           console.log(
             `[MasterScraper] Stage 1 WIN — googleLens exact (isExactMatch=${lensRaw.isExactMatch === true}) in ${lensMs}ms; skipping keyword scrapers`

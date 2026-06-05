@@ -126,9 +126,10 @@ export function toCandidate(
   if (!value || !validateProduct(value)) return null;
 
   const listingBrand = String(value.brand ?? "");
-  if (brandsConflict(vision.visionBrand, listingBrand)) {
+  const listingTitle = String(value.title ?? "");
+  if (brandsConflict(vision.visionBrand, listingBrand, listingTitle)) {
     console.warn(
-      `[MasterScraper] ${source}: REJECTED brand conflict — vision="${vision.visionBrand}" vs listing="${listingBrand}" (jaccard=${brandJaccard(vision.visionBrand ?? "", listingBrand).toFixed(2)})`
+      `[MasterScraper] ${source}: REJECTED brand conflict — vision="${vision.visionBrand}" vs listing="${listingBrand}" title="${listingTitle.slice(0, 60)}" (jaccard=${brandJaccard(vision.visionBrand ?? "", listingBrand).toFixed(2)})`
     );
     return null;
   }

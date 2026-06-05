@@ -154,14 +154,49 @@ export function brandJaccard(visionBrand: string, listingBrand: string): number 
   return union > 0 ? inter / union : 0;
 }
 
-/** Vision has brand and listing brand clearly disagrees (e.g. Breitling vs Casio) */
+/** True when listing title contains vision brand (or all brand tokens). */
+export function titleMentionsBrand(
+  listingTitle: string | undefined,
+  visionBrand: string | undefined
+): boolean {
+  const title = String(listingTitle ?? "").toLowerCase();
+  const brand = String(visionBrand ?? "").trim().toLowerCase();
+  if (!title || !brand) return false;
+  if (title.includes(brand)) return true;
+  const tokens = brand.split(/\s+/).filter((t) => t.length > 1);
+  return tokens.length > 0 && tokens.every((t) => title.includes(t));
+}
+
+const UNRELIABLE_PARSED_BRANDS = new Set([
+  "pre",
+  "pre-owned",
+  "owned",
+  "the",
+  "hats",
+  "hat",
+  "caps",
+  "cap",
+  "shop",
+  "store",
+  "new",
+  "used",
+  "vintage",
+]);
+
+/** Vision has brand and listing clearly disagrees (e.g. Breitling vs Casio) */
 export function brandsConflict(
   visionBrand: string | undefined,
-  listingBrand: string | undefined
+  listingBrand: string | undefined,
+  listingTitle?: string
 ): boolean {
   const vb = String(visionBrand ?? "").trim().toLowerCase();
+  if (!vb) return false;
+
+  if (titleMentionsBrand(listingTitle, visionBrand)) return false;
+
   const lb = String(listingBrand ?? "").trim().toLowerCase();
-  if (!vb || !lb) return false;
+  if (!lb) return false;
+  if (UNRELIABLE_PARSED_BRANDS.has(lb)) return false;
   if (vb === lb || lb.includes(vb) || vb.includes(lb)) return false;
   return brandJaccard(vb, lb) < 0.25;
 }
