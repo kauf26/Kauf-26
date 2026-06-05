@@ -142,11 +142,9 @@ function stripListingUrls(listing: ScrapedListing): ScrapedListing {
 function scraperHasUsableProduct(scraped: ScrapedListing | null): boolean {
   if (!scraped) return false;
   const price = parseFloat(String(scraped.price ?? 0)) || 0;
-  return (
-    scraped.priceReliable === true &&
-    price >= 5 &&
-    (scraped.isExactMatch === true || scraped.matchType === "exact")
-  );
+  const exact =
+    scraped.isExactMatch === true || scraped.matchType === "exact";
+  return exact && price >= 5;
 }
 
 function buildVisionFallback(vision: VisionProduct): ScrapedListing {
@@ -202,17 +200,25 @@ function mergeVisionAndScraper(
   }
 
   const scrapedPrice = parseFloat(String(scraper.price ?? 0)) || 0;
-  if (scraper.priceReliable === true && scrapedPrice > 0) {
+  const scraperExact =
+    scraper.isExactMatch === true || scraper.matchType === "exact";
+  if (
+    scrapedPrice >= 5 &&
+    (scraper.priceReliable === true || scraperExact)
+  ) {
     final.price = scrapedPrice;
     final.medianPrice =
       parseFloat(String(scraper.medianPrice ?? scrapedPrice)) || scrapedPrice;
-    final.priceReliable = true;
+    final.priceReliable = scraper.priceReliable === true;
     final.allegroAvg =
       parseFloat(String(scraper.allegroAvg ?? scrapedPrice)) || scrapedPrice;
     final.ebayAvg =
       parseFloat(
         String(scraper.ebayAvg ?? scraper.ebayPrice ?? scrapedPrice)
       ) || scrapedPrice;
+    if (scraper.priceMin != null) final.priceMin = scraper.priceMin;
+    if (scraper.priceMax != null) final.priceMax = scraper.priceMax;
+    final.requiresManualReview = !final.priceReliable;
   }
 
   const scraperLong = String(scraper.longDescription ?? "").trim();

@@ -14,10 +14,12 @@ const BLOCKED_TITLE_RE =
 
 /** Known resale / retail marketplaces */
 const MARKETPLACE_HOST_RE =
-  /(?:^|\.)((?:ebay|allegro|amazon|etsy|poshmark|mercari|depop|grailed|offerup|bonanza|rubylane|thredup|vestiairecollective|chrono24|watchfinder|therealreal|stockx|goat|vinted|asos|zara|nike|adidas|shopify)\.[a-z.]+)/i;
+  /(?:^|\.)((?:ebay|allegro|amazon|etsy|poshmark|mercari|depop|grailed|offerup|bonanza|rubylane|thredup|vestiairecollective|chrono24|watchfinder|therealreal|stockx|goat|vinted|asos|zara|nike|adidas|shopify|bobswatches|swisswatchexpo|crownandcaliber|watchcharts)\.[a-z.]+)/i;
+
+const COLLECTION_ONLY_PATH_RE = /\/collections?\//i;
 
 const PRODUCT_PATH_RE =
-  /\/(item|listing|product|p|dp|itm|offer|sku|goods|buy|shop|store)\/|\/\d{6,}|[?&](item|product|sku|itm)=/i;
+  /\/(items?|listings?|products?|product|p|dp|itm|offer|sku|goods|buy|shop|store)\/|\/\d{6,}|[?&](item|product|sku|itm)=/i;
 
 const BUY_SIGNAL_RE =
   /\b(add to cart|buy now|add to bag|shop now|in stock|free shipping|buy it now|make offer|listings?)\b/i;
@@ -78,6 +80,13 @@ export function evaluateOrganicResult(input: {
 
   if (isBlockedHost(url)) {
     return { accept: false, reason: "blocked_host", isMarketplace: false };
+  }
+
+  if (
+    COLLECTION_ONLY_PATH_RE.test(url) &&
+    !/\/products?\//i.test(url)
+  ) {
+    return { accept: false, reason: "collection_page_not_product", isMarketplace: false };
   }
 
   if (BLOCKED_TITLE_RE.test(title) || BLOCKED_TITLE_RE.test(description)) {
