@@ -5,11 +5,24 @@ import {
   scoreScraperCandidate,
 } from "./listingUtils";
 import type { ScraperRunOptions } from "./scraperOptions";
+import {
+  buildMatchTargetFromContext,
+  validateMatch,
+  type MatchConfidence,
+} from "./validateMatch";
 
-/** Stage 2 keyword race budget (Apify / Google Shopping) */
-export const GLOBAL_EXACT_RACE_TIMEOUT_MS = Number(
-  process.env.SCRAPER_GLOBAL_TIMEOUT_MS ?? 3_000
+/** Parallel race window — first exact validation match wins; per-source timeout */
+export const SCRAPER_RACE_TIMEOUT_MS = Number(
+  process.env.SCRAPER_RACE_TIMEOUT_MS ?? 7_000
 );
+
+/** @deprecated Use SCRAPER_RACE_TIMEOUT_MS */
+export const GLOBAL_EXACT_RACE_TIMEOUT_MS = SCRAPER_RACE_TIMEOUT_MS;
+
+const EXACT_WIN_CONFIDENCES = new Set<MatchConfidence>([
+  "high_reference",
+  "exact_brand_model",
+]);
 
 export type ScraperRunner = {
   source: ScraperSource;
@@ -49,6 +62,39 @@ function validateProduct(data: unknown): data is Record<string, unknown> {
   return true;
 }
 
+function listingRowFromProduct(
+  value: Record<string, unknown>
+): Record<string, unknown> {
+  return {
+    title: String(value.title ?? "").trim(),
+    brand: String(value.brand ?? "").trim(),
+    description: String(value.description ?? "").trim(),
+    url: String(value.productUrl ?? value.url ?? value.link ?? "").trim(),
+  };
+}
+
+/** Exact win: validateMatch high_reference / exact_brand_model, or legacy isExactMatch flag */
+export function isRaceExactValidation(
+  vision: VisionMatchContext,
+  value: Record<string, unknown>
+): { exact: boolean; confidence?: MatchConfidence } {
+  if (value.isExactMatch === true) {
+    return {
+      exact: true,
+      confidence: (value.matchValidation as MatchConfidence) ?? "high_reference",
+    };
+  }
+  const target = buildMatchTargetFromContext(vision);
+  const validation = validateMatch(listingRowFromProduct(value), target);
+  if (
+    validation.accepted &&
+    EXACT_WIN_CONFIDENCES.has(validation.confidence)
+  ) {
+    return { exact: true, confidence: validation.confidence };
+  }
+  return { exact: false };
+}
+
 export function toCandidate(
   vision: VisionMatchContext,
   result: ScraperRunResult,
@@ -68,13 +114,27 @@ export function toCandidate(
     return null;
   }
 
-  const scored = scoreFn(vision, value);
+  const exactCheck = isRaceExactValidation(vision, value);
+  const product = {
+    ...value,
+    scraperSource: source,
+    ...(exactCheck.exact
+      ? {
+          isExactMatch: true,
+          matchType: "exact",
+          matchValidation: exactCheck.confidence ?? value.matchValidation,
+        }
+      : {}),
+  };
+
+  const scored = scoreFn(vision, product);
   console.log(
-    `[MasterScraper] ${source}: score=${scored.score} [${scored.reasons.join(", ")}]`
+    `[MasterScraper] ${source}: score=${scored.score} [${scored.reasons.join(", ")}]` +
+      (exactCheck.exact ? ` exact=${exactCheck.confidence}` : "")
   );
   return {
     source,
-    product: { ...value, scraperSource: source },
+    product,
     score: scored.score,
     reasons: scored.reasons,
   };
@@ -89,8 +149,9 @@ export type RaceScrapersResult = {
 };
 
 /**
- * Run scrapers in parallel. First valid exact match wins and aborts the rest.
- * If no exact within GLOBAL_EXACT_RACE_TIMEOUT_MS, wait for all and rank similar.
+ * Run scrapers in parallel with SCRAPER_RACE_TIMEOUT_MS per source.
+ * First high_reference / exact_brand_model (or isExactMatch) wins and aborts the rest.
+ * If no exact within the race window, wait for all finishes and return best similar.
  */
 export async function raceScrapersForExactMatch(
   runners: ScraperRunner[],
@@ -118,6 +179,11 @@ export async function raceScrapersForExactMatch(
   const results: ScraperRunResult[] = [];
   let anyTimedOut = false;
 
+  console.log(
+    `[ScraperRace] Parallel race start sources=[${runners.map((r) => r.source).join(", ")}] ` +
+      `perSourceTimeout=${SCRAPER_RACE_TIMEOUT_MS}ms raceWindow=${SCRAPER_RACE_TIMEOUT_MS}ms`
+  );
+
   const combineSignals = (a: AbortSignal, b: AbortSignal): AbortSignal => {
     if (a.aborted || b.aborted) {
       const c = new AbortController();
@@ -135,6 +201,7 @@ export async function raceScrapersForExactMatch(
     const opts = buildOpts(source);
     const mergedOpts: ScraperRunOptions = {
       ...opts,
+      timeoutMs: opts.timeoutMs ?? SCRAPER_RACE_TIMEOUT_MS,
       signal: opts.signal
         ? combineSignals(opts.signal, masterAbort.signal)
         : masterAbort.signal,
@@ -151,12 +218,12 @@ export async function raceScrapersForExactMatch(
             ? "ok"
             : "empty";
       console.log(
-        `[MasterScraper] ${result.source} ${status} in ${result.elapsedMs}ms`
+        `[ScraperRace] ${result.source} ${status} in ${result.elapsedMs}ms`
       );
 
       if (winnerLocked && result.source !== winnerSource) {
         console.log(
-          `[MasterScraper] ${result.source} aborted — winner ${winnerSource} already locked`
+          `[ScraperRace] ${result.source} cancelled — winner ${winnerSource} locked`
         );
         return { ...result, aborted: true };
       }
@@ -170,19 +237,23 @@ export async function raceScrapersForExactMatch(
     let settled = false;
 
     const tryResolveExact = (result: ScraperRunResult) => {
-      if (settled || winnerLocked) return;
+      if (settled || winnerLocked || !result.value) return;
+
+      const exactCheck = isRaceExactValidation(vision, result.value);
+      if (!exactCheck.exact) return;
+
       const candidate = toCandidate(vision, result, scoreFn);
-      if (candidate?.product.isExactMatch === true) {
-        settled = true;
-        winnerLocked = true;
-        winnerSource = result.source;
-        exactFoundAtMs = Date.now() - raceStart;
-        masterAbort.abort();
-        console.log(
-          `[MasterScraper] WINNER (exact match) from ${result.source} in ${exactFoundAtMs}ms`
-        );
-        resolve(candidate);
-      }
+      if (!candidate) return;
+
+      settled = true;
+      winnerLocked = true;
+      winnerSource = result.source;
+      exactFoundAtMs = Date.now() - raceStart;
+      masterAbort.abort();
+      console.log(
+        `[ScraperRace] WINNER ${result.source} (${exactCheck.confidence}) in ${exactFoundAtMs}ms — cancelling pending scrapers`
+      );
+      resolve(candidate);
     };
 
     for (const p of promises) {
@@ -195,11 +266,11 @@ export async function raceScrapersForExactMatch(
       if (!settled) {
         settled = true;
         console.log(
-          `[MasterScraper] Global ${GLOBAL_EXACT_RACE_TIMEOUT_MS}ms timeout — no exact match yet, waiting for best similar`
+          `[ScraperRace] ${SCRAPER_RACE_TIMEOUT_MS}ms race window elapsed — no exact match yet, waiting for best result`
         );
         resolve(null);
       }
-    }, GLOBAL_EXACT_RACE_TIMEOUT_MS);
+    }, SCRAPER_RACE_TIMEOUT_MS);
 
     Promise.allSettled(promises).then(() => {
       clearTimeout(globalTimer);
@@ -236,6 +307,14 @@ export async function raceScrapersForExactMatch(
     if (bExact !== aExact) return bExact - aExact;
     return b.score - a.score;
   });
+
+  if (candidates.length > 0) {
+    console.log(
+      `[ScraperRace] No exact winner — best similar ${candidates[0].source} score=${candidates[0].score}`
+    );
+  } else {
+    console.log("[ScraperRace] No candidates after race");
+  }
 
   return {
     exactWinner: null,

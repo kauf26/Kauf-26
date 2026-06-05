@@ -1,0 +1,17 @@
+{
+  "job_id": "5615dcfe-a3b8-44bd-8881-6e990920d932",
+  "status": "completed",
+  "query": "Breitling Superocean A17360",
+  "image_path": null,
+  "created_at": "2026-06-04T22:26:19.356816+00:00",
+  "updated_at": "2026-06-04T22:26:19.357863+00:00",
+  "results": [
+    {
+      "title": "Placeholder result for: Breitling Superocean A17360",
+      "link": null,
+      "snippet": "Set SERPAPI_API_KEY for live Google results.",
+      "source": "placeholder"
+    }
+  ],
+  "completed_at": "2026-06-04T22:26:19.357860+00:00"
+}

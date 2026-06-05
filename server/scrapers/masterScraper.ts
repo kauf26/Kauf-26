@@ -19,6 +19,7 @@ import {
 } from "./searchOptimizer";
 import {
   GLOBAL_EXACT_RACE_TIMEOUT_MS,
+  SCRAPER_RACE_TIMEOUT_MS,
   raceScrapersForExactMatch,
   type ScraperRunner,
 } from "./scraperRace";
@@ -460,7 +461,8 @@ async function runScraperWithRetry(
     }
     const attemptStart = Date.now();
     try {
-      const timeoutMs = SCRAPER_TIMEOUT_MS[source] ?? 12_000;
+      const timeoutMs =
+        opts?.timeoutMs ?? SCRAPER_TIMEOUT_MS[source] ?? SCRAPER_RACE_TIMEOUT_MS;
       const value = await withTimeout(
         run(query, vision, opts),
         timeoutMs,
@@ -737,7 +739,7 @@ export const scrapeProduct = async (
   ];
 
   console.log(
-    `[MasterScraper] Stage 2 race (${runners.length} scrapers, timeout ${GLOBAL_EXACT_RACE_TIMEOUT_MS}ms):`,
+    `[MasterScraper] Stage 2 race (${runners.length} scrapers, ${SCRAPER_RACE_TIMEOUT_MS}ms per source / race window):`,
     runners.map((r) => r.source).join(", ")
   );
 
@@ -747,7 +749,7 @@ export const scrapeProduct = async (
     matchVision,
     (source, run, q, v, opts) =>
       runScraperWithRetry(source, run, q, v, opts),
-  () => ({}),
+    () => ({ timeoutMs: SCRAPER_RACE_TIMEOUT_MS }),
     scoreResult
   );
 
