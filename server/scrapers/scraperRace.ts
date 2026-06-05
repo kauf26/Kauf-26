@@ -5,6 +5,11 @@ import {
   scoreScraperCandidate,
 } from "./listingUtils";
 import type { ScraperRunOptions } from "./scraperOptions";
+import {
+  buildMatchTargetFromContext,
+  validateMatch,
+  type MatchConfidence,
+} from "./validateMatch";
 
 /** Parallel race window — first exact validation match wins; per-source timeout */
 export const SCRAPER_RACE_TIMEOUT_MS = Number(
@@ -14,10 +19,21 @@ export const SCRAPER_RACE_TIMEOUT_MS = Number(
 /** @deprecated Use SCRAPER_RACE_TIMEOUT_MS */
 export const GLOBAL_EXACT_RACE_TIMEOUT_MS = SCRAPER_RACE_TIMEOUT_MS;
 
-const EXACT_WIN_VALIDATIONS = new Set([
+const EXACT_WIN_CONFIDENCES = new Set<MatchConfidence>([
   "high_reference",
   "exact_brand_model",
 ]);
+
+function listingRowFromProduct(
+  value: Record<string, unknown>
+): Record<string, unknown> {
+  return {
+    title: String(value.title ?? "").trim(),
+    brand: String(value.brand ?? "").trim(),
+    description: String(value.description ?? "").trim(),
+    url: String(value.productUrl ?? value.url ?? value.link ?? "").trim(),
+  };
+}
 
 export type ScraperRunner = {
   source: ScraperSource;
@@ -57,24 +73,30 @@ function validateProduct(data: unknown): data is Record<string, unknown> {
   return true;
 }
 
-/**
- * Exact win: isExactMatch flag or matchValidation high_reference / exact_brand_model
- * (set by scrapers after validateMatch).
- */
+/** Exact win: validateMatch high_reference / exact_brand_model, or legacy flags */
 export function isRaceExactValidation(
-  _vision: VisionMatchContext,
+  vision: VisionMatchContext,
   value: Record<string, unknown>
-): { exact: boolean; confidence?: string } {
+): { exact: boolean; confidence?: MatchConfidence } {
   if (value.isExactMatch === true) {
     return {
       exact: true,
-      confidence: String(value.matchValidation ?? "high_reference"),
+      confidence: (value.matchValidation as MatchConfidence) ?? "high_reference",
     };
   }
 
-  const preset = String(value.matchValidation ?? "");
-  if (EXACT_WIN_VALIDATIONS.has(preset)) {
+  const preset = value.matchValidation as MatchConfidence | undefined;
+  if (preset && EXACT_WIN_CONFIDENCES.has(preset)) {
     return { exact: true, confidence: preset };
+  }
+
+  const target = buildMatchTargetFromContext(vision);
+  const validation = validateMatch(listingRowFromProduct(value), target);
+  if (
+    validation.accepted &&
+    EXACT_WIN_CONFIDENCES.has(validation.confidence)
+  ) {
+    return { exact: true, confidence: validation.confidence };
   }
 
   return { exact: false };
@@ -209,7 +231,8 @@ export async function raceScrapersForExactMatch(
     });
   });
 
-  const exactWinPromise = new Promise<ScraperCandidate | null>((resolve) => {
+  /** Promise.race: first exact validation vs race window deadline */
+  const firstExactPromise = new Promise<ScraperCandidate | null>((resolve) => {
     let settled = false;
 
     const tryResolveExact = (result: ScraperRunResult) => {
@@ -264,7 +287,11 @@ export async function raceScrapersForExactMatch(
     });
   });
 
-  const exactWinner = await exactWinPromise;
+  const raceDeadline = new Promise<null>((resolve) => {
+    setTimeout(() => resolve(null), SCRAPER_RACE_TIMEOUT_MS);
+  });
+
+  const exactWinner = await Promise.race([firstExactPromise, raceDeadline]);
 
   if (exactWinner) {
     return {

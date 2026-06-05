@@ -17,6 +17,12 @@ import {
   raceWithAbortSignal,
   throwIfAborted,
 } from "./scraperOptions";
+import {
+  applyValidationToProduct,
+  buildMatchTargetFromContext,
+  validateMatch,
+} from "./validateMatch";
+import { normalizeText, significantTokens } from "./visionMatch";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -36,21 +42,47 @@ type OrganicResult = {
   displayedUrl?: string;
 };
 
+function titleMatchesQueryKeywords(
+  title: string,
+  searchQuery: string,
+  visionBrand?: string
+): boolean {
+  const tokens = significantTokens(searchQuery, visionBrand);
+  if (tokens.length === 0) return true;
+  const normTitle = normalizeText(title);
+  return tokens.every((t) => normTitle.includes(t));
+}
+
 function organicToListing(
   row: OrganicResult,
+  searchQuery: string,
   visionBrand?: string
 ): RawListing | null {
   const title = String(row.title ?? "").trim();
-  if (!title) return null;
+  if (!title) {
+    console.log(
+      `[DEBUG][GoogleSearchApify] organic REJECT missing_title url=${String(row.url ?? "").slice(0, 80)}`
+    );
+    return null;
+  }
 
   const url = String(row.url ?? "").trim();
   const blob = `${title} ${row.description ?? ""}`;
   const price = bestPriceFromText(blob, 0);
   const looksLikeProduct = PRODUCT_URL_RE.test(url);
+  const keywordMatch = titleMatchesQueryKeywords(title, searchQuery, visionBrand);
 
-  if (price <= 0 && !looksLikeProduct) {
+  if (!keywordMatch && price <= 0 && !looksLikeProduct) {
+    console.log(
+      `[DEBUG][GoogleSearchApify] organic REJECT no_keyword_no_price_no_product_url title="${title.slice(0, 80)}" url=${url.slice(0, 80)}`
+    );
     return null;
   }
+
+  console.log(
+    `[DEBUG][GoogleSearchApify] organic ACCEPT title="${title.slice(0, 80)}" ` +
+      `keywordMatch=${keywordMatch} price=${price} productUrl=${looksLikeProduct}`
+  );
 
   return {
     title,
@@ -103,11 +135,22 @@ async function runGoogleSearch(
     `[GoogleSearchApify] Run ${run.status}; organic: ${organic.length} for "${q}"`
   );
 
+  for (let i = 0; i < Math.min(3, organic.length); i++) {
+    const row = organic[i];
+    console.log(
+      `[GoogleSearchApify] Apify organic[${i}]: title="${String(row.title ?? "").slice(0, 100)}" url=${String(row.url ?? "").slice(0, 120)}`
+    );
+  }
+
   const visionBrand = context?.visionBrand?.trim();
   const listings = organic
-    .map((r) => organicToListing(r, visionBrand))
+    .map((r) => organicToListing(r, q, visionBrand))
     .filter((r): r is RawListing => r != null)
     .slice(0, SCRAPE_LISTING_LIMIT + 2);
+
+  console.log(
+    `[GoogleSearchApify] Query "${q}" → organic=${organic.length} listings=${listings.length}`
+  );
 
   if (listings.length === 0) return null;
 
@@ -122,8 +165,23 @@ async function runGoogleSearch(
     limit: 5,
   });
 
-  const aggregated = aggregateListings(listings, visionTitle, matchCtx);
+  let aggregated = aggregateListings(listings, visionTitle, matchCtx);
   if (!aggregated) return null;
+
+  const target = buildMatchTargetFromContext(matchCtx);
+  const repListing = {
+    title: aggregated.title,
+    brand: aggregated.brand,
+    description: aggregated.description,
+    url: aggregated.url ?? aggregated.link,
+  };
+  const validation = validateMatch(repListing, target);
+  aggregated = applyValidationToProduct(aggregated, validation);
+  if (validation.accepted) {
+    console.log(
+      `[GoogleSearchApify] validateMatch ${validation.confidence}: ${validation.reason}`
+    );
+  }
 
   const priced = listings.filter((l) => l.price != null).length;
   if (priced < 2) {

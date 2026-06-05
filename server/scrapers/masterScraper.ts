@@ -337,6 +337,7 @@ export function mergeSimilarProduct(
     isExactMatch: false,
     matchType: "similar" satisfies MatchType,
     scraperSource: scraped.scraperSource,
+    needsManualReview: true,
   };
 }
 
@@ -521,8 +522,23 @@ function wrapParallelOptimizedQueries(
   queryStrings: string[]
 ): ScraperRunner["run"] {
   if (source === "apify") {
-    return async (primary, vision, opts) =>
-      run(primary, vision, { ...opts, queryChain: queryStrings });
+    return async (primary, vision, opts) => {
+      console.log(
+        `[MasterScraper] apify query chain (${queryStrings.length}):`,
+        queryStrings.join(" | ")
+      );
+      const raw = await run(primary, vision, {
+        ...opts,
+        queryChain: queryStrings,
+      });
+      console.log(
+        `[MasterScraper] apify chain → ${raw ? "result" : "empty"}` +
+          (raw
+            ? ` title="${String(raw.title ?? "").slice(0, 60)}" isExact=${raw.isExactMatch === true}`
+            : "")
+      );
+      return raw;
+    };
   }
 
   return async (_primary, vision, opts) => {
@@ -538,8 +554,19 @@ function wrapParallelOptimizedQueries(
     const outcomes = await Promise.all(
       queryStrings.map(async (q) => {
         try {
-          return await run(q, ctx, opts);
-        } catch {
+          const raw = await run(q, ctx, opts);
+          console.log(
+            `[MasterScraper] ${source} query "${q}" → ${raw ? "result" : "empty"}` +
+              (raw
+                ? ` title="${String(raw.title ?? "").slice(0, 60)}" isExact=${raw.isExactMatch === true}`
+                : "")
+          );
+          return raw;
+        } catch (err) {
+          console.log(
+            `[MasterScraper] ${source} query "${q}" → error:`,
+            err instanceof Error ? err.message : err
+          );
           return null;
         }
       })
@@ -547,6 +574,10 @@ function wrapParallelOptimizedQueries(
 
     let best: Record<string, unknown> | null = null;
     let bestScore = -1;
+
+    console.log(
+      `[MasterScraper] ${source} parallel queries=${queryStrings.length} withResults=${outcomes.filter(Boolean).length}`
+    );
 
     for (const raw of outcomes) {
       if (!raw || !validateProduct(raw)) continue;
@@ -757,8 +788,15 @@ export const scrapeProduct = async (
     `[MasterScraper] Race finished in ${race.raceElapsedMs}ms` +
       (race.exactFoundAtMs != null
         ? ` (exact at ${race.exactFoundAtMs}ms)`
-        : " (no exact)")
+        : " (no exact)") +
+      ` candidates=${race.candidates.length}`
   );
+  for (const c of race.candidates) {
+    console.log(
+      `[MasterScraper] Race result ${c.source}: score=${c.score} isExact=${c.product.isExactMatch === true} ` +
+        `matchValidation=${String(c.product.matchValidation ?? "n/a")} title="${String(c.product.title ?? "").slice(0, 80)}"`
+    );
+  }
 
   const candidates = race.candidates;
   const anyScraperTimedOut = race.anyTimedOut;
@@ -766,10 +804,24 @@ export const scrapeProduct = async (
   if (candidates.length === 0) {
     logNoExactMatchWarning(matchVision, queryPlan, null, []);
     console.log(
-      "[MasterScraper] No scraper returned vision-consistent data — caller should use vision fallback",
+      "[MasterScraper] No scraper candidates — returning vision similar fallback with needsManualReview",
       anyScraperTimedOut ? "(some scrapers timed out)" : ""
     );
-    return null;
+    const fallback = mergeSimilarProduct(
+      {
+        title: matchVision.visionTitle || query,
+        brand: matchVision.visionBrand ?? "",
+        description: `Similar match for ${matchVision.visionTitle || query}. Details pending manual review.`,
+        price: 0,
+        scraperSource: "openai",
+      },
+      { visionTitle: matchVision.visionTitle }
+    );
+    return attachScrapeMeta(fallback, {
+      timedOut: anyScraperTimedOut,
+      matchConfidence: "low",
+      matchScore: 0,
+    });
   }
 
   logListingExactRanks(
@@ -865,6 +917,9 @@ export const scrapeProduct = async (
     visionTitle: matchVision.visionTitle,
     visionCategory: undefined,
   });
+  console.log(
+    "[MasterScraper] Returning similar match (needsManualReview=true) — no exact winner"
+  );
   console.log("[MasterScraper] Price stats:", {
     price: result.price,
     priceReliable: result.priceReliable,
