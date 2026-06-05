@@ -84,6 +84,9 @@ type MatchConfidence = 'low' | 'medium' | 'high';
 type IdentifyApiResponse = {
   success?: boolean;
   draftId?: number | string;
+  message?: string;
+  fallbackToVision?: boolean;
+  listingsFound?: number;
   isExactMatch?: boolean;
   matchType?: MatchType;
   visionConfidence?: MatchConfidence;
@@ -128,9 +131,11 @@ function isExactMatchResult(result: IdentifyApiResponse): boolean {
   );
 }
 
-/** Proceed to draft when we have a marketplace hit or structured manual-review fallback. */
+/** Proceed to draft whenever identify succeeded (vision-only or scraper-backed). */
 function shouldProceedToDraft(result: IdentifyApiResponse): boolean {
+  if (result.success === true && result.draftId != null) return true;
   if (result.requiresManualReview === true) return true;
+  if (result.fallbackToVision === true) return true;
   if (isExactMatchResult(result)) return true;
   const p = result.product;
   if (!p) return false;
@@ -254,16 +259,24 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
       body: formData,
     });
 
+    const body = (await res.json().catch(() => ({}))) as IdentifyApiResponse & {
+      error?: string;
+      message?: string;
+    };
+
+    if (body.success === true && body.draftId != null) {
+      return body;
+    }
+
     if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
       throw new Error(
-        (body as { message?: string; error?: string }).message ||
-          (body as { message?: string; error?: string }).error ||
-          'Failed to process image with scraper'
+        body.message ||
+          body.error ||
+          'Failed to identify product. Please try again.'
       );
     }
 
-    return res.json() as Promise<IdentifyApiResponse>;
+    return body;
   };
 
   const goToDraft = (result: IdentifyApiResponse) => {
@@ -303,8 +316,20 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
         draftId: result.draftId,
       });
 
+      if (result.message && result.requiresManualReview) {
+        console.log('[Identify]', result.message);
+      }
+
       if (shouldProceedToDraft(result)) {
-        goToDraft(result);
+        goToDraft({
+          ...result,
+          verificationWarning:
+            result.verificationWarning ??
+            (result.requiresManualReview
+              ? result.message ??
+                'Product identified — please review pricing before posting.'
+              : undefined),
+        });
         return;
       }
 
@@ -316,6 +341,7 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
       goToDraft({
         ...result,
         verificationWarning:
+          result.message ??
           'No exact match found – using best guess. You can edit before posting.',
       });
     } catch (err) {

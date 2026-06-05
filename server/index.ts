@@ -120,6 +120,8 @@ type ScrapedListing = ScrapedProduct & {
   requiresManualReview?: boolean;
   priceMin?: string | number;
   priceMax?: string | number;
+  listingCount?: number;
+  exactMatchCount?: number;
 };
 
 function visionToListing(vision: VisionProduct): ScrapedListing {
@@ -175,7 +177,7 @@ function buildVisionFallback(vision: VisionProduct): ScrapedListing {
     vision.title,
     vision.brand
   );
-  return stripListingUrls({
+  const listing = stripListingUrls({
     ...visionToListing(vision),
     price: range.suggested,
     medianPrice: range.suggested,
@@ -189,8 +191,14 @@ function buildVisionFallback(vision: VisionProduct): ScrapedListing {
     requiresManualReview: true,
     longDescription: String(vision.description ?? "").trim(),
     verificationWarning:
-      "No marketplace product found — using estimated price range. Review before posting.",
+      "Product identified, but pricing information is incomplete. Please review before posting.",
   });
+  enrichBrandModelFromScraper(
+    listing,
+    { title: vision.title, brand: vision.brand } as ScrapedListing,
+    vision
+  );
+  return listing;
 }
 
 const ICONIC_WATCH_MODEL_RE =
@@ -835,20 +843,39 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
    console.log("🔍 [3/5] Vision identified:", JSON.stringify(vision, null, 2));
 
    let listings: ScrapedListing;
+   let fallbackToVision = false;
+   let listingsFound = 0;
+   let scrapedRaw: ScrapedListing | null = null;
 
    {
      console.log("🕸️ [4/5] Calling scraper with query:", searchQuery);
      const scrapeStart = Date.now();
-     const scrapedRaw = (await fetchMasterProductData(searchQuery, {
-       vision: {
-         visionTitle: vision.title,
-         visionBrand: vision.brand ?? "",
-       },
-       imageBase64: base64Image,
-       imageMimeType: req.file.mimetype || "image/jpeg",
-     })) as ScrapedListing | null;
+     try {
+       scrapedRaw = (await fetchMasterProductData(searchQuery, {
+         vision: {
+           visionTitle: vision.title,
+           visionBrand: vision.brand ?? "",
+         },
+         imageBase64: base64Image,
+         imageMimeType: req.file.mimetype || "image/jpeg",
+       })) as ScrapedListing | null;
+     } catch (scraperErr) {
+       console.warn(
+         "[Identify] Scraper error — continuing with vision-only draft:",
+         scraperErr instanceof Error ? scraperErr.message : scraperErr
+       );
+       scrapedRaw = null;
+     }
+     step = logStep("Scraper race complete", scrapeStart);
+
+     listingsFound = Number(
+       scrapedRaw?.listingCount ??
+         scrapedRaw?.exactMatchCount ??
+         (scraperHasUsableProduct(scrapedRaw, vision) ? 1 : 0)
+     );
+
      if (!scrapedRaw) {
-       console.warn("[Identify] Scraper returned no result");
+       console.warn("[Identify] Scraper returned no result — vision-only draft");
      } else {
        console.log("[Identify] Scraper result:", {
          title: scrapedRaw.title,
@@ -859,13 +886,14 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
          matchType: scrapedRaw.matchType,
          matchValidation: scrapedRaw.matchValidation,
          scraperSource: scrapedRaw.scraperSource,
+         listingsFound,
        });
      }
-     step = logStep("Scraper race complete", scrapeStart);
 
      const scraperTitle = String(scrapedRaw?.title ?? "").trim();
 
      if (!scraperHasUsableProduct(scrapedRaw, vision)) {
+       fallbackToVision = true;
        console.warn(
          "[Identify] No valid marketplace product — vision fallback with estimated pricing"
        );
@@ -901,11 +929,16 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
 
    console.log("📦 Listing result:", JSON.stringify(listings, null, 2));
 
-   // ✨ NEW: Save as a draft in the database
+   const requiresManualReview =
+     fallbackToVision || listings.requiresManualReview === true;
+   const draftStatus = requiresManualReview
+     ? "requires_review"
+     : "ready_for_posting";
+
    const draftData = {
      title: listings.title ?? searchQuery,
      sku: listings.refNumber || `AUTO-${Date.now()}`,
-     status: 'ready_for_posting', // This makes it appear on page 3
+     status: draftStatus,
      images: [`data:${req.file.mimetype};base64,${base64Image}`],
      attributes: {
        brand: normalizeBrand(listings.brand) || normalizeBrand(vision.brand),
@@ -936,7 +969,9 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
        isExactMatch: listings.isExactMatch === true,
        scraperSource: listings.scraperSource ?? null,
        scraperMetadata: listings._scraperMetadata ?? null,
-       requiresManualReview: listings.requiresManualReview === true,
+       requiresManualReview,
+       fallbackToVision,
+       listingsFound,
        priceMin: String(listings.priceMin ?? ""),
        priceMax: String(listings.priceMax ?? ""),
        identifiedAt: new Date().toISOString()
@@ -960,7 +995,9 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
    const draftId = savedDraft.id ?? savedDraft;
    console.log("✅ Draft saved successfully with ID:", draftId);
 
-   const publishJobId = await prepareDraftPublishing(Number(draftId));
+   const publishJobId = requiresManualReview
+     ? null
+     : await prepareDraftPublishing(Number(draftId));
 
    // Normalized response for ProductDraft / sessionStorage (Task A)
    const capturedImage = `data:${req.file.mimetype};base64,${base64Image}`;
@@ -972,6 +1009,10 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
 
    const matchType: MatchType = listings.matchType ?? "generic";
    const isExactMatch = matchType === "exact";
+   const priceReliable = listings.priceReliable === true && !fallbackToVision;
+   const responsePrice = priceReliable
+     ? market.price
+     : null;
 
    logStep("Identify total", identifyStart);
 
@@ -979,7 +1020,14 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
      success: true,
      draftId,
      publishJobId,
-     requiresManualReview: listings.requiresManualReview === true,
+     message: requiresManualReview
+       ? "Product identified, but pricing information is incomplete. Please review before posting."
+       : undefined,
+     requiresManualReview,
+     fallbackToVision,
+     listingsFound,
+     price: responsePrice,
+     priceReliable,
      priceMin: listings.priceMin ?? null,
      priceMax: listings.priceMax ?? null,
      isExactMatch,
@@ -1000,8 +1048,10 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
          listings.description ??
          vision.description ??
          "",
-       price: String(market.price),
-       priceReliable: listings.priceReliable === true,
+       price: priceReliable
+         ? String(market.price)
+         : String(listings.medianPrice ?? listings.price ?? ""),
+       priceReliable,
        medianPrice: String(listings.medianPrice ?? market.price),
        brand: normalizeBrand(listings.brand) || normalizeBrand(vision.brand),
        model: String(listings.model ?? "").trim(),
@@ -1052,7 +1102,13 @@ app.post(
         });
       }
       console.error("❌ Identification Error:", error);
-      res.status(500).json({ error: "Scraping or identification failed" });
+      res.status(500).json({
+        error: "Identification failed",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Identification failed — please try again",
+      });
     }
   }
 );

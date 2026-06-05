@@ -619,6 +619,7 @@ export const scrapeProduct = async (
   query: string,
   options?: ScrapeOptions
 ): Promise<Record<string, unknown> | null> => {
+  try {
   const visionInput: VisionMatchContext = options?.vision ?? {
     visionTitle: query,
     visionBrand: "",
@@ -959,4 +960,11 @@ export const scrapeProduct = async (
     timedOut: anyScraperTimedOut,
   });
   return attachScrapeMeta(result, meta);
+  } catch (err) {
+    console.error(
+      "[MasterScraper] scrapeProduct failed — returning null (vision-only identify will continue):",
+      err instanceof Error ? err.message : err
+    );
+    return null;
+  }
 };

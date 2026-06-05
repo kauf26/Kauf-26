@@ -1,7 +1,7 @@
 import express from 'express';
 import { db } from './db';
 import { productDrafts, publishJobs, publishTasks } from '../shared/schema';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 
 const router = express.Router();
 
@@ -173,7 +173,9 @@ router.get("/drafts/ready-for-posting", async (_req, res) => {
  try {
    const readyDrafts = await db.select()
      .from(productDrafts)
-     .where(eq(productDrafts.status, 'ready_for_posting'));
+     .where(
+       inArray(productDrafts.status, ["ready_for_posting", "requires_review"])
+     );
 
    console.log(`[KAUF26] Found ${readyDrafts.length} drafts ready for posting`);
    return res.status(200).json({
@@ -203,9 +205,13 @@ router.post("/drafts/:id/post-to-marketplaces", async (req, res) => {
      return res.status(404).json({ error: "Draft not found" });
    }
 
-   if (draft.status !== 'ready_for_posting' && draft.status !== 'draft') {
+   if (
+     draft.status !== "ready_for_posting" &&
+     draft.status !== "requires_review" &&
+     draft.status !== "draft"
+   ) {
      return res.status(400).json({
-       error: `Draft status is '${draft.status}', need 'ready_for_posting' or 'draft'`
+       error: `Draft status is '${draft.status}', need 'ready_for_posting', 'requires_review', or 'draft'`,
      });
    }
 
@@ -323,7 +329,12 @@ router.patch("/drafts/:id/status", async (req, res) => {
    const draftId = req.params.id;
    const { status } = req.body;
 
-   if (!status || !['draft', 'processing', 'ready_for_posting', 'posted'].includes(status)) {
+   if (
+     !status ||
+     !["draft", "processing", "ready_for_posting", "requires_review", "posted"].includes(
+       status
+     )
+   ) {
      return res.status(400).json({ error: "Invalid status value" });
    }
 
