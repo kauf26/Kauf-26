@@ -44,11 +44,28 @@ type OrganicResult = {
   displayedUrl?: string;
 };
 
+/** Trailing marketplace noise (em-dash / pipe). Do NOT include ASCII hyphen — breaks "Pre-Owned". */
 const TITLE_TRAILING_NOISE_RE =
-  /\s*[»|–—-]\s*.+$|\s+for sale.*$|\s+check prices.*$|\s+price breakdown.*$/i;
+  /\s+[»|–—]\s*.+$|\s+for sale.*$|\s+check prices.*$|\s+price breakdown.*$/i;
 
 const TITLE_PREFIX_NOISE_RE =
   /\b(pre[- ]?owned|used|like new|new|vintage|authentic|certified|genuine|official)\b/gi;
+
+const ICONIC_MODEL_RE =
+  /\b(submariner(?:\s+date)?|daytona|datejust|speedmaster|seamaster|royal\s+oak|nautilus|aquaracer)\b/i;
+
+const MODEL_ATTR_NOISE_RE =
+  /\b(stainless|steel|silver|black|white|gold|dial|bezel|oyster|ceramic|sapphire|automatic|quartz|and|with)\b/gi;
+
+function refineWatchModel(model: string): string {
+  let m = String(model ?? "")
+    .replace(MODEL_ATTR_NOISE_RE, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const iconic = m.match(ICONIC_MODEL_RE);
+  if (iconic?.[0]) return iconic[0];
+  return m;
+}
 
 const GENERIC_TITLE_LEADERS = new Set([
   "hats",
@@ -82,11 +99,13 @@ export function extractBrandModelFromTitle(
   const hint = String(hintBrand ?? "").trim();
   if (hint && t.toLowerCase().includes(hint.toLowerCase())) {
     const escaped = hint.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const model = t
-      .replace(new RegExp(escaped, "gi"), "")
-      .replace(/\bhats?\b|\bcaps?\b/gi, "")
-      .replace(/\s+/g, " ")
-      .trim();
+    const model = refineWatchModel(
+      t
+        .replace(new RegExp(escaped, "gi"), "")
+        .replace(/\bhats?\b|\bcaps?\b/gi, "")
+        .replace(/\s+/g, " ")
+        .trim()
+    );
     return { brand: hint, model };
   }
 
@@ -121,7 +140,7 @@ export function extractBrandModelFromTitle(
   if (ref && !model.toUpperCase().includes(ref[1].toUpperCase())) {
     model = model ? `${model} ${ref[1]}` : ref[1];
   }
-  return { brand, model };
+  return { brand, model: refineWatchModel(model) };
 }
 
 function deriveCanonicalBrandModel(listings: RawListing[]): {

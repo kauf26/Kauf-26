@@ -14,7 +14,9 @@ import {
   isPriceSaneForLuxury,
   type LuxuryProfile,
 } from "./scrapers/luxuryPricing";
+import { extractBrandModelFromTitle } from "./scrapers/googleSearchApify";
 import { debugIdentify } from "./scrapers/scrapeDebug";
+import { extractReferenceNumbers } from "./scrapers/visionMatch";
 import { stripExternalUrlFields } from "./listingSanitizer";
 import { SUPPORTED_MARKETPLACE_IDS } from "./publishToMarketplaces";
 import { productRoutes } from "./productsRoutes";
@@ -191,6 +193,48 @@ function buildVisionFallback(vision: VisionProduct): ScrapedListing {
   });
 }
 
+const ICONIC_WATCH_MODEL_RE =
+  /\b(submariner(?:\s+date)?|daytona|datejust|speedmaster|seamaster|royal\s+oak|nautilus)\b/i;
+
+function enrichBrandModelFromScraper(
+  final: ScrapedListing,
+  scraper: ScrapedListing,
+  vision: VisionProduct
+): void {
+  const hint =
+    normalizeBrand(final.brand) ||
+    normalizeBrand(vision.brand) ||
+    normalizeBrand(scraper.brand);
+  const parsed = extractBrandModelFromTitle(
+    String(scraper.title ?? final.title ?? ""),
+    hint
+  );
+
+  final.brand = hint || normalizeBrand(parsed.brand);
+  if (!String(final.model ?? "").trim()) {
+    final.model = String(scraper.model ?? parsed.model ?? "").trim();
+  }
+  if (!final.model) {
+    const iconic = String(scraper.title ?? final.title ?? "").match(
+      ICONIC_WATCH_MODEL_RE
+    );
+    if (iconic?.[1]) final.model = iconic[1];
+  }
+  if (!final.refNumber) {
+    const refs = extractReferenceNumbers(
+      [
+        scraper.title,
+        scraper.description,
+        scraper.longDescription,
+        final.title,
+      ]
+        .filter(Boolean)
+        .join(" ")
+    );
+    if (refs[0]) final.refNumber = refs[0];
+  }
+}
+
 function resolveScraperPrice(
   scraper: ScrapedListing,
   luxury: LuxuryProfile | null
@@ -309,6 +353,25 @@ function mergeVisionAndScraper(
   if (!override.allowed && scraper.matchType === "similar") {
     final.matchType = "similar";
   }
+
+  enrichBrandModelFromScraper(final, scraper, vision);
+
+  if (
+    scraperExact &&
+    luxury?.isLuxuryWatch &&
+    priceOk &&
+    !override.allowed &&
+    override.tokenCoverage >= 0.75 &&
+    String(scraper.title ?? "").length > String(vision.title ?? "").length
+  ) {
+    final.title = String(scraper.title).trim();
+    final.isExactMatch = true;
+    final.matchType = "exact";
+    console.log(
+      `[Identify] Luxury exact — keeping detailed scraper title coverage=${override.tokenCoverage.toFixed(2)} title="${final.title}"`
+    );
+  }
+
   final.matchValidation = scraper.matchValidation;
   final.scraperSource = scraper.scraperSource;
 
@@ -326,9 +389,12 @@ function mergeVisionAndScraper(
     luxuryBrand: luxury?.brand ?? null,
     finalTitle: final.title,
     finalBrand: final.brand,
+    finalModel: final.model,
     finalPrice: final.price,
+    refNumber: final.refNumber ?? null,
     preservedMaterial: final.material,
     preservedColor: final.color,
+    preservedStyle: final.style,
   });
 
   return stripListingUrls(final);
@@ -844,6 +910,7 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
      attributes: {
        brand: normalizeBrand(listings.brand) || normalizeBrand(vision.brand),
        model: String(listings.model ?? "").trim(),
+       referenceNumber: String(listings.refNumber ?? "").trim(),
        year: listings.year || new Date().getFullYear().toString(),
        condition:
          normalizeCondition(listings.condition) ||
@@ -938,6 +1005,8 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
        medianPrice: String(listings.medianPrice ?? market.price),
        brand: normalizeBrand(listings.brand) || normalizeBrand(vision.brand),
        model: String(listings.model ?? "").trim(),
+       referenceNumber: String(listings.refNumber ?? "").trim(),
+       year: String(listings.year ?? "").trim() || undefined,
        category: coalesceCategory(listings.category, vision.category),
        condition:
          normalizeCondition(listings.condition) ||
