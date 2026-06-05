@@ -1,16 +1,33 @@
 /**
- * Scraper may override vision title/brand only when all gates pass.
+ * Scraper may override vision title/brand when token + price gates pass.
+ * Luxury watches use wider market bands ($5k–$20k for Rolex, etc.).
  */
 
+import {
+  detectLuxuryProfile,
+  isPriceInLuxuryMarketBand,
+  isPriceSaneForLuxury,
+  type LuxuryProfile,
+} from "./luxuryPricing";
 import { hasProductListingStructure } from "./productPageFilter";
 import { normalizeText } from "./visionMatch";
 
-const MIN_PRICE = 5;
-const MAX_PRICE = 500;
+const GENERIC_MIN_PRICE = 5;
+const GENERIC_MAX_PRICE = 500;
 const MIN_TOKEN_MATCH = 0.9;
+const MIN_LUXURY_COVERAGE = 0.75;
 
 const TITLE_STOP = new Set([
-  "with", "from", "that", "this", "your", "for", "the", "and", "new", "used",
+  "with",
+  "from",
+  "that",
+  "this",
+  "your",
+  "for",
+  "the",
+  "and",
+  "new",
+  "used",
 ]);
 
 function significantTokens(title: string): string[] {
@@ -33,42 +50,115 @@ export function visionTokenMatchRatio(
   return union > 0 ? overlap / union : 0;
 }
 
-export function priceInResaleBand(price: unknown): boolean {
+/** Fraction of vision tokens present in scraper title (good for short vision titles). */
+export function visionTokenCoverage(
+  visionBlob: string,
+  scraperTitle: string
+): number {
+  const visionTokens = significantTokens(visionBlob);
+  if (visionTokens.length === 0) return 0;
+  const scraperSet = new Set(significantTokens(scraperTitle));
+  const found = visionTokens.filter((t) => scraperSet.has(t)).length;
+  return found / visionTokens.length;
+}
+
+export function buildVisionMatchBlob(input: {
+  visionTitle?: string;
+  visionBrand?: string;
+  visionMaterial?: string;
+  visionColor?: string;
+  visionStyle?: string;
+}): string {
+  return [
+    input.visionBrand,
+    input.visionTitle,
+    input.visionMaterial,
+    input.visionColor,
+    input.visionStyle,
+  ]
+    .map((s) => String(s ?? "").trim())
+    .filter(Boolean)
+    .join(" ");
+}
+
+export function priceInResaleBand(
+  price: unknown,
+  profile: LuxuryProfile | null
+): boolean {
   const n = parseFloat(String(price ?? 0)) || 0;
-  return n >= MIN_PRICE && n <= MAX_PRICE;
+  if (profile?.isLuxuryWatch) {
+    return (
+      isPriceSaneForLuxury(n, profile) &&
+      isPriceInLuxuryMarketBand(n, profile)
+    );
+  }
+  return n >= GENERIC_MIN_PRICE && n <= GENERIC_MAX_PRICE;
 }
 
 export type ScraperOverrideInput = {
   visionTitle: string;
+  visionBrand?: string;
+  visionMaterial?: string;
+  visionColor?: string;
+  visionStyle?: string;
   scraperTitle: string;
+  scraperBrand?: string;
   price?: unknown;
   description?: string;
   url?: string;
+  isExactMatch?: boolean;
 };
 
 export function canScraperOverrideVision(input: ScraperOverrideInput): {
   allowed: boolean;
   reasons: string[];
   tokenMatch: number;
+  tokenCoverage: number;
+  luxuryProfile: LuxuryProfile | null;
 } {
   const reasons: string[] = [];
-  const tokenMatch = visionTokenMatchRatio(
+
+  const luxuryProfile = detectLuxuryProfile(
+    input.visionBrand,
     input.visionTitle,
-    input.scraperTitle
+    input.scraperTitle,
+    input.scraperBrand
   );
 
-  if (tokenMatch < MIN_TOKEN_MATCH) {
-    reasons.push(`token_match=${tokenMatch.toFixed(2)}<${MIN_TOKEN_MATCH}`);
+  const visionBlob = buildVisionMatchBlob(input);
+  const tokenMatch = Math.max(
+    visionTokenMatchRatio(visionBlob, input.scraperTitle),
+    visionTokenMatchRatio(input.visionTitle, input.scraperTitle)
+  );
+  const tokenCoverage = visionTokenCoverage(visionBlob, input.scraperTitle);
+
+  const tokenOk =
+    tokenMatch >= MIN_TOKEN_MATCH ||
+    (luxuryProfile?.isLuxuryWatch === true &&
+      input.isExactMatch === true &&
+      tokenCoverage >= MIN_LUXURY_COVERAGE);
+
+  if (!tokenOk) {
+    reasons.push(
+      `token_match=${tokenMatch.toFixed(2)} coverage=${tokenCoverage.toFixed(2)}`
+    );
   }
-  if (!priceInResaleBand(input.price)) {
+
+  if (!priceInResaleBand(input.price, luxuryProfile)) {
     reasons.push(`price_out_of_band_${input.price}`);
   }
+
+  if (luxuryProfile?.isLuxuryWatch && !isPriceSaneForLuxury(input.price, luxuryProfile)) {
+    reasons.push(`luxury_price_below_sanity_${input.price}`);
+  }
+
   if (
     !hasProductListingStructure(
       input.scraperTitle,
       String(input.description ?? ""),
       String(input.url ?? "")
-    )
+    ) &&
+    !input.isExactMatch
   ) {
     reasons.push("no_product_listing_structure");
   }
@@ -77,5 +167,7 @@ export function canScraperOverrideVision(input: ScraperOverrideInput): {
     allowed: reasons.length === 0,
     reasons,
     tokenMatch,
+    tokenCoverage,
+    luxuryProfile,
   };
 }

@@ -13,7 +13,8 @@
   "lint": "eslint .",
   "test": "vitest",
   "preview": "vite preview",
-  "publish:draft": "tsx scripts/publish-draft.ts"
+  "publish:draft": "tsx scripts/publish-draft.ts",
+  "scrape:debug": "tsx scripts/scrape-debug.ts"
 },
 
   "dependencies": {

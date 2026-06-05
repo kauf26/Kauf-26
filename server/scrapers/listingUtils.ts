@@ -1,6 +1,10 @@
 /** Shared helpers: multi-listing price median + vision-based exact/similar scoring */
 
 import {
+  detectLuxuryProfile,
+  filterLuxuryListingPrices,
+} from "./luxuryPricing";
+import {
   computePriceBand,
   isProductPageUrl,
   listingExactRank,
@@ -316,9 +320,16 @@ export function aggregateListings(
     visionBrand: "",
   };
 
-  const peerPrices = items
-    .map((item) => parseListingPrice(item.price))
-    .filter((p) => p > 0);
+  const luxuryProfile = detectLuxuryProfile(
+    baseCtx.visionBrand,
+    baseCtx.visionTitle,
+    query
+  );
+
+  const peerPrices = filterLuxuryListingPrices(
+    items.map((item) => parseListingPrice(item.price)),
+    luxuryProfile
+  );
   const priceBand =
     baseCtx.priceBand ?? computePriceBand(peerPrices) ?? null;
 

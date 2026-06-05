@@ -9,6 +9,12 @@ import { scrapeProduct as fetchMasterProductData } from "./scrapers/masterScrape
 import { SCRAPER_RACE_WINDOW_MS } from "./scrapers/scraperRace";
 import { canScraperOverrideVision } from "./scrapers/exactMatchGate";
 import { getFallbackPriceRange } from "./scrapers/fallbackPricing";
+import {
+  detectLuxuryProfile,
+  isPriceSaneForLuxury,
+  type LuxuryProfile,
+} from "./scrapers/luxuryPricing";
+import { debugIdentify } from "./scrapers/scrapeDebug";
 import { stripExternalUrlFields } from "./listingSanitizer";
 import { SUPPORTED_MARKETPLACE_IDS } from "./publishToMarketplaces";
 import { productRoutes } from "./productsRoutes";
@@ -139,16 +145,34 @@ function stripListingUrls(listing: ScrapedListing): ScrapedListing {
   return cleaned as ScrapedListing;
 }
 
-function scraperHasUsableProduct(scraped: ScrapedListing | null): boolean {
+function scraperHasUsableProduct(
+  scraped: ScrapedListing | null,
+  vision?: VisionProduct
+): boolean {
   if (!scraped) return false;
   const price = parseFloat(String(scraped.price ?? 0)) || 0;
   const exact =
     scraped.isExactMatch === true || scraped.matchType === "exact";
-  return exact && price >= 5;
+  if (!exact) return false;
+
+  const luxury = detectLuxuryProfile(
+    vision?.brand,
+    vision?.title,
+    scraped.title,
+    scraped.brand
+  );
+  if (luxury?.isLuxuryWatch) {
+    return isPriceSaneForLuxury(price, luxury) || price === 0;
+  }
+  return price >= 5;
 }
 
 function buildVisionFallback(vision: VisionProduct): ScrapedListing {
-  const range = getFallbackPriceRange(vision.category, vision.title);
+  const range = getFallbackPriceRange(
+    vision.category,
+    vision.title,
+    vision.brand
+  );
   return stripListingUrls({
     ...visionToListing(vision),
     price: range.suggested,
@@ -167,20 +191,56 @@ function buildVisionFallback(vision: VisionProduct): ScrapedListing {
   });
 }
 
-/** Vision-first merge: scraper never overwrites color, material, style, or short description */
+function resolveScraperPrice(
+  scraper: ScrapedListing,
+  luxury: LuxuryProfile | null
+): number {
+  let price =
+    parseFloat(String(scraper.medianPrice ?? scraper.price ?? 0)) || 0;
+  if (luxury?.isLuxuryWatch && price > 0 && price < luxury.minSanityPrice) {
+    const alt = parseFloat(String(scraper.medianPrice ?? 0)) || 0;
+    price =
+      alt >= luxury.minSanityPrice ? alt : luxury.fallbackSuggested;
+  }
+  return price;
+}
+
+/** Vision-first merge: preserve vision detail fields; scraper wins title/brand/model on exact match */
 function mergeVisionAndScraper(
   vision: VisionProduct,
   scraper: ScrapedListing
 ): ScrapedListing {
   const final: ScrapedListing = visionToListing(vision);
 
+  // Never strip vision physical attributes
+  final.material = String(vision.material ?? scraper.material ?? "").trim();
+  final.color = String(vision.color ?? scraper.color ?? "").trim();
+  final.style = String(vision.style ?? scraper.style ?? "").trim();
+  final.year = String(scraper.year ?? "").trim() || undefined;
+  final.refNumber = String(scraper.refNumber ?? "").trim() || undefined;
+  final.description = truncateWords(
+    String(vision.description ?? scraper.description ?? "").trim(),
+    50
+  );
+
+  const scraperExact =
+    scraper.isExactMatch === true || scraper.matchType === "exact";
+
   const override = canScraperOverrideVision({
     visionTitle: vision.title,
+    visionBrand: vision.brand,
+    visionMaterial: vision.material,
+    visionColor: vision.color,
+    visionStyle: vision.style,
     scraperTitle: String(scraper.title ?? ""),
-    price: scraper.price,
+    scraperBrand: scraper.brand,
+    price: scraper.medianPrice ?? scraper.price,
     description: scraper.description,
     url: scraper.url ?? scraper.link ?? scraper.productUrl,
+    isExactMatch: scraperExact,
   });
+
+  const luxury = override.luxuryProfile;
 
   if (override.allowed) {
     final.title = String(scraper.title ?? vision.title).trim();
@@ -189,27 +249,34 @@ function mergeVisionAndScraper(
     final.model = String(scraper.model ?? "").trim();
     final.isExactMatch = true;
     final.matchType = "exact";
+    final.requiresManualReview = false;
     console.log(
-      `[Identify] Scraper override allowed tokenMatch=${override.tokenMatch.toFixed(2)} title="${final.title}"`
+      `[Identify] Scraper exact match — keeping scraper title/brand tokenMatch=${override.tokenMatch.toFixed(2)} coverage=${override.tokenCoverage.toFixed(2)} title="${final.title}"`
     );
   } else if (override.reasons.length > 0) {
     console.log(
       `[Identify] Scraper override blocked: ${override.reasons.join(", ")}`
     );
-    final.requiresManualReview = true;
+    if (scraperExact && luxury?.isLuxuryWatch) {
+      final.requiresManualReview = true;
+    } else if (!scraperExact) {
+      final.requiresManualReview = true;
+    }
   }
 
-  const scrapedPrice = parseFloat(String(scraper.price ?? 0)) || 0;
-  const scraperExact =
-    scraper.isExactMatch === true || scraper.matchType === "exact";
-  if (
-    scrapedPrice >= 5 &&
-    (scraper.priceReliable === true || scraperExact)
-  ) {
+  const scrapedPrice = resolveScraperPrice(scraper, luxury);
+  const priceOk =
+    luxury?.isLuxuryWatch
+      ? isPriceSaneForLuxury(scrapedPrice, luxury)
+      : scrapedPrice >= 5;
+
+  if (priceOk && (scraper.priceReliable === true || scraperExact)) {
     final.price = scrapedPrice;
     final.medianPrice =
       parseFloat(String(scraper.medianPrice ?? scrapedPrice)) || scrapedPrice;
-    final.priceReliable = scraper.priceReliable === true;
+    final.priceReliable =
+      scraper.priceReliable === true ||
+      (luxury?.isLuxuryWatch === true && override.allowed);
     final.allegroAvg =
       parseFloat(String(scraper.allegroAvg ?? scrapedPrice)) || scrapedPrice;
     final.ebayAvg =
@@ -218,7 +285,16 @@ function mergeVisionAndScraper(
       ) || scrapedPrice;
     if (scraper.priceMin != null) final.priceMin = scraper.priceMin;
     if (scraper.priceMax != null) final.priceMax = scraper.priceMax;
-    final.requiresManualReview = !final.priceReliable;
+    if (!override.allowed) final.requiresManualReview = true;
+  } else if (luxury?.isLuxuryWatch && scraperExact) {
+    final.price = luxury.fallbackSuggested;
+    final.medianPrice = luxury.fallbackSuggested;
+    final.priceMin = luxury.fallbackMin;
+    final.priceMax = luxury.fallbackMax;
+    final.priceReliable = false;
+    final.requiresManualReview = true;
+    final.verificationWarning =
+      "Luxury watch detected but marketplace price looked unreliable — using market estimate. Review before posting.";
   }
 
   const scraperLong = String(scraper.longDescription ?? "").trim();
@@ -230,11 +306,30 @@ function mergeVisionAndScraper(
     matchValidation: scraper.matchValidation ?? null,
   };
 
-  if (!override.allowed) {
-    if (scraper.matchType === "similar") final.matchType = "similar";
+  if (!override.allowed && scraper.matchType === "similar") {
+    final.matchType = "similar";
   }
   final.matchValidation = scraper.matchValidation;
   final.scraperSource = scraper.scraperSource;
+
+  debugIdentify("mergeVisionAndScraper", {
+    visionTitle: vision.title,
+    visionBrand: vision.brand,
+    scraperTitle: scraper.title,
+    scraperBrand: scraper.brand,
+    scraperPrice: scraper.price,
+    medianPrice: scraper.medianPrice,
+    overrideAllowed: override.allowed,
+    overrideReasons: override.reasons,
+    tokenMatch: override.tokenMatch,
+    tokenCoverage: override.tokenCoverage,
+    luxuryBrand: luxury?.brand ?? null,
+    finalTitle: final.title,
+    finalBrand: final.brand,
+    finalPrice: final.price,
+    preservedMaterial: final.material,
+    preservedColor: final.color,
+  });
 
   return stripListingUrls(final);
 }
@@ -444,6 +539,8 @@ function applyVisionEnrichment(
     title: listing.title ?? vision.title,
     brand: normalizeBrand(listing.brand) || normalizeBrand(vision.brand),
     model: String(listing.model ?? "").trim(),
+    year: String(listing.year ?? "").trim() || undefined,
+    refNumber: String(listing.refNumber ?? "").trim() || undefined,
     category,
     material: String(listing.material ?? vision.material ?? "").trim(),
     color: String(listing.color ?? vision.color ?? "").trim(),
@@ -702,7 +799,7 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
 
      const scraperTitle = String(scrapedRaw?.title ?? "").trim();
 
-     if (!scraperHasUsableProduct(scrapedRaw)) {
+     if (!scraperHasUsableProduct(scrapedRaw, vision)) {
        console.warn(
          "[Identify] No valid marketplace product — vision fallback with estimated pricing"
        );

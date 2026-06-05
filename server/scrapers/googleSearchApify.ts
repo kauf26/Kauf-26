@@ -23,6 +23,7 @@ import {
   validateMatch,
 } from "./validateMatch";
 import { normalizeText, significantTokens } from "./visionMatch";
+import { detectLuxuryProfile, isPriceSaneForLuxury } from "./luxuryPricing";
 import { evaluateOrganicResult } from "./productPageFilter";
 import dotenv from "dotenv";
 
@@ -276,7 +277,23 @@ function organicToListing(
 
   const url = String(row.url ?? "").trim();
   const blob = `${title} ${row.description ?? ""}`;
-  const price = bestPriceFromText(blob, 0);
+  let price = bestPriceFromText(blob, 0);
+
+  const luxuryProfile = detectLuxuryProfile(
+    visionBrand,
+    searchQuery,
+    title
+  );
+  if (
+    price > 0 &&
+    luxuryProfile?.isLuxuryWatch &&
+    !isPriceSaneForLuxury(price, luxuryProfile)
+  ) {
+    console.log(
+      `[DEBUG][GoogleSearchApify] organic REJECT luxury_price_too_low price=${price} title="${title.slice(0, 80)}"`
+    );
+    price = 0;
+  }
 
   const pageVerdict = evaluateOrganicResult({
     title,

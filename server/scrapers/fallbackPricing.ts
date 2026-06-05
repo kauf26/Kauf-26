@@ -2,6 +2,8 @@
  * Category-based default price ranges when no marketplace product is found.
  */
 
+import { detectLuxuryProfile } from "./luxuryPricing";
+
 export type FallbackPriceRange = {
   min: number;
   max: number;
@@ -11,10 +13,21 @@ export type FallbackPriceRange = {
 
 export function getFallbackPriceRange(
   category: string | undefined,
-  title: string
+  title: string,
+  brand?: string
 ): FallbackPriceRange {
   const cat = String(category ?? "").toLowerCase();
   const t = String(title ?? "").toLowerCase();
+
+  const luxury = detectLuxuryProfile(brand, title, category);
+  if (luxury?.isLuxuryWatch) {
+    return {
+      min: luxury.fallbackMin,
+      max: luxury.fallbackMax,
+      suggested: luxury.fallbackSuggested,
+      requiresManualReview: true,
+    };
+  }
 
   if (
     cat.includes("clothing") ||
