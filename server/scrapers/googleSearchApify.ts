@@ -170,10 +170,10 @@ async function runGoogleSearch(
 
   const target = buildMatchTargetFromContext(matchCtx);
   const repListing = {
-    title: aggregated.title,
-    brand: aggregated.brand,
-    description: aggregated.description,
-    url: aggregated.url ?? aggregated.link,
+    title: String(aggregated.title ?? ""),
+    brand: String(aggregated.brand ?? ""),
+    description: String(aggregated.description ?? ""),
+    url: String(aggregated.url ?? aggregated.link ?? ""),
   };
   const validation = validateMatch(repListing, target);
   aggregated = applyValidationToProduct(aggregated, validation);
