@@ -116,8 +116,27 @@ type IdentifyApiResponse = {
 };
 
 function isExactMatchResult(result: IdentifyApiResponse): boolean {
+  const matchType = result.matchType ?? result.product?.matchType;
   return (
-    result.isExactMatch === true || result.product?.isExactMatch === true
+    result.isExactMatch === true ||
+    result.product?.isExactMatch === true ||
+    matchType === 'exact'
+  );
+}
+
+/** Proceed to draft when we have a marketplace hit (exact or priced similar). */
+function shouldProceedToDraft(result: IdentifyApiResponse): boolean {
+  if (isExactMatchResult(result)) return true;
+  const p = result.product;
+  if (!p) return false;
+  const price = parseFloat(String(p.price ?? 0));
+  const reliable =
+    result.priceReliable === true || p.priceReliable === true;
+  const matchType = result.matchType ?? p.matchType;
+  return (
+    (matchType === 'similar' || matchType === 'exact') &&
+    price > 0 &&
+    reliable
   );
 }
 
@@ -270,9 +289,18 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
         `📸 Sending camera image to /api/identify (attempt ${attempt + 1}/2)...`
       );
       const result = await sendImageToScraper(capturedImage, attempt);
-      console.log('✅ Identify result:', result);
+      console.log('[Identify] API response:', JSON.stringify(result, null, 2));
+      console.log('[Identify] Parsed:', {
+        isExactMatch: result.isExactMatch ?? result.product?.isExactMatch,
+        matchType: result.matchType ?? result.product?.matchType,
+        price: result.product?.price,
+        priceReliable: result.priceReliable ?? result.product?.priceReliable,
+        title: result.product?.title,
+        brand: result.product?.brand,
+        draftId: result.draftId,
+      });
 
-      if (isExactMatchResult(result)) {
+      if (shouldProceedToDraft(result)) {
         goToDraft(result);
         return;
       }

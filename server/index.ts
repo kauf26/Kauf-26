@@ -6,6 +6,7 @@ import { setupVite, serveStatic } from "./vite";
 import multer from "multer";
 import OpenAI from "openai";
 import { scrapeProduct as fetchMasterProductData } from "./scrapers/masterScraper";
+import { SCRAPER_RACE_WINDOW_MS } from "./scrapers/scraperRace";
 import { brandsConflict } from "./scrapers/listingUtils";
 import { productRoutes } from "./productsRoutes";
 import marketplaceRoutes from "./marketplaceRoutes";
@@ -84,11 +85,14 @@ type ScrapedListing = ScrapedProduct & {
   category?: string;
   isExactMatch?: boolean;
   matchType?: MatchType;
+  matchValidation?: string;
   priceReliable?: boolean;
   allegroAvg?: string | number;
   ebayAvg?: string | number;
   scraperSource?: string;
   productUrl?: string;
+  url?: string;
+  link?: string;
   verificationWarning?: string;
   timedOut?: boolean;
   matchConfidence?: "low" | "medium" | "high";
@@ -390,12 +394,15 @@ app.use("/api/marketplaces", marketplaceRoutes);
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const upload = multer({ storage: multer.memoryStorage() });
 
-/** vision ~10s + scrapers ~4s + buffer */
+/** vision ~10s + scraper race window (~23s) + buffer */
+const SCRAPE_CALL_TIMEOUT_MS = Number(
+  process.env.SCRAPE_CALL_TIMEOUT_MS ?? SCRAPER_RACE_WINDOW_MS + 5_000
+);
 const IDENTIFY_REQUEST_TIMEOUT_MS = Number(
-  process.env.IDENTIFY_REQUEST_TIMEOUT_MS ?? 6_000
+  process.env.IDENTIFY_REQUEST_TIMEOUT_MS ??
+    SCRAPE_CALL_TIMEOUT_MS + 12_000
 );
 const VISION_TIMEOUT_MS = Number(process.env.VISION_TIMEOUT_MS ?? 10_000);
-const SCRAPE_CALL_TIMEOUT_MS = Number(process.env.SCRAPE_CALL_TIMEOUT_MS ?? 4_000);
 
 function applyScrapeMeta(
   listing: ScrapedListing,
@@ -514,6 +521,17 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
        console.warn(
          `[Identify] Scrape finished with no result within ${SCRAPE_CALL_TIMEOUT_MS}ms`
        );
+     } else {
+       console.log("[Identify] Scraper result:", {
+         title: scrapedRaw.title,
+         brand: scrapedRaw.brand,
+         price: scrapedRaw.price,
+         priceReliable: scrapedRaw.priceReliable,
+         isExactMatch: scrapedRaw.isExactMatch,
+         matchType: scrapedRaw.matchType,
+         matchValidation: scrapedRaw.matchValidation,
+         scraperSource: scrapedRaw.scraperSource,
+       });
      }
      step = logStep("Scraper race complete", scrapeStart);
 
@@ -557,11 +575,41 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
          scrapedRaw
        );
      } else {
+       const useMarketplaceLead =
+         scrapedRaw.isExactMatch === true ||
+         scrapedRaw.matchType === "exact" ||
+         (scrapedRaw.priceReliable === true &&
+           (parseFloat(String(scrapedRaw.price ?? 0)) || 0) > 0);
+
        listings = applyScrapeMeta(
          mergeListingWithVision(scrapedRaw, vision),
          scrapedRaw
        );
-       const scrapedUrl = String(scrapedRaw.productUrl ?? "").trim();
+
+       if (useMarketplaceLead) {
+         listings.isExactMatch =
+           scrapedRaw.isExactMatch === true || scrapedRaw.matchType === "exact";
+         listings.matchType = listings.isExactMatch ? "exact" : "similar";
+         const scrapedPrice = parseFloat(String(scrapedRaw.price ?? 0)) || 0;
+         if (scrapedPrice > 0) {
+           listings.price = scrapedPrice;
+           listings.allegroAvg =
+             parseFloat(String(scrapedRaw.allegroAvg ?? scrapedPrice)) ||
+             scrapedPrice;
+           listings.ebayAvg =
+             parseFloat(
+               String(scrapedRaw.ebayAvg ?? scrapedRaw.ebayPrice ?? scrapedPrice)
+             ) || scrapedPrice;
+         }
+         listings.priceReliable = scrapedRaw.priceReliable === true;
+         if (scrapedRaw.matchValidation) {
+           listings.matchValidation = String(scrapedRaw.matchValidation);
+         }
+       }
+
+       const scrapedUrl = String(
+         scrapedRaw.productUrl ?? scrapedRaw.url ?? scrapedRaw.link ?? ""
+       ).trim();
        if (scrapedUrl) listings.productUrl = scrapedUrl;
        if (scrapedRaw.scraperSource) {
          listings.scraperSource = String(scrapedRaw.scraperSource);
@@ -615,7 +663,10 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
          ebayAvg: String(listings.ebayAvg ?? listings.ebayPrice ?? "0.00"),
          recommendedPrice: String(listings.price ?? "0.00"),
        },
-       source: 'ai_identified',
+       source: listings.scraperSource ?? "ai_identified",
+       matchType: listings.matchType ?? "generic",
+       isExactMatch: listings.isExactMatch === true,
+       scraperSource: listings.scraperSource ?? null,
        identifiedAt: new Date().toISOString()
      }
    };

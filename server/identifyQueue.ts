@@ -6,8 +6,9 @@
 export const IDENTIFY_QUEUE_CONCURRENCY = Number(
   process.env.IDENTIFY_QUEUE_CONCURRENCY ?? 3
 );
+/** Must exceed vision + SCRAPE_CALL_TIMEOUT_MS (see server/index.ts) */
 export const IDENTIFY_JOB_TIMEOUT_MS = Number(
-  process.env.IDENTIFY_JOB_TIMEOUT_MS ?? 15_000
+  process.env.IDENTIFY_JOB_TIMEOUT_MS ?? 40_000
 );
 
 export class IdentifyJobTimeoutError extends Error {
