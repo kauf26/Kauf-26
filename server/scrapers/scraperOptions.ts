@@ -1,8 +1,10 @@
 /** Shared options for parallel scraper runs (masterScraper race). */
 export type ScraperRunOptions = {
   signal?: AbortSignal;
-  /** Per-run timeout override (parallel race uses SCRAPER_RACE_PER_SOURCE_TIMEOUT_MS) */
+  /** Soft per-source timeout (logs warning); race waits until raceDeadlineMs */
   timeoutMs?: number;
+  /** Hard cap for parallel race — wait for slow Apify cold starts (default SCRAPER_RACE_WINDOW_MS) */
+  raceDeadlineMs?: number;
   queryChain?: string[];
   /** Raw base64 (no data: prefix) for Google Lens image search */
   imageBase64?: string;

@@ -57,10 +57,10 @@ export type ScrapeOptions = {
 const SCRAPER_MAX_ATTEMPTS = 1;
 
 /** Total scrape budget after vision (Lens + keyword stage) */
-const SCRAPE_BUDGET_MS = Number(process.env.SCRAPE_BUDGET_MS ?? 30_000);
+const SCRAPE_BUDGET_MS = Number(process.env.SCRAPE_BUDGET_MS ?? 50_000);
 
 const SCRAPER_TIMEOUT_MS: Record<ScraperSource, number> = {
-  apify: Number(process.env.APIFY_SCRAPER_TIMEOUT_MS ?? 25_000),
+  apify: Number(process.env.APIFY_SCRAPER_TIMEOUT_MS ?? 40_000),
   googleLens: Number(process.env.GOOGLE_LENS_TIMEOUT_MS ?? 4_000),
   google: Number(process.env.GOOGLE_SHOPPING_TIMEOUT_MS ?? 3_000),
   ebay: 3_000,
@@ -461,33 +461,53 @@ async function runScraperWithRetry(
         elapsedMs: Date.now() - t0,
       };
     }
-    const attemptStart = Date.now();
     try {
-      const timeoutMs =
+      const softTimeoutMs =
         opts?.timeoutMs ??
         SCRAPER_TIMEOUT_MS[source] ??
         SCRAPER_RACE_PER_SOURCE_TIMEOUT_MS;
-      const value = await withTimeout(
-        run(query, vision, opts),
-        timeoutMs,
-        `${source}#${attempt}`
-      );
-      const elapsedMs = Date.now() - t0;
-      const exact =
-        value &&
-        typeof value === "object" &&
-        (value as Record<string, unknown>).isExactMatch === true;
-      console.log(
-        `[MasterScraper] ${source} ok in ${elapsedMs}ms` +
-          (exact ? " (exact match)" : "")
-      );
-      return {
-        source,
-        value,
-        timedOut,
-        aborted: false,
-        elapsedMs,
-      };
+      const hardDeadlineMs =
+        opts?.raceDeadlineMs ?? softTimeoutMs;
+
+      let softTimer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        if (hardDeadlineMs > softTimeoutMs) {
+          softTimer = setTimeout(() => {
+            if (!timedOut) {
+              timedOut = true;
+              console.warn(
+                `[MasterScraper] ${source} soft timeout at ${softTimeoutMs}ms — ` +
+                  `waiting until race deadline ${hardDeadlineMs}ms`
+              );
+            }
+          }, softTimeoutMs);
+        }
+
+        const value = await withTimeout(
+          run(query, vision, opts),
+          hardDeadlineMs,
+          `${source}#${attempt}`
+        );
+
+        const elapsedMs = Date.now() - t0;
+        const exact =
+          value &&
+          typeof value === "object" &&
+          (value as Record<string, unknown>).isExactMatch === true;
+        console.log(
+          `[MasterScraper] ${source} ok in ${elapsedMs}ms` +
+            (exact ? " (exact match)" : "")
+        );
+        return {
+          source,
+          value,
+          timedOut,
+          aborted: false,
+          elapsedMs,
+        };
+      } finally {
+        if (softTimer) clearTimeout(softTimer);
+      }
     } catch (err) {
       if (isAbortError(err)) {
         const elapsedMs = Date.now() - t0;
@@ -786,6 +806,7 @@ export const scrapeProduct = async (
     (source) => ({
       timeoutMs:
         SCRAPER_TIMEOUT_MS[source] ?? SCRAPER_RACE_PER_SOURCE_TIMEOUT_MS,
+      raceDeadlineMs: SCRAPER_RACE_WINDOW_MS,
     }),
     scoreResult
   );

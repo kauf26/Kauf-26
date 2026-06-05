@@ -11,18 +11,18 @@ import {
   type MatchConfidence,
 } from "./validateMatch";
 
-/** Per-scraper timeout during parallel race (Apify default 25s) */
+/** Soft per-source timeout label (Apify cold starts often need 30s+) */
 export const SCRAPER_RACE_PER_SOURCE_TIMEOUT_MS = Number(
   process.env.SCRAPER_RACE_PER_SOURCE_TIMEOUT_MS ??
     process.env.APIFY_SCRAPER_TIMEOUT_MS ??
-    25_000
+    40_000
 );
 
-/** Soft race window — after this, wait for in-flight scrapers (no discard at boundary) */
+/** Hard race deadline — scrapers keep running until this (no discard at soft timeout) */
 export const SCRAPER_RACE_WINDOW_MS = Number(
   process.env.SCRAPER_RACE_WINDOW_MS ??
     process.env.SCRAPER_RACE_TIMEOUT_MS ??
-    30_000
+    45_000
 );
 
 /** @deprecated Use SCRAPER_RACE_WINDOW_MS */
@@ -229,6 +229,7 @@ export async function raceScrapersForExactMatch(
     const mergedOpts: ScraperRunOptions = {
       ...opts,
       timeoutMs: opts.timeoutMs ?? SCRAPER_RACE_PER_SOURCE_TIMEOUT_MS,
+      raceDeadlineMs: opts.raceDeadlineMs ?? SCRAPER_RACE_WINDOW_MS,
       signal: opts.signal
         ? combineSignals(opts.signal, masterAbort.signal)
         : masterAbort.signal,
