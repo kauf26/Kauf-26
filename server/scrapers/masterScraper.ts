@@ -68,7 +68,12 @@ const SCRAPER_TIMEOUT_MS: Record<ScraperSource, number> = {
 };
 
 const GOOGLE_LENS_PHASE_TIMEOUT_MS = Number(
-  process.env.GOOGLE_LENS_TIMEOUT_MS ?? 4_000
+  process.env.GOOGLE_LENS_TIMEOUT_MS ?? 15_000
+);
+
+/** Minimum ms reserved for Stage 2 after Lens (Lens timeout must not consume entire scrape budget) */
+const KEYWORD_STAGE_MIN_BUDGET_MS = Number(
+  process.env.KEYWORD_STAGE_MIN_BUDGET_MS ?? GLOBAL_EXACT_RACE_TIMEOUT_MS
 );
 
 /** Stage 2 rank threshold for exact match (default 50; env EXACT_MATCH_MIN_RANK) */
@@ -616,15 +621,25 @@ export const scrapeProduct = async (
 
   const lensBase64 = options?.imageBase64?.trim();
   if (lensBase64 && process.env.APIFY_API_KEY?.trim() && scrapeRemainingMs() > 0) {
+    const keywordReserveMs = Math.min(
+      KEYWORD_STAGE_MIN_BUDGET_MS,
+      scrapeRemainingMs()
+    );
+    const lensTimeoutMs = Math.min(
+      GOOGLE_LENS_PHASE_TIMEOUT_MS,
+      Math.max(0, scrapeRemainingMs() - keywordReserveMs)
+    );
+
+    if (lensTimeoutMs < 500) {
+      console.log(
+        `[MasterScraper] Stage 1 Lens skipped — reserving ${keywordReserveMs}ms for Stage 2 (total budget ${SCRAPE_BUDGET_MS}ms)`
+      );
+    } else {
     const lensStart = Date.now();
     console.log(
-      "[MasterScraper] Stage 1: Google Lens visual exact-match (product-search + exactMatch)"
+      `[MasterScraper] Stage 1: Google Lens visual exact-match (${lensTimeoutMs}ms cap, ${keywordReserveMs}ms reserved for Stage 2)`
     );
     try {
-      const lensTimeoutMs = Math.min(
-        GOOGLE_LENS_PHASE_TIMEOUT_MS,
-        scrapeRemainingMs()
-      );
       const lensRaw = await withTimeout(
         scrapeGoogleLens(exactQuery, matchVision, {
           imageBase64: lensBase64,
@@ -677,14 +692,20 @@ export const scrapeProduct = async (
     } catch (err) {
       if (!isAbortError(err)) {
         console.warn(
-          "[MasterScraper] Google Lens failed:",
+          "[MasterScraper] Google Lens failed or timed out — continuing to Stage 2:",
           err instanceof Error ? err.message : err
+        );
+      } else {
+        console.log(
+          "[MasterScraper] Google Lens aborted — continuing to Stage 2 if budget remains"
         );
       }
     }
+    }
   }
 
-  if (scrapeRemainingMs() <= 0) {
+  const stage2RemainingMs = scrapeRemainingMs();
+  if (stage2RemainingMs <= 0) {
     console.log(
       `[MasterScraper] Scrape budget ${SCRAPE_BUDGET_MS}ms exhausted after Stage 1 — no Stage 2`
     );
@@ -692,7 +713,7 @@ export const scrapeProduct = async (
   }
 
   console.log(
-    `[MasterScraper] Stage 2 (${scrapeRemainingMs()}ms left) queries:`,
+    `[MasterScraper] Stage 2 (${stage2RemainingMs}ms left) queries:`,
     keywordQueries.join(" | ")
   );
 
