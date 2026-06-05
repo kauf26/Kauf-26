@@ -12,7 +12,8 @@
   "db:push": "drizzle-kit push",
   "lint": "eslint .",
   "test": "vitest",
-  "preview": "vite preview"
+  "preview": "vite preview",
+  "publish:draft": "tsx scripts/publish-draft.ts"
 },
 
   "dependencies": {

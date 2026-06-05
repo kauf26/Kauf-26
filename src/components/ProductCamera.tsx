@@ -92,6 +92,10 @@ type IdentifyApiResponse = {
   matchScore?: number;
   timedOut?: boolean;
   verificationWarning?: string | null;
+  requiresManualReview?: boolean;
+  priceMin?: number | string | null;
+  priceMax?: number | string | null;
+  publishJobId?: number | null;
   product?: {
     title?: string;
     description?: string;
@@ -124,8 +128,9 @@ function isExactMatchResult(result: IdentifyApiResponse): boolean {
   );
 }
 
-/** Proceed to draft when we have a marketplace hit (exact or priced similar). */
+/** Proceed to draft when we have a marketplace hit or structured manual-review fallback. */
 function shouldProceedToDraft(result: IdentifyApiResponse): boolean {
+  if (result.requiresManualReview === true) return true;
   if (isExactMatchResult(result)) return true;
   const p = result.product;
   if (!p) return false;
@@ -165,7 +170,6 @@ function persistPendingAnalysisFromIdentify(result: IdentifyApiResponse) {
     isExactMatch,
     matchType,
     priceReliable: result.priceReliable === true || p.priceReliable === true,
-    productUrl: String(result.productUrl ?? p.productUrl ?? "").trim(),
     product: {
       title: p.title ?? '',
       description: p.description ?? '',
@@ -182,7 +186,6 @@ function persistPendingAnalysisFromIdentify(result: IdentifyApiResponse) {
       isExactMatch,
       matchType,
       priceReliable: result.priceReliable === true || p.priceReliable === true,
-      productUrl: String(result.productUrl ?? p.productUrl ?? "").trim(),
     },
   });
   if (result.draftId != null) {
@@ -412,8 +415,9 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
           {showSecondSearchPrompt && (
             <div className="rounded border border-amber-800/60 bg-amber-950/30 p-4 space-y-3">
               <p className="text-sm text-amber-200/90">
-                We&apos;re having a hard time finding this product. Please take
-                another photo to allow a second search.
+                No exact marketplace match yet. You can take another photo for a
+                second search, or continue with an estimated price range and
+                review the listing on the next screen.
               </p>
               <button
                 type="button"

@@ -23,6 +23,7 @@ import {
   validateMatch,
 } from "./validateMatch";
 import { normalizeText, significantTokens } from "./visionMatch";
+import { evaluateOrganicResult } from "./productPageFilter";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -221,19 +222,34 @@ function organicToListing(
   const url = String(row.url ?? "").trim();
   const blob = `${title} ${row.description ?? ""}`;
   const price = bestPriceFromText(blob, 0);
-  const looksLikeProduct = PRODUCT_URL_RE.test(url);
-  const keywordMatch = titleMatchesQueryKeywords(title, searchQuery, visionBrand);
 
-  if (!keywordMatch && price <= 0 && !looksLikeProduct) {
+  const pageVerdict = evaluateOrganicResult({
+    title,
+    url,
+    description: String(row.description ?? ""),
+    price,
+  });
+
+  if (!pageVerdict.accept) {
     console.log(
-      `[DEBUG][GoogleSearchApify] organic REJECT no_keyword_no_price_no_product_url title="${title.slice(0, 80)}" url=${url.slice(0, 80)}`
+      `[DEBUG][GoogleSearchApify] organic REJECT ${pageVerdict.reason} title="${title.slice(0, 80)}" url=${url.slice(0, 80)}`
+    );
+    return null;
+  }
+
+  const keywordMatch = titleMatchesQueryKeywords(title, searchQuery, visionBrand);
+  const looksLikeProduct = PRODUCT_URL_RE.test(url);
+
+  if (!keywordMatch && price <= 0 && !looksLikeProduct && !pageVerdict.isMarketplace) {
+    console.log(
+      `[DEBUG][GoogleSearchApify] organic REJECT weak_keyword_match title="${title.slice(0, 80)}" url=${url.slice(0, 80)}`
     );
     return null;
   }
 
   console.log(
-    `[DEBUG][GoogleSearchApify] organic ACCEPT title="${title.slice(0, 80)}" ` +
-      `keywordMatch=${keywordMatch} price=${price} productUrl=${looksLikeProduct}`
+    `[DEBUG][GoogleSearchApify] organic ACCEPT ${pageVerdict.reason} title="${title.slice(0, 80)}" ` +
+      `keywordMatch=${keywordMatch} price=${price} marketplace=${pageVerdict.isMarketplace}`
   );
 
   const { brand: parsedBrand, model: parsedModel } =

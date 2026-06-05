@@ -1,11 +1,16 @@
 import express from 'express';
 import { db } from './db';
-import { productDrafts } from '../shared/schema';
+import { productDrafts, publishJobs, publishTasks } from '../shared/schema';
 import { eq } from 'drizzle-orm';
 
 const router = express.Router();
 
-const STRIPPED_ATTRIBUTE_KEYS = ["productUrl", "url", "link"] as const;
+const STRIPPED_ATTRIBUTE_KEYS = [
+  "productUrl",
+  "url",
+  "link",
+  "externalUrl",
+] as const;
 
 function normalizeDraftAttributes(
   attributes: Record<string, unknown> | undefined
@@ -186,6 +191,9 @@ router.post("/drafts/:id/post-to-marketplaces", async (req, res) => {
  try {
    const draftId = req.params.id;
    const { marketplaces } = req.body;
+   const marketplaceIds: string[] = Array.isArray(marketplaces) && marketplaces.length > 0
+     ? marketplaces
+     : (process.env.DEFAULT_PUBLISH_MARKETPLACES?.split(",").map((s) => s.trim()) ?? ["ebay", "allegro"]);
 
    const [draft] = await db.select()
      .from(productDrafts)
@@ -195,36 +203,54 @@ router.post("/drafts/:id/post-to-marketplaces", async (req, res) => {
      return res.status(404).json({ error: "Draft not found" });
    }
 
-   if (draft.status !== 'ready_for_posting') {
+   if (draft.status !== 'ready_for_posting' && draft.status !== 'draft') {
      return res.status(400).json({
-       error: `Draft status is '${draft.status}', need 'ready_for_posting'`
+       error: `Draft status is '${draft.status}', need 'ready_for_posting' or 'draft'`
      });
    }
 
-   console.log(`[KAUF26] Posting draft ${draftId} to marketplaces:`, marketplaces);
+   console.log(`[KAUF26] Queueing draft ${draftId} to marketplaces:`, marketplaceIds);
 
-   // Safely handle attributes that might be null
+   const { draftToPublishPayload } = await import("./publishToMarketplaces");
+   const payload = draftToPublishPayload(draft);
+
+   const [job] = await db.insert(publishJobs)
+     .values({ productData: payload })
+     .returning();
+
+   await db.insert(publishTasks).values(
+     marketplaceIds.map((marketplaceId: string) => ({
+       jobId: job.id,
+       marketplaceId,
+       status: "pending",
+       attempts: 0,
+     }))
+   );
+
    const currentAttributes = draft.attributes && typeof draft.attributes === 'object'
      ? draft.attributes
      : {};
 
-   const updatedAttributes = {
+   const updatedAttributes = normalizeDraftAttributes({
      ...currentAttributes,
-     postedTo: marketplaces || [],
-     postedAt: new Date().toISOString()
-   };
+     publishJobId: job.id,
+     queuedMarketplaces: marketplaceIds,
+     queuedAt: new Date().toISOString(),
+   });
 
    const [postedDraft] = await db.update(productDrafts)
      .set({
-       status: 'posted',
+       status: 'ready_for_posting',
        attributes: updatedAttributes,
        updatedAt: new Date()
      })
      .where(eq(productDrafts.id, Number(draftId)))
      .returning();
 
-   return res.status(200).json({
-     message: "Draft posted to marketplaces successfully",
+   return res.status(202).json({
+     message: "Publishing tasks queued",
+     jobId: job.id,
+     marketplaces: marketplaceIds,
      draft: postedDraft,
    });
 

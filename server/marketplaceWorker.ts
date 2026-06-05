@@ -1,22 +1,11 @@
-import { db } from './db'; // Adjust path if your initialized drizzle db instance is elsewhere
-import { publishJobs, publishTasks } from '../shared/schema';
+import { db } from './db';
+import { publishJobs, publishTasks, productDrafts } from '../shared/schema';
 import { eq, and, or, lt } from 'drizzle-orm';
-
-// Stub publisher — replace with eBay/Depop/etc. adapters later
-async function executeMarketplaceUpload(marketplaceId: string, productData: unknown) {
- console.log(`[Worker] STUB publish → marketplace: ${marketplaceId}`);
- console.log(
-   `[Worker] Listing payload (job productData):`,
-   JSON.stringify(productData, null, 2)
- );
- await new Promise((resolve) => setTimeout(resolve, 500));
- console.log(`[Worker] STUB completed upload to ${marketplaceId}`);
-}
+import { processPublishTask, MAX_ATTEMPTS } from './queueManager';
+import { draftToPublishPayload } from './publishToMarketplaces';
 
 async function processQueue() {
  try {
-   // 1. Fetch one pending or retryable task using Drizzle with a row-level lock
-   // This perfectly mirrors your raw SQL: FOR UPDATE SKIP LOCKED
    const [taskWithData] = await db
      .select({
        taskId: publishTasks.id,
@@ -33,19 +22,17 @@ async function processQueue() {
          eq(publishTasks.status, 'pending'),
          and(
            eq(publishTasks.status, 'failed'),
-           lt(publishTasks.attempts, 3)
+           lt(publishTasks.attempts, MAX_ATTEMPTS)
          )
        )
      )
      .limit(1)
      .for('update', { skipLocked: true });
 
-   // If no tasks are waiting in the queue, quietly return and wait for the next interval
    if (!taskWithData) return;
 
    const currentAttempts = (taskWithData.attempts ?? 0) + 1;
 
-   // 2. Mark the task as processing and bump the attempt counter
    await db
      .update(publishTasks)
      .set({
@@ -55,30 +42,94 @@ async function processQueue() {
      })
      .where(eq(publishTasks.id, taskWithData.taskId));
 
-   try {
-     // 3. Run the actual marketplace background upload
-     await executeMarketplaceUpload(taskWithData.marketplaceId, taskWithData.productData);
+   const raw = taskWithData.productData as Record<string, unknown> | null;
+   const draftPayload =
+     raw && typeof raw === "object" && "draftId" in raw
+       ? {
+           draftId: Number(raw.draftId),
+           title: String(raw.title ?? ""),
+           sku: (raw.sku as string | null) ?? null,
+           images: Array.isArray(raw.images) ? (raw.images as string[]) : [],
+           attributes:
+             raw.attributes && typeof raw.attributes === "object"
+               ? (raw.attributes as Record<string, unknown>)
+               : {},
+         }
+       : null;
 
-     // 4. On Success: mark as completed
+   try {
+     const result = await processPublishTask({
+       taskId: taskWithData.taskId,
+       jobId: taskWithData.jobId,
+       marketplaceId: taskWithData.marketplaceId,
+       attempts: taskWithData.attempts ?? 0,
+       draft:
+         draftPayload ??
+         draftToPublishPayload({
+           id: 0,
+           title: String((raw as { title?: string })?.title ?? "Unknown"),
+           images: [],
+           attributes: raw ?? {},
+         }),
+     });
+
+     if (!result.success) {
+       throw new Error(result.errorMessage ?? "Publish failed");
+     }
+
      await db
        .update(publishTasks)
        .set({
          status: 'completed',
-         errorMessage: null,
+         errorMessage: result.dryRun ? "dry_run_no_credentials" : null,
          updatedAt: new Date(),
        })
        .where(eq(publishTasks.id, taskWithData.taskId));
 
-     console.log(`[Worker] Task ${taskWithData.taskId} completed for ${taskWithData.marketplaceId}`);
-   } catch (uploadError: any) {
-     console.error(`[Worker] Task ${taskWithData.taskId} failed:`, uploadError.message);
+     if (draftPayload?.draftId) {
+       const [draft] = await db
+         .select()
+         .from(productDrafts)
+         .where(eq(productDrafts.id, draftPayload.draftId));
 
-     // 5. On Failure: mark as failed and log the error message
+       if (draft) {
+         const attrs =
+           draft.attributes && typeof draft.attributes === "object"
+             ? { ...(draft.attributes as Record<string, unknown>) }
+             : {};
+         const posted = Array.isArray(attrs.postedTo)
+           ? [...(attrs.postedTo as string[])]
+           : [];
+         if (!posted.includes(taskWithData.marketplaceId)) {
+           posted.push(taskWithData.marketplaceId);
+         }
+         await db
+           .update(productDrafts)
+           .set({
+             status: "posted",
+             attributes: {
+               ...attrs,
+               postedTo: posted,
+               postedAt: new Date().toISOString(),
+               [`${taskWithData.marketplaceId}ListingId`]: result.listingId ?? null,
+             },
+             updatedAt: new Date(),
+           })
+           .where(eq(productDrafts.id, draftPayload.draftId));
+       }
+     }
+
+     console.log(`[Worker] Task ${taskWithData.taskId} completed for ${taskWithData.marketplaceId}`);
+   } catch (uploadError: unknown) {
+     const message =
+       uploadError instanceof Error ? uploadError.message : "Unknown error";
+     console.error(`[Worker] Task ${taskWithData.taskId} failed:`, message);
+
      await db
        .update(publishTasks)
        .set({
          status: 'failed',
-         errorMessage: uploadError.message || 'Unknown error',
+         errorMessage: message,
          updatedAt: new Date(),
        })
        .where(eq(publishTasks.id, taskWithData.taskId));

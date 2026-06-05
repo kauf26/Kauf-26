@@ -7,7 +7,10 @@ import multer from "multer";
 import OpenAI from "openai";
 import { scrapeProduct as fetchMasterProductData } from "./scrapers/masterScraper";
 import { SCRAPER_RACE_WINDOW_MS } from "./scrapers/scraperRace";
-import { brandsConflict } from "./scrapers/listingUtils";
+import { canScraperOverrideVision } from "./scrapers/exactMatchGate";
+import { getFallbackPriceRange } from "./scrapers/fallbackPricing";
+import { stripExternalUrlFields } from "./listingSanitizer";
+import { SUPPORTED_MARKETPLACE_IDS } from "./publishToMarketplaces";
 import { productRoutes } from "./productsRoutes";
 import marketplaceRoutes from "./marketplaceRoutes";
 import { startMarketplaceWorker } from "./marketplaceWorker";
@@ -106,24 +109,10 @@ type ScrapedListing = ScrapedProduct & {
     source?: string | null;
     matchValidation?: string | null;
   };
+  requiresManualReview?: boolean;
+  priceMin?: string | number;
+  priceMax?: string | number;
 };
-
-const HIGH_CONFIDENCE_MATCH_SCORE = 80;
-
-function isHighConfidenceScraperMatch(scraped: ScrapedListing): boolean {
-  const isExact =
-    scraped.isExactMatch === true || scraped.matchType === "exact";
-  if (!isExact) return false;
-
-  const validation = String(scraped.matchValidation ?? "");
-  const score = Number(scraped.matchScore ?? 0);
-  return (
-    validation === "high_reference" ||
-    validation === "exact_brand_model" ||
-    validation === "hierarchical" ||
-    score >= HIGH_CONFIDENCE_MATCH_SCORE
-  );
-}
 
 function visionToListing(vision: VisionProduct): ScrapedListing {
   return {
@@ -143,12 +132,74 @@ function visionToListing(vision: VisionProduct): ScrapedListing {
   };
 }
 
-/** Vision-first merge: scraper supplies reliable price + longDescription only */
+function stripListingUrls(listing: ScrapedListing): ScrapedListing {
+  const cleaned = stripExternalUrlFields({
+    ...listing,
+  } as Record<string, unknown>);
+  return cleaned as ScrapedListing;
+}
+
+function scraperHasUsableProduct(scraped: ScrapedListing | null): boolean {
+  if (!scraped) return false;
+  const price = parseFloat(String(scraped.price ?? 0)) || 0;
+  return (
+    scraped.priceReliable === true &&
+    price >= 5 &&
+    (scraped.isExactMatch === true || scraped.matchType === "exact")
+  );
+}
+
+function buildVisionFallback(vision: VisionProduct): ScrapedListing {
+  const range = getFallbackPriceRange(vision.category, vision.title);
+  return stripListingUrls({
+    ...visionToListing(vision),
+    price: range.suggested,
+    medianPrice: range.suggested,
+    priceMin: range.min,
+    priceMax: range.max,
+    allegroAvg: range.suggested,
+    ebayAvg: range.suggested,
+    priceReliable: false,
+    isExactMatch: false,
+    matchType: "generic",
+    requiresManualReview: true,
+    longDescription: String(vision.description ?? "").trim(),
+    verificationWarning:
+      "No marketplace product found — using estimated price range. Review before posting.",
+  });
+}
+
+/** Vision-first merge: scraper never overwrites color, material, style, or short description */
 function mergeVisionAndScraper(
   vision: VisionProduct,
   scraper: ScrapedListing
 ): ScrapedListing {
   const final: ScrapedListing = visionToListing(vision);
+
+  const override = canScraperOverrideVision({
+    visionTitle: vision.title,
+    scraperTitle: String(scraper.title ?? ""),
+    price: scraper.price,
+    description: scraper.description,
+    url: scraper.url ?? scraper.link ?? scraper.productUrl,
+  });
+
+  if (override.allowed) {
+    final.title = String(scraper.title ?? vision.title).trim();
+    final.brand =
+      normalizeBrand(scraper.brand) || normalizeBrand(vision.brand);
+    final.model = String(scraper.model ?? "").trim();
+    final.isExactMatch = true;
+    final.matchType = "exact";
+    console.log(
+      `[Identify] Scraper override allowed tokenMatch=${override.tokenMatch.toFixed(2)} title="${final.title}"`
+    );
+  } else if (override.reasons.length > 0) {
+    console.log(
+      `[Identify] Scraper override blocked: ${override.reasons.join(", ")}`
+    );
+    final.requiresManualReview = true;
+  }
 
   const scrapedPrice = parseFloat(String(scraper.price ?? 0)) || 0;
   if (scraper.priceReliable === true && scrapedPrice > 0) {
@@ -168,25 +219,49 @@ function mergeVisionAndScraper(
   final.longDescription =
     scraperLong || String(vision.description ?? "").trim();
 
-  delete final.link;
-  delete final.productUrl;
-  delete final.url;
-
   final._scraperMetadata = {
     source: scraper.scraperSource ?? null,
     matchValidation: scraper.matchValidation ?? null,
   };
 
-  if (scraper.isExactMatch === true || scraper.matchType === "exact") {
-    final.isExactMatch = true;
-    final.matchType = "exact";
-  } else if (scraper.matchType === "similar") {
-    final.matchType = "similar";
+  if (!override.allowed) {
+    if (scraper.matchType === "similar") final.matchType = "similar";
   }
   final.matchValidation = scraper.matchValidation;
   final.scraperSource = scraper.scraperSource;
 
-  return final;
+  return stripListingUrls(final);
+}
+
+async function prepareDraftPublishing(draftId: number): Promise<number | null> {
+  const auto =
+    process.env.AUTO_QUEUE_PUBLISH?.trim() === "true" ||
+    process.env.AUTO_QUEUE_PUBLISH === "1";
+  if (!auto) return null;
+
+  const marketplaces =
+    process.env.DEFAULT_PUBLISH_MARKETPLACES?.split(",").map((s) => s.trim()) ??
+    SUPPORTED_MARKETPLACE_IDS.slice(0, 2);
+
+  try {
+    const res = await fetch(
+      `http://localhost:${PORT}/api/drafts/${draftId}/post-to-marketplaces`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ marketplaces }),
+      }
+    );
+    if (!res.ok) return null;
+    const body = (await res.json()) as { jobId?: number };
+    console.log(
+      `[Identify] Auto-queued publish job #${body.jobId} for draft ${draftId}`
+    );
+    return body.jobId ?? null;
+  } catch (err) {
+    console.warn("[Identify] Auto-publish queue failed:", err);
+    return null;
+  }
 }
 
 const VISION_IDENTIFY_PROMPT = `You are a product identification expert analyzing a product photo for a resale listing.
@@ -619,68 +694,21 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
      }
      step = logStep("Scraper race complete", scrapeStart);
 
-     const visionBrand = normalizeBrand(vision.brand);
      const scraperTitle = String(scrapedRaw?.title ?? "").trim();
-     const scraperBrand = normalizeBrand(scrapedRaw?.brand);
 
-     if (!scrapedRaw) {
+     if (!scraperHasUsableProduct(scrapedRaw)) {
        console.warn(
-         "[Identify] All scrapers failed or conflicted with vision — vision-only fallback"
+         "[Identify] No valid marketplace product — vision fallback with estimated pricing"
        );
-       listings = applyScrapeMeta(
-         buildGenericFromVision(
-           vision,
-           visionBrand
-             ? `No marketplace data consistent with "${visionBrand}" — verify brand and model manually.`
-             : undefined
-         ),
-         scrapedRaw
-       );
-     } else if (isHighConfidenceScraperMatch(scrapedRaw)) {
-       console.log(
-         `[Identify] mergeVisionAndScraper — vision: title="${vision.title}" brand="${visionBrand}" | scraper: title="${scraperTitle}" price=${scrapedRaw.price ?? 0} priceReliable=${scrapedRaw.priceReliable} matchValidation=${scrapedRaw.matchValidation} score=${scrapedRaw.matchScore ?? 0}`
-       );
-
-       listings = applyScrapeMeta(
-         mergeVisionAndScraper(vision, scrapedRaw),
-         scrapedRaw
-       );
-     } else if (brandsConflict(visionBrand, scraperBrand)) {
-       console.warn(
-         `[Identify] Scraper brand "${scraperBrand}" conflicts with vision "${visionBrand}" — vision fallback`
-       );
-       listings = applyScrapeMeta(
-         buildGenericFromVision(
-           vision,
-           `Scraper brand "${scraperBrand}" does not match vision "${visionBrand}" — manual verification required.`
-         ),
-         scrapedRaw
-       );
-     } else if (scraperTitle && titlesAreVeryDifferent(vision.title, scraperTitle)) {
-       console.warn(
-         `[Identify] Scraper title "${scraperTitle}" conflicts with vision "${vision.title}" — generic fallback`
-       );
-       listings = applyScrapeMeta(
-         buildGenericFromVision(
-           vision,
-           "Scraper title did not match vision — manual verification recommended."
-         ),
-         scrapedRaw
-       );
+       listings = applyScrapeMeta(buildVisionFallback(vision), scrapedRaw);
      } else {
        console.log(
-         `[Identify] mergeVisionAndScraper — vision: title="${vision.title}" | scraper: title="${scraperTitle}" priceReliable=${scrapedRaw.priceReliable}`
+         `[Identify] mergeVisionAndScraper — vision: title="${vision.title}" | scraper: title="${scraperTitle}" price=${scrapedRaw!.price} priceReliable=${scrapedRaw!.priceReliable}`
        );
-
        listings = applyScrapeMeta(
-         mergeVisionAndScraper(vision, scrapedRaw),
+         mergeVisionAndScraper(vision, scrapedRaw!),
          scrapedRaw
        );
-
-       if (listings.matchType !== "exact") {
-         listings.verificationWarning =
-           "Marketplace match is approximate — confirm brand and model before listing.";
-       }
      }
 
      if (listings.scraperSource) {
@@ -738,6 +766,9 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
        isExactMatch: listings.isExactMatch === true,
        scraperSource: listings.scraperSource ?? null,
        scraperMetadata: listings._scraperMetadata ?? null,
+       requiresManualReview: listings.requiresManualReview === true,
+       priceMin: String(listings.priceMin ?? ""),
+       priceMax: String(listings.priceMax ?? ""),
        identifiedAt: new Date().toISOString()
      }
    };
@@ -756,7 +787,10 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
    }
 
    const savedDraft = await saveResponse.json();
-   console.log("✅ Draft saved successfully with ID:", savedDraft.id || savedDraft);
+   const draftId = savedDraft.id ?? savedDraft;
+   console.log("✅ Draft saved successfully with ID:", draftId);
+
+   const publishJobId = await prepareDraftPublishing(Number(draftId));
 
    // Normalized response for ProductDraft / sessionStorage (Task A)
    const capturedImage = `data:${req.file.mimetype};base64,${base64Image}`;
@@ -773,7 +807,11 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
 
    res.json({
      success: true,
-     draftId: savedDraft.id ?? savedDraft,
+     draftId,
+     publishJobId,
+     requiresManualReview: listings.requiresManualReview === true,
+     priceMin: listings.priceMin ?? null,
+     priceMax: listings.priceMax ?? null,
      isExactMatch,
      matchType,
      visionConfidence: vision.confidence,

@@ -7,10 +7,25 @@ const router = express.Router();
 
 // POST /api/marketplaces/publish
 router.post('/publish', async (req, res) => {
- const { productData, marketplaceIds } = req.body;
+ const { productData, marketplaceIds, draftId } = req.body;
 
- if (!productData || typeof productData !== 'object') {
-   return res.status(400).json({ error: 'productData is required.' });
+ let payload = productData;
+ if (draftId != null) {
+   const { db } = await import('./db');
+   const { productDrafts } = await import('../shared/schema');
+   const { draftToPublishPayload } = await import('./publishToMarketplaces');
+   const [draft] = await db
+     .select()
+     .from(productDrafts)
+     .where(eq(productDrafts.id, Number(draftId)));
+   if (!draft) {
+     return res.status(404).json({ error: 'Draft not found.' });
+   }
+   payload = draftToPublishPayload(draft);
+ }
+
+ if (!payload || typeof payload !== 'object') {
+   return res.status(400).json({ error: 'productData or draftId is required.' });
  }
 
  if (!marketplaceIds || !Array.isArray(marketplaceIds) || marketplaceIds.length === 0) {
@@ -21,7 +36,7 @@ router.post('/publish', async (req, res) => {
    // 1. Insert the master job using Drizzle
    const [newJob] = await db.insert(publishJobs)
      .values({
-       productData: productData,
+       productData: payload,
      })
      .returning();
 
