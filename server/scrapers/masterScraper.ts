@@ -57,10 +57,10 @@ export type ScrapeOptions = {
 const SCRAPER_MAX_ATTEMPTS = 1;
 
 /** Total scrape budget after vision (Lens + keyword stage) */
-const SCRAPE_BUDGET_MS = Number(process.env.SCRAPE_BUDGET_MS ?? 23_000);
+const SCRAPE_BUDGET_MS = Number(process.env.SCRAPE_BUDGET_MS ?? 30_000);
 
 const SCRAPER_TIMEOUT_MS: Record<ScraperSource, number> = {
-  apify: Number(process.env.APIFY_SCRAPER_TIMEOUT_MS ?? 20_000),
+  apify: Number(process.env.APIFY_SCRAPER_TIMEOUT_MS ?? 25_000),
   googleLens: Number(process.env.GOOGLE_LENS_TIMEOUT_MS ?? 4_000),
   google: Number(process.env.GOOGLE_SHOPPING_TIMEOUT_MS ?? 3_000),
   ebay: 3_000,

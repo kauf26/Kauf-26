@@ -11,18 +11,18 @@ import {
   type MatchConfidence,
 } from "./validateMatch";
 
-/** Per-scraper timeout during parallel race (Apify default 20s) */
+/** Per-scraper timeout during parallel race (Apify default 25s) */
 export const SCRAPER_RACE_PER_SOURCE_TIMEOUT_MS = Number(
   process.env.SCRAPER_RACE_PER_SOURCE_TIMEOUT_MS ??
     process.env.APIFY_SCRAPER_TIMEOUT_MS ??
-    20_000
+    25_000
 );
 
-/** Total race window before falling back to best similar (default 23s) */
+/** Soft race window — after this, wait for in-flight scrapers (no discard at boundary) */
 export const SCRAPER_RACE_WINDOW_MS = Number(
   process.env.SCRAPER_RACE_WINDOW_MS ??
     process.env.SCRAPER_RACE_TIMEOUT_MS ??
-    23_000
+    30_000
 );
 
 /** @deprecated Use SCRAPER_RACE_WINDOW_MS */
@@ -207,6 +207,23 @@ export async function raceScrapersForExactMatch(
     return combined.signal;
   };
 
+  const resultToExactCandidate = (
+    result: ScraperRunResult
+  ): ScraperCandidate | null => {
+    if (!result.value || result.aborted) return null;
+
+    const exactCheck = isRaceExactValidation(vision, result.value);
+    if (!exactCheck.exact) return null;
+
+    const enriched = {
+      ...result.value,
+      isExactMatch: true,
+      matchType: "exact",
+      matchValidation: exactCheck.confidence ?? result.value.matchValidation,
+    };
+    return toCandidate(vision, { ...result, value: enriched }, scoreFn);
+  };
+
   const promises = runners.map(({ source, run }) => {
     const opts = buildOpts(source);
     const mergedOpts: ScraperRunOptions = {
@@ -243,67 +260,80 @@ export async function raceScrapersForExactMatch(
     });
   });
 
-  /** Promise.race: first exact validation vs race window deadline */
-  const firstExactPromise = new Promise<ScraperCandidate | null>((resolve) => {
-    let settled = false;
+  const allScrapersDone = Promise.allSettled(promises);
 
-    const tryResolveExact = (result: ScraperRunResult) => {
-      if (settled || winnerLocked || !result.value) return;
+  /** First exact match wins immediately and cancels other scrapers */
+  const earlyExactPromise = new Promise<ScraperCandidate | null>((resolve) => {
+    let resolved = false;
+    const finish = (candidate: ScraperCandidate | null) => {
+      if (resolved) return;
+      resolved = true;
+      resolve(candidate);
+    };
 
-      const exactCheck = isRaceExactValidation(vision, result.value);
-      if (!exactCheck.exact) return;
+    const tryEarlyWin = (result: ScraperRunResult) => {
+      if (winnerLocked || !result.value) return;
 
-      const enriched = {
-        ...result.value,
-        isExactMatch: true,
-        matchType: "exact",
-        matchValidation: exactCheck.confidence ?? result.value.matchValidation,
-      };
-      const enrichedResult = { ...result, value: enriched };
-      const candidate = toCandidate(vision, enrichedResult, scoreFn);
+      const candidate = resultToExactCandidate(result);
       if (!candidate) return;
 
-      settled = true;
       winnerLocked = true;
       winnerSource = result.source;
       exactFoundAtMs = Date.now() - raceStart;
       masterAbort.abort();
       console.log(
-        `[ScraperRace] WINNER ${result.source} (${exactCheck.confidence}) in ${exactFoundAtMs}ms — cancelling pending scrapers`
+        `[ScraperRace] WINNER ${result.source} (${candidate.product.matchValidation ?? "exact"}) in ${exactFoundAtMs}ms — cancelling pending scrapers`
       );
-      resolve(candidate);
+      finish(candidate);
     };
 
     for (const p of promises) {
-      p.then(tryResolveExact).catch(() => {
-        /* individual scraper errors handled in runScraper */
+      p.then(tryEarlyWin).catch(() => {
+        /* errors handled in runScraper */
       });
     }
 
-    const globalTimer = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        console.log(
-          `[ScraperRace] ${SCRAPER_RACE_WINDOW_MS}ms race window elapsed — no exact match yet, waiting for best result`
-        );
-        resolve(null);
-      }
+    void allScrapersDone.then(() => finish(null));
+  });
+
+  const windowElapsed = new Promise<"window">((resolve) => {
+    setTimeout(() => {
+      console.log(
+        `[ScraperRace] ${SCRAPER_RACE_WINDOW_MS}ms window elapsed — waiting for in-flight scrapers (no discard)`
+      );
+      resolve("window");
     }, SCRAPER_RACE_WINDOW_MS);
-
-    Promise.allSettled(promises).then(() => {
-      clearTimeout(globalTimer);
-      if (!settled) {
-        settled = true;
-        resolve(null);
-      }
-    });
   });
 
-  const raceDeadline = new Promise<null>((resolve) => {
-    setTimeout(() => resolve(null), SCRAPER_RACE_WINDOW_MS);
-  });
+  const earlyExact = await Promise.race([
+    earlyExactPromise,
+    Promise.race([allScrapersDone, windowElapsed]).then(() => null),
+  ]);
 
-  const exactWinner = await Promise.race([firstExactPromise, raceDeadline]);
+  await allScrapersDone;
+
+  if (earlyExact) {
+    return {
+      exactWinner: earlyExact,
+      candidates: [earlyExact],
+      anyTimedOut,
+      raceElapsedMs: Date.now() - raceStart,
+      exactFoundAtMs,
+    };
+  }
+
+  let exactWinner: ScraperCandidate | null = null;
+  for (const result of results) {
+    if (result.aborted) continue;
+    const candidate = resultToExactCandidate(result);
+    if (!candidate) continue;
+    exactWinner = candidate;
+    exactFoundAtMs = exactFoundAtMs ?? result.elapsedMs;
+    console.log(
+      `[ScraperRace] Exact match after full wait: ${result.source} in ${result.elapsedMs}ms`
+    );
+    break;
+  }
 
   if (exactWinner) {
     return {
@@ -315,10 +345,9 @@ export async function raceScrapersForExactMatch(
     };
   }
 
-  await Promise.allSettled(promises);
-
   const candidates: ScraperCandidate[] = [];
   for (const result of results) {
+    if (result.aborted) continue;
     const candidate = toCandidate(vision, result, scoreFn);
     if (candidate) candidates.push(candidate);
   }

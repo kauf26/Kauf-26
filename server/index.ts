@@ -394,13 +394,10 @@ app.use("/api/marketplaces", marketplaceRoutes);
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const upload = multer({ storage: multer.memoryStorage() });
 
-/** vision ~10s + scraper race window (~23s) + buffer */
-const SCRAPE_CALL_TIMEOUT_MS = Number(
-  process.env.SCRAPE_CALL_TIMEOUT_MS ?? SCRAPER_RACE_WINDOW_MS + 5_000
-);
+/** HTTP timeout: vision + full scraper race window + buffer */
 const IDENTIFY_REQUEST_TIMEOUT_MS = Number(
   process.env.IDENTIFY_REQUEST_TIMEOUT_MS ??
-    SCRAPE_CALL_TIMEOUT_MS + 12_000
+    SCRAPER_RACE_WINDOW_MS + 20_000
 );
 const VISION_TIMEOUT_MS = Number(process.env.VISION_TIMEOUT_MS ?? 10_000);
 
@@ -504,23 +501,16 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
    {
      console.log("🕸️ [4/5] Calling scraper with query:", searchQuery);
      const scrapeStart = Date.now();
-     const scrapedRaw = (await Promise.race([
-       fetchMasterProductData(searchQuery, {
-         vision: {
-           visionTitle: vision.title,
-           visionBrand: vision.brand ?? "",
-         },
-         imageBase64: base64Image,
-         imageMimeType: req.file.mimetype || "image/jpeg",
-       }),
-       new Promise<null>((resolve) =>
-         setTimeout(() => resolve(null), SCRAPE_CALL_TIMEOUT_MS)
-       ),
-     ])) as ScrapedListing | null;
+     const scrapedRaw = (await fetchMasterProductData(searchQuery, {
+       vision: {
+         visionTitle: vision.title,
+         visionBrand: vision.brand ?? "",
+       },
+       imageBase64: base64Image,
+       imageMimeType: req.file.mimetype || "image/jpeg",
+     })) as ScrapedListing | null;
      if (!scrapedRaw) {
-       console.warn(
-         `[Identify] Scrape finished with no result within ${SCRAPE_CALL_TIMEOUT_MS}ms`
-       );
+       console.warn("[Identify] Scraper returned no result");
      } else {
        console.log("[Identify] Scraper result:", {
          title: scrapedRaw.title,
@@ -586,11 +576,34 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
          scrapedRaw
        );
 
-       if (useMarketplaceLead) {
+       const scrapedPrice = parseFloat(String(scrapedRaw.price ?? 0)) || 0;
+       const scraperExact =
+         scrapedRaw.isExactMatch === true ||
+         scrapedRaw.matchType === "exact" ||
+         scrapedRaw.matchValidation === "high_reference" ||
+         scrapedRaw.matchValidation === "exact_brand_model";
+
+       if (scraperExact && scrapedPrice > 0) {
+         listings.isExactMatch = true;
+         listings.matchType = "exact";
+         listings.title = scraperTitle || listings.title;
+         listings.brand = scraperBrand || listings.brand;
+         listings.price = scrapedPrice;
+         listings.allegroAvg =
+           parseFloat(String(scrapedRaw.allegroAvg ?? scrapedPrice)) ||
+           scrapedPrice;
+         listings.ebayAvg =
+           parseFloat(
+             String(scrapedRaw.ebayAvg ?? scrapedRaw.ebayPrice ?? scrapedPrice)
+           ) || scrapedPrice;
+         listings.priceReliable = scrapedRaw.priceReliable !== false;
+         if (scrapedRaw.matchValidation) {
+           listings.matchValidation = String(scrapedRaw.matchValidation);
+         }
+       } else if (useMarketplaceLead) {
          listings.isExactMatch =
            scrapedRaw.isExactMatch === true || scrapedRaw.matchType === "exact";
          listings.matchType = listings.isExactMatch ? "exact" : "similar";
-         const scrapedPrice = parseFloat(String(scrapedRaw.price ?? 0)) || 0;
          if (scrapedPrice > 0) {
            listings.price = scrapedPrice;
            listings.allegroAvg =
