@@ -1,5 +1,6 @@
 /** Shared helpers: multi-listing price median + vision-based exact/similar scoring */
 
+import { extractBrandModelFromTitle } from "./brandFromTitle";
 import {
   detectLuxuryProfile,
   filterLuxuryListingPrices,
@@ -309,6 +310,121 @@ function sanitizeCategory(category: unknown): string {
   return s;
 }
 
+export type BrandTitleResolution = {
+  brand: string;
+  source: string;
+  corrected: boolean;
+};
+
+/** Pick brand that appears in the listing title — never attach a vision brand the title omits. */
+export function coalesceBrandWithTitle(
+  title: string,
+  listingBrand?: string,
+  visionBrand?: string
+): BrandTitleResolution {
+  const titleStr = String(title ?? "").trim();
+  const lb = sanitizeBrand(listingBrand);
+  const vb = sanitizeBrand(visionBrand);
+  const fromTitle = sanitizeBrand(
+    extractBrandModelFromTitle(titleStr).brand
+  );
+
+  if (lb && titleMentionsBrand(titleStr, lb)) {
+    return { brand: lb, source: "listing.brand", corrected: false };
+  }
+  if (fromTitle && titleMentionsBrand(titleStr, fromTitle)) {
+    const corrected = Boolean(lb && lb.toLowerCase() !== fromTitle.toLowerCase());
+    return {
+      brand: fromTitle,
+      source: corrected ? "title.parse" : "listing.brand_or_title",
+      corrected,
+    };
+  }
+  if (vb && titleMentionsBrand(titleStr, vb)) {
+    return { brand: vb, source: "vision.brand", corrected: Boolean(lb && lb !== vb) };
+  }
+  if (lb && brandsConflict(vb, lb, titleStr)) {
+    return { brand: fromTitle || lb, source: "title.parse_conflict", corrected: true };
+  }
+  if (lb) return { brand: lb, source: "listing.brand", corrected: false };
+  if (fromTitle) return { brand: fromTitle, source: "title.parse", corrected: false };
+  return { brand: "", source: "none", corrected: false };
+}
+
+export function validateBrandTitleConsistency(
+  title: string,
+  brand: string,
+  label = "listingUtils"
+): { ok: boolean; message: string } {
+  const t = String(title ?? "").trim();
+  const b = sanitizeBrand(brand);
+  if (!t || !b) return { ok: true, message: "skipped_empty" };
+  if (titleMentionsBrand(t, b)) {
+    return { ok: true, message: "title_contains_brand" };
+  }
+  const msg = `[${label}] brand-title mismatch: title="${t}" brand="${b}"`;
+  console.error(msg);
+  return { ok: false, message: msg };
+}
+
+function representativeListingScore(
+  item: RawListing,
+  matchCtx: VisionMatchContext,
+  exactRank: number
+): number {
+  const title = String(item.title ?? "");
+  const brand = sanitizeBrand(item.brand);
+  const parsedBrand = sanitizeBrand(extractBrandModelFromTitle(title).brand);
+  let score = exactRank;
+
+  if (parsedBrand && titleMentionsBrand(title, parsedBrand)) {
+    score += 55;
+    if (!brand || brand.toLowerCase() === parsedBrand.toLowerCase()) score += 15;
+  } else if (brand && titleMentionsBrand(title, brand)) {
+    score += 45;
+  } else if (brand) {
+    score -= 60;
+  }
+
+  const vb = sanitizeBrand(matchCtx.visionBrand);
+  if (vb && titleMentionsBrand(title, vb)) score += 15;
+  else if (
+    vb &&
+    parsedBrand &&
+    brandsConflict(vb, parsedBrand, title) &&
+    titleMentionsBrand(title, parsedBrand)
+  ) {
+    score += 30;
+  } else if (vb && brandsConflict(vb, brand || parsedBrand, title)) {
+    score -= 25;
+  }
+
+  return score;
+}
+
+function pickRepresentativeListing(
+  scored: Array<{ item: RawListing; score: "exact" | "similar"; price: number }>,
+  matchCtx: VisionMatchContext,
+  hasExact: boolean
+): RawListing {
+  const pool = hasExact
+    ? scored.filter((s) => s.score === "exact")
+    : scored;
+
+  const ranked = pool
+    .map((s) => ({
+      item: s.item,
+      repScore: representativeListingScore(
+        s.item,
+        matchCtx,
+        listingExactRank(s.item, matchCtx)
+      ),
+    }))
+    .sort((a, b) => b.repScore - a.repScore);
+
+  return ranked[0]?.item ?? pool[0]?.item ?? scored[0].item;
+}
+
 /** Collapse N marketplace rows → one product row with median price + match flags */
 export function aggregateListings(
   items: RawListing[],
@@ -351,12 +467,7 @@ export function aggregateListings(
     limit: 5,
   });
 
-  const exactRows = scored
-    .filter((s) => s.score === "exact")
-    .sort(
-      (a, b) =>
-        listingExactRank(b.item, matchCtx) - listingExactRank(a.item, matchCtx)
-    );
+  const exactRows = scored.filter((s) => s.score === "exact");
   const hasExact = exactRows.length > 0;
   const pool = hasExact ? exactRows : scored;
   const pricedInPool = pool.filter((s) => s.price > 0);
@@ -368,12 +479,33 @@ export function aggregateListings(
       : peerPrices;
   const median =
     pricedForMedian.length > 0 ? medianPrice(pricedForMedian) : 0;
-  const rep = (hasExact ? exactRows[0] : scored[0]).item;
+
+  const rep = pickRepresentativeListing(scored, matchCtx, hasExact);
+  const repTitle = String(rep.title ?? query);
+  const brandResolution = coalesceBrandWithTitle(
+    repTitle,
+    rep.brand,
+    matchCtx.visionBrand
+  );
+  validateBrandTitleConsistency(repTitle, brandResolution.brand, "aggregateListings");
+
   const bestLink = rep.url ?? "";
 
   const similarMatches = hasExact
     ? []
     : topSimilarListings(items, matchCtx, 3);
+
+  const fieldSources = {
+    title: "rep.title",
+    brand: brandResolution.source,
+    description: "rep.description",
+    category: "rep.category",
+    condition: "rep.condition",
+    material: "rep.material",
+    color: "rep.color",
+    url: "rep.url",
+    price: "median(pool)",
+  };
 
   console.log("[listingUtils] aggregateListings:", {
     totalItems: items.length,
@@ -382,6 +514,10 @@ export function aggregateListings(
     pricedListingsUsed: pricedCount,
     medianPrice: median,
     priceReliable,
+    repTitle,
+    repBrand: brandResolution.brand,
+    brandCorrected: brandResolution.corrected,
+    fieldSources,
     topSimilar: similarMatches.map((s) => ({
       title: s.title,
       exactRank: s.exactRank,
@@ -389,8 +525,9 @@ export function aggregateListings(
   });
 
   return {
-    title: rep.title ?? query,
-    brand: sanitizeBrand(rep.brand) || sanitizeBrand(matchCtx.visionBrand),
+    title: repTitle,
+    brand: brandResolution.brand,
+    model: String(rep.model ?? "").trim(),
     description: rep.description ?? "",
     category: sanitizeCategory(rep.category),
     condition: String(rep.condition ?? "").trim(),
@@ -411,5 +548,7 @@ export function aggregateListings(
     link: bestLink,
     url: bestLink,
     similarMatches,
+    fieldSources,
+    brandTitleCorrected: brandResolution.corrected,
   };
 }

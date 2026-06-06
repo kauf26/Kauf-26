@@ -14,7 +14,11 @@ import {
   isPriceSaneForLuxury,
   type LuxuryProfile,
 } from "./scrapers/luxuryPricing";
-import { extractBrandModelFromTitle } from "./scrapers/googleSearchApify";
+import { extractBrandModelFromTitle } from "./scrapers/brandFromTitle";
+import {
+  coalesceBrandWithTitle,
+  validateBrandTitleConsistency,
+} from "./scrapers/listingUtils";
 import { debugIdentify } from "./scrapers/scrapeDebug";
 import { MAX_PRODUCT_PAGE_IMAGES } from "./scrapers/productPageImages";
 import { extractReferenceNumbers } from "./scrapers/visionMatch";
@@ -225,16 +229,18 @@ function enrichBrandModelFromScraper(
   scraper: ScrapedListing,
   vision: VisionProduct
 ): void {
-  const hint =
-    normalizeBrand(final.brand) ||
-    normalizeBrand(vision.brand) ||
-    normalizeBrand(scraper.brand);
-  const parsed = extractBrandModelFromTitle(
-    String(scraper.title ?? final.title ?? ""),
-    hint
+  const titleForParse = String(final.title ?? scraper.title ?? "");
+  const coalesced = coalesceBrandWithTitle(
+    titleForParse,
+    scraper.brand ?? final.brand,
+    vision.brand
   );
+  const parsed = extractBrandModelFromTitle(titleForParse);
 
-  final.brand = hint || normalizeBrand(parsed.brand);
+  final.brand =
+    coalesced.brand ||
+    normalizeBrand(parsed.brand) ||
+    normalizeBrand(scraper.brand);
   if (!String(final.model ?? "").trim()) {
     final.model = String(scraper.model ?? parsed.model ?? "").trim();
   }
@@ -312,8 +318,12 @@ function mergeVisionAndScraper(
 
   if (override.allowed) {
     final.title = String(scraper.title ?? vision.title).trim();
-    final.brand =
-      normalizeBrand(scraper.brand) || normalizeBrand(vision.brand);
+    const brandFromTitle = coalesceBrandWithTitle(
+      final.title,
+      scraper.brand,
+      vision.brand
+    );
+    final.brand = brandFromTitle.brand;
     final.model = String(scraper.model ?? "").trim();
     final.isExactMatch = true;
     final.matchType = "exact";
@@ -389,12 +399,35 @@ function mergeVisionAndScraper(
     String(scraper.title ?? "").length > String(vision.title ?? "").length
   ) {
     final.title = String(scraper.title).trim();
+    const brandFromTitle = coalesceBrandWithTitle(
+      final.title,
+      scraper.brand,
+      vision.brand
+    );
+    final.brand = brandFromTitle.brand;
     final.isExactMatch = true;
     final.matchType = "exact";
     console.log(
-      `[Identify] Luxury exact — keeping detailed scraper title coverage=${override.tokenCoverage.toFixed(2)} title="${final.title}"`
+      `[Identify] Luxury exact — keeping detailed scraper title coverage=${override.tokenCoverage.toFixed(2)} title="${final.title}" brand="${final.brand}"`
     );
   }
+
+  const finalBrandCheck = coalesceBrandWithTitle(
+    String(final.title ?? ""),
+    final.brand,
+    vision.brand
+  );
+  if (finalBrandCheck.corrected || finalBrandCheck.brand !== final.brand) {
+    console.warn(
+      `[Identify] Corrected brand for title consistency: "${final.brand}" → "${finalBrandCheck.brand}" (source=${finalBrandCheck.source})`
+    );
+    final.brand = finalBrandCheck.brand;
+  }
+  validateBrandTitleConsistency(
+    String(final.title ?? ""),
+    String(final.brand ?? ""),
+    "mergeVisionAndScraper"
+  );
 
   final.matchValidation = scraper.matchValidation;
   final.scraperSource = scraper.scraperSource;
@@ -413,6 +446,7 @@ function mergeVisionAndScraper(
     luxuryBrand: luxury?.brand ?? null,
     finalTitle: final.title,
     finalBrand: final.brand,
+    brandSource: finalBrandCheck.source,
     finalModel: final.model,
     finalPrice: final.price,
     refNumber: final.refNumber ?? null,
