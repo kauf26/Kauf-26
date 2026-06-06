@@ -13,7 +13,7 @@ function dataUrlToImageBuffer(
   const trimmed = dataUrl.trim();
   if (!trimmed) return null;
 
-  const match = trimmed.match(/^data:([^;]+);base64,(.+)$/i);
+  const match = trimmed.match(/^data:([^;]+);base64,(.+)$/s);
   if (match) {
     return {
       mimetype: match[1] || "image/jpeg",
