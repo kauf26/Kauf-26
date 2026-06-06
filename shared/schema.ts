@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, boolean, timestamp, decimal, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, boolean, timestamp, decimal, jsonb, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
@@ -223,15 +223,25 @@ export const inventorySyncEvents = pgTable("inventory_sync_events", {
 });
 
 /** Idempotency: one decrement per marketplace order */
-export const inventorySaleDedup = pgTable("inventory_sale_dedup", {
- id: serial("id").primaryKey(),
- poolId: integer("pool_id")
-   .notNull()
-   .references(() => inventoryPools.id, { onDelete: "cascade" }),
- marketplaceId: text("marketplace_id").notNull(),
- externalOrderId: text("external_order_id").notNull(),
- createdAt: timestamp("created_at").defaultNow(),
-});
+export const inventorySaleDedup = pgTable(
+ "inventory_sale_dedup",
+ {
+   id: serial("id").primaryKey(),
+   poolId: integer("pool_id")
+     .notNull()
+     .references(() => inventoryPools.id, { onDelete: "cascade" }),
+   marketplaceId: text("marketplace_id").notNull(),
+   externalOrderId: text("external_order_id").notNull(),
+   createdAt: timestamp("created_at").defaultNow(),
+ },
+ (table) => [
+   uniqueIndex("inventory_sale_dedup_order_unique").on(
+     table.poolId,
+     table.marketplaceId,
+     table.externalOrderId
+   ),
+ ]
+);
 
 // --- SCHEMAS & TYPES ---
 export const insertUserSchema = createInsertSchema(users);

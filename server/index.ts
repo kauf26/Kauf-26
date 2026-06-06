@@ -22,6 +22,8 @@ import { stripExternalUrlFields } from "./listingSanitizer";
 import { SUPPORTED_MARKETPLACE_IDS } from "./publishToMarketplaces";
 import { productRoutes } from "./productsRoutes";
 import marketplaceRoutes from "./marketplaceRoutes";
+import inventoryRoutes from "./inventoryRoutes";
+import { startInventoryPoller } from "./inventoryPoller";
 import { startMarketplaceWorker } from "./marketplaceWorker";
 import {
   enqueueIdentifyJob,
@@ -871,6 +873,9 @@ app.use("/api", productRoutes);
 // Marketplace publish queue (POST /api/marketplaces/publish, GET /api/marketplaces/status/:jobId)
 app.use("/api/marketplaces", marketplaceRoutes);
 
+// Central inventory pool (shared quantity across marketplace listings)
+app.use("/api/inventory", inventoryRoutes);
+
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -1283,6 +1288,10 @@ const server = createServer(app);
    console.log(`   - POST /api/marketplaces/publish`);
    console.log(`   - POST /api/marketplaces/publish-all`);
    console.log(`   - GET  /api/marketplaces/status/:jobId`);
+   console.log(`   - GET  /api/inventory/draft/:draftId`);
+   console.log(`   - PUT  /api/inventory/draft/:draftId/quantity`);
+   console.log(`   - POST /api/inventory/webhooks/:marketplace`);
    startMarketplaceWorker();
+   startInventoryPoller();
  });
 })();

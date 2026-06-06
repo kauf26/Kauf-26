@@ -35,7 +35,6 @@ export default function InventoryQuantityCounter({
 }: Props) {
   const [snapshot, setSnapshot] = useState<InventorySnapshot | null>(null);
   const [inputQty, setInputQty] = useState(String(initialQuantity));
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
 
@@ -141,9 +140,6 @@ export default function InventoryQuantityCounter({
         <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wider">
           Shared Inventory
         </h3>
-        {loading && (
-          <span className="text-xs text-zinc-500">Loading…</span>
-        )}
       </div>
 
       <p className="text-xs text-zinc-500">

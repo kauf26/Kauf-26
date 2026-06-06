@@ -229,10 +229,14 @@ const handleContinue = async () => {
   saveListingSession(listing);
 
   try {
-    await fetch("/api/drafts", {
+    const existingDraftId =
+      sessionStorage.getItem("productDraftId") ??
+      sessionStorage.getItem("identifyDraftId");
+    const res = await fetch("/api/drafts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        id: existingDraftId ? Number(existingDraftId) : undefined,
         title: product.title,
         status: "draft",
         attributes: {
@@ -248,6 +252,13 @@ const handleContinue = async () => {
         },
       }),
     });
+    if (res.ok) {
+      const saved = (await res.json()) as { id?: number };
+      if (saved.id != null) {
+        sessionStorage.setItem("productDraftId", String(saved.id));
+        sessionStorage.setItem("identifyDraftId", String(saved.id));
+      }
+    }
   } catch (err) {
     console.error("Draft sync failed (non-critical):", err);
   }

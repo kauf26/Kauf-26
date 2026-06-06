@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import {
   loadListingSession,
   saveListingSession,
   type ListingSession,
 } from "@/lib/pendingAnalysis";
+import InventoryQuantityCounter from "@/components/InventoryQuantityCounter";
 
 type Marketplace =
 | "ebay" | "amazon" | "walmart" | "wish" | "reverb"
@@ -48,26 +49,6 @@ const US_MARKETS = [
   { id: "kidizen", name: "Kidizen", currency: "USD" },
  ] as const;
 
-function listingToProductData(draft: ListingSession) {
-  return {
-    title: draft.title,
-    description: draft.description,
-    price: draft.price,
-    brand: draft.brand,
-    category: draft.category,
-    condition: draft.condition,
-    material: draft.material ?? draft.product.material ?? "",
-    color: draft.color ?? draft.product.color ?? "",
-    style: draft.style ?? draft.product.style ?? "",
-    capturedImage: draft.capturedImage,
-    matchType: draft.matchType,
-    isExactMatch: draft.isExactMatch,
-    productUrl: draft.productUrl ?? draft.product.productUrl ?? "",
-    allegroAvg: draft.product.allegroAvg,
-    ebayAvg: draft.product.ebayAvg,
-  };
-}
-
 export default function SelectMarketplaces() {
   const [, setLocation] = useLocation();
   const [draft, setDraft] = useState<ListingSession | null>(null);
@@ -75,6 +56,14 @@ export default function SelectMarketplaces() {
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publishJobId, setPublishJobId] = useState<number | null>(null);
+
+  const draftId = useMemo(() => {
+    const raw =
+      sessionStorage.getItem("productDraftId") ??
+      sessionStorage.getItem("identifyDraftId");
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) ? n : null;
+  }, []);
 
   useEffect(() => {
     const loaded = loadListingSession();
@@ -271,6 +260,8 @@ export default function SelectMarketplaces() {
         </div>
 
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 space-y-6">
+          <InventoryQuantityCounter draftId={draftId} initialQuantity={1} />
+
           <div>
             <div className="text-xs font-semibold uppercase mb-2 flex gap-1 tracking-wider text-zinc-400">
               <span>🇺🇸</span> US-Based Marketplaces
@@ -288,18 +279,23 @@ export default function SelectMarketplaces() {
           <button
             onClick={async () => {
               if (!draft || selected.length === 0) return;
+              if (draftId == null) {
+                setPublishError(
+                  "No draft ID found. Go back to the product draft step and continue again."
+                );
+                return;
+              }
               setIsPublishing(true);
               setPublishError(null);
               setPublishJobId(null);
               saveListingSession(draft);
               sessionStorage.setItem("selectedMarkets", JSON.stringify(selected));
-              const productData = listingToProductData(draft);
               try {
                 const res = await fetch("/api/marketplaces/publish", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
-                    productData,
+                    draftId,
                     marketplaceIds: selected,
                   }),
                 });

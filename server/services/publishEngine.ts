@@ -16,6 +16,7 @@ import {
 } from "../publishToMarketplaces";
 import { publishOne } from "./adapters";
 import type { FetchFn } from "./adapters/types";
+import { registerMarketplaceListing } from "./inventoryService";
 
 export type MarketplaceOutcome = {
   marketplace: string;
@@ -184,6 +185,23 @@ export async function publishDraft(
             attempts: 1,
           })
           .where(eq(publishTasks.id, task.id));
+      }
+    }
+
+    for (const o of outcomes) {
+      if (!o.success) continue;
+      try {
+        await registerMarketplaceListing(
+          draftId,
+          o.marketplace,
+          o.listingId ?? null,
+          payload.sku
+        );
+      } catch (invErr) {
+        console.error(
+          `[PublishEngine] Inventory registration failed for ${o.marketplace}:`,
+          invErr
+        );
       }
     }
   } else {

@@ -108,7 +108,7 @@ export async function getOrCreatePool(
       sku: draft?.sku ?? `draft-${draftId}`,
       status: qty > 0 ? "active" : "out_of_stock",
     })
-    .onConflictDoNothing()
+    .onConflictDoNothing({ target: inventoryPools.draftId })
     .returning();
 
   if (created) {

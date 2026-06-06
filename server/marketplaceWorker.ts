@@ -3,6 +3,7 @@ import { publishJobs, publishTasks, productDrafts } from '../shared/schema';
 import { eq, and, or, lt } from 'drizzle-orm';
 import { processPublishTask, MAX_ATTEMPTS } from './queueManager';
 import { draftToPublishPayload } from './publishToMarketplaces';
+import { registerMarketplaceListing } from './services/inventoryService';
 
 /** Exponential backoff before retrying failed tasks (ms). */
 function retryBackoffMs(attempts: number): number {
@@ -144,6 +145,20 @@ async function processQueue() {
              updatedAt: new Date(),
            })
            .where(eq(productDrafts.id, draftPayload.draftId));
+       }
+
+       try {
+         await registerMarketplaceListing(
+           draftPayload.draftId,
+           taskWithData.marketplaceId,
+           result.listingId ?? null,
+           draftPayload.sku
+         );
+       } catch (invErr) {
+         console.error(
+           `[Worker] Inventory registration failed for ${taskWithData.marketplaceId}:`,
+           invErr
+         );
        }
      }
 
