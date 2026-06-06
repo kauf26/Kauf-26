@@ -33,7 +33,6 @@ import {
   type VisionConfidence,
   type VisionPerImage,
   type VisionProduct,
-  type VisionSources,
 } from "./visionMerge";
 
 /** Skip vague scraper categories like "General" */

@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { saveListingSession, type MatchType } from '@/lib/pendingAnalysis';
 
+const MAX_IMAGES = 3;
 const MAX_EXPORT_DIM = 1024;
 const JPEG_QUALITY = 0.85;
 
@@ -74,6 +75,15 @@ function encodeCanvasForApi(canvas: HTMLCanvasElement): Promise<string> {
   });
 }
 
+async function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
   const res = await fetch(dataUrl);
   return res.blob();
@@ -84,6 +94,8 @@ type MatchConfidence = 'low' | 'medium' | 'high';
 type IdentifyApiResponse = {
   success?: boolean;
   draftId?: number | string;
+  imagesProcessed?: number;
+  sources?: Record<string, string>;
   message?: string;
   fallbackToVision?: boolean;
   listingsFound?: number;
@@ -112,6 +124,7 @@ type IdentifyApiResponse = {
     allegroAvg?: string | number;
     ebayAvg?: string | number;
     capturedImage?: string;
+    capturedImages?: string[];
     isExactMatch?: boolean;
     matchType?: MatchType;
     priceReliable?: boolean;
@@ -131,7 +144,6 @@ function isExactMatchResult(result: IdentifyApiResponse): boolean {
   );
 }
 
-/** Proceed to draft whenever identify succeeded (vision-only or scraper-backed). */
 function shouldProceedToDraft(result: IdentifyApiResponse): boolean {
   if (result.success === true && result.draftId != null) return true;
   if (result.requiresManualReview === true) return true;
@@ -150,11 +162,16 @@ function shouldProceedToDraft(result: IdentifyApiResponse): boolean {
   );
 }
 
-function persistPendingAnalysisFromIdentify(result: IdentifyApiResponse) {
+function persistPendingAnalysisFromIdentify(
+  result: IdentifyApiResponse,
+  capturedImages: string[]
+) {
   if (!result?.product) {
     throw new Error('Identify response missing product');
   }
   const p = result.product;
+  const primaryImage =
+    p.capturedImage ?? capturedImages[0] ?? '';
   const matchType: MatchType =
     result.matchType ??
     p.matchType ??
@@ -171,7 +188,7 @@ function persistPendingAnalysisFromIdentify(result: IdentifyApiResponse) {
     material: p.material ?? '',
     color: p.color ?? '',
     style: p.style ?? '',
-    capturedImage: p.capturedImage ?? '',
+    capturedImage: primaryImage,
     isExactMatch,
     matchType,
     priceReliable: result.priceReliable === true || p.priceReliable === true,
@@ -185,7 +202,7 @@ function persistPendingAnalysisFromIdentify(result: IdentifyApiResponse) {
       material: p.material ?? '',
       color: p.color ?? '',
       style: p.style ?? '',
-      capturedImage: p.capturedImage ?? '',
+      capturedImage: primaryImage,
       allegroAvg: String(p.allegroAvg ?? p.price ?? 0),
       ebayAvg: String(p.ebayAvg ?? p.price ?? 0),
       isExactMatch,
@@ -195,6 +212,12 @@ function persistPendingAnalysisFromIdentify(result: IdentifyApiResponse) {
   });
   if (result.draftId != null) {
     sessionStorage.setItem('identifyDraftId', String(result.draftId));
+  }
+  if (capturedImages.length > 0) {
+    sessionStorage.setItem(
+      'identifyCapturedImages',
+      JSON.stringify(capturedImages)
+    );
   }
   if (warning) {
     sessionStorage.setItem('identifyVerificationWarning', warning);
@@ -211,14 +234,16 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
   const navigate = useNavigate();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const [stream, setStream] = useState<MediaStream | null>(null);
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [capturedImages, setCapturedImages] = useState<string[]>([]);
+  const [isCapturingMore, setIsCapturingMore] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [analyzeStep, setAnalyzeStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  /** 0 = first identify, 1 = second (max 2 attempts) */
-  const [attemptCount, setAttemptCount] = useState<0 | 1>(0);
-  const [showSecondSearchPrompt, setShowSecondSearchPrompt] = useState(false);
 
   const stopStream = () => {
     const active = streamRef.current;
@@ -244,15 +269,28 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
     }
   };
 
-  const sendImageToScraper = async (
-    imageDataUrl: string,
-    attempt: 0 | 1
-  ) => {
-    const blob = await dataUrlToBlob(imageDataUrl);
+  const clearProgressTimer = () => {
+    if (progressTimerRef.current) {
+      clearInterval(progressTimerRef.current);
+      progressTimerRef.current = null;
+    }
+  };
 
+  const startAnalyzeProgress = (total: number) => {
+    clearProgressTimer();
+    setAnalyzeStep(1);
+    if (total <= 1) return;
+    progressTimerRef.current = setInterval(() => {
+      setAnalyzeStep((prev) => (prev < total ? prev + 1 : prev));
+    }, 4500);
+  };
+
+  const sendImagesToIdentify = async (imageDataUrls: string[]) => {
     const formData = new FormData();
-    formData.append('image', blob, 'camera-capture.jpg');
-    formData.append('attempt', String(attempt));
+    for (let i = 0; i < imageDataUrls.length; i++) {
+      const blob = await dataUrlToBlob(imageDataUrls[i]);
+      formData.append('images', blob, `angle-${i + 1}.jpg`);
+    }
 
     const res = await fetch('/api/identify', {
       method: 'POST',
@@ -280,7 +318,7 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
   };
 
   const goToDraft = (result: IdentifyApiResponse) => {
-    persistPendingAnalysisFromIdentify(result);
+    persistPendingAnalysisFromIdentify(result, capturedImages);
     if (result.draftId != null) {
       console.log('Draft saved with ID:', result.draftId);
     }
@@ -289,32 +327,17 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
   };
 
   const identify = async () => {
-    if (!capturedImage) return;
+    if (capturedImages.length === 0) return;
     setIsLoading(true);
     setError(null);
-    setShowSecondSearchPrompt(false);
+    startAnalyzeProgress(capturedImages.length);
 
     try {
-      const attempt = attemptCount;
-      if (attempt === 1) {
-        console.log(
-          '[Identify] Second attempt – allowing fallback to generic'
-        );
-      }
       console.log(
-        `📸 Sending camera image to /api/identify (attempt ${attempt + 1}/2)...`
+        `📸 Sending ${capturedImages.length} image(s) to /api/identify...`
       );
-      const result = await sendImageToScraper(capturedImage, attempt);
+      const result = await sendImagesToIdentify(capturedImages);
       console.log('[Identify] API response:', JSON.stringify(result, null, 2));
-      console.log('[Identify] Parsed:', {
-        isExactMatch: result.isExactMatch ?? result.product?.isExactMatch,
-        matchType: result.matchType ?? result.product?.matchType,
-        price: result.product?.price,
-        priceReliable: result.priceReliable ?? result.product?.priceReliable,
-        title: result.product?.title,
-        brand: result.product?.brand,
-        draftId: result.draftId,
-      });
 
       if (result.message && result.requiresManualReview) {
         console.log('[Identify]', result.message);
@@ -333,11 +356,6 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
         return;
       }
 
-      if (attempt === 0) {
-        setShowSecondSearchPrompt(true);
-        return;
-      }
-
       goToDraft({
         ...result,
         verificationWarning:
@@ -352,28 +370,29 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
       );
       console.error(err);
     } finally {
+      clearProgressTimer();
+      setAnalyzeStep(0);
       setIsLoading(false);
     }
   };
 
-  const takeAnotherPhoto = () => {
-    setAttemptCount(1);
-    setShowSecondSearchPrompt(false);
-    setCapturedImage(null);
-    setError(null);
-    startCamera();
+  const addCapturedImage = (imageDataUrl: string) => {
+    setCapturedImages((prev) => {
+      if (prev.length >= MAX_IMAGES) return prev;
+      return [...prev, imageDataUrl];
+    });
+    setIsCapturingMore(false);
+    stopStream();
   };
 
   const capturePhoto = async () => {
     if (!videoRef.current || !canvasRef.current || isLoading) return;
     setError(null);
-    setShowSecondSearchPrompt(false);
 
     try {
       captureVideoFrame(videoRef.current, canvasRef.current);
       const imageDataUrl = await encodeCanvasForApi(canvasRef.current);
-      stopStream();
-      setCapturedImage(imageDataUrl);
+      addCapturedImage(imageDataUrl);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Could not capture photo.'
@@ -381,40 +400,127 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
     }
   };
 
-  const retake = () => {
-    setAttemptCount(0);
-    setCapturedImage(null);
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const files = event.target.files;
+    if (!files?.length || isLoading) return;
     setError(null);
-    setShowSecondSearchPrompt(false);
-    startCamera();
+
+    try {
+      const remaining = MAX_IMAGES - capturedImages.length;
+      const selected = Array.from(files).slice(0, remaining);
+      const dataUrls = await Promise.all(selected.map(fileToDataUrl));
+      setCapturedImages((prev) => [...prev, ...dataUrls].slice(0, MAX_IMAGES));
+      setIsCapturingMore(false);
+      stopStream();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Could not load image file.'
+      );
+    } finally {
+      event.target.value = '';
+    }
   };
 
+  const removeImage = (index: number) => {
+    setCapturedImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const replaceImage = (index: number) => {
+    removeImage(index);
+    setIsCapturingMore(true);
+    void startCamera();
+  };
+
+  const addAnotherAngle = () => {
+    if (capturedImages.length >= MAX_IMAGES) return;
+    setIsCapturingMore(true);
+    void startCamera();
+  };
+
+  const retakeAll = () => {
+    setCapturedImages([]);
+    setIsCapturingMore(false);
+    setError(null);
+    void startCamera();
+  };
+
+  const showCamera =
+    capturedImages.length === 0 || isCapturingMore;
+
   useEffect(() => {
-    startCamera();
+    if (capturedImages.length === 0) {
+      void startCamera();
+    }
     return () => {
+      clearProgressTimer();
       streamRef.current?.getTracks().forEach((track) => track.stop());
     };
   }, []);
 
+  useEffect(() => {
+    if (showCamera && !stream && capturedImages.length < MAX_IMAGES) {
+      void startCamera();
+    }
+  }, [showCamera, stream, capturedImages.length]);
+
+  const angleLabel =
+    capturedImages.length === 0
+      ? 'first'
+      : capturedImages.length === 1
+        ? 'second'
+        : 'third';
+
   return (
     <div className="max-w-2xl mx-auto p-6 bg-zinc-900 border border-zinc-800 rounded-lg text-white space-y-4">
-      <h1 className="text-xl font-bold tracking-tight">KAUF26 Scanner Node</h1>
+      <div>
+        <h1 className="text-xl font-bold tracking-tight">KAUF26 Scanner Node</h1>
+        <p className="text-xs text-zinc-400 mt-1">
+          For best results, take 3 photos: front, back, label/tag.
+        </p>
+      </div>
+
       {error && (
         <div className="bg-red-950/40 border border-red-900 text-red-400 px-3 py-2 text-xs rounded">
           {error}
         </div>
       )}
 
-      {!capturedImage ? (
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={(e) => void handleFileUpload(e)}
+      />
+
+      {showCamera ? (
         !stream ? (
-          <button
-            onClick={startCamera}
-            className="w-full py-3 bg-blue-600 rounded font-semibold hover:bg-blue-500 transition-colors"
-          >
-            Start Camera
-          </button>
+          <div className="space-y-3">
+            <button
+              onClick={() => void startCamera()}
+              className="w-full py-3 bg-blue-600 rounded font-semibold hover:bg-blue-500 transition-colors"
+            >
+              Start Camera
+            </button>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isLoading}
+              className="w-full py-3 bg-zinc-800 rounded font-semibold hover:bg-zinc-700 disabled:opacity-40 transition-colors"
+            >
+              Upload photo
+            </button>
+          </div>
         ) : (
           <div className="space-y-4">
+            <p className="text-sm text-zinc-400">
+              {capturedImages.length === 0
+                ? 'Capture or upload your first photo.'
+                : `Capture your ${angleLabel} angle (${capturedImages.length + 1}/${MAX_IMAGES}).`}
+            </p>
             <video
               ref={videoRef}
               autoPlay
@@ -426,60 +532,103 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
               disabled={isLoading}
               className="w-full py-3 bg-emerald-600 rounded font-semibold hover:bg-emerald-500 disabled:opacity-40 transition-colors"
             >
-              Capture Photo
+              {capturedImages.length === 0 ? 'Capture Photo' : `Take ${angleLabel} photo`}
             </button>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isLoading}
+              className="w-full py-2 text-sm text-zinc-300 underline hover:text-white"
+            >
+              Or upload from gallery
+            </button>
+            {capturedImages.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setIsCapturingMore(false);
+                  stopStream();
+                }}
+                className="w-full py-2 text-sm text-zinc-400 hover:text-white"
+              >
+                Done adding angles
+              </button>
+            )}
           </div>
         )
       ) : (
         <div className="space-y-4">
-          <img
-            src={capturedImage}
-            alt="Captured preview"
-            className="w-full rounded border border-zinc-700"
-          />
+          <div className="grid grid-cols-3 gap-2">
+            {capturedImages.map((img, index) => (
+              <div key={`${index}-${img.slice(0, 24)}`} className="relative group">
+                <img
+                  src={img}
+                  alt={`Angle ${index + 1}`}
+                  className="w-full aspect-square object-cover rounded border border-zinc-700"
+                />
+                <span className="absolute top-1 left-1 text-[10px] bg-black/70 px-1.5 py-0.5 rounded">
+                  {index + 1}
+                </span>
+                <div className="absolute inset-x-0 bottom-0 flex gap-1 p-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    type="button"
+                    onClick={() => replaceImage(index)}
+                    disabled={isLoading}
+                    className="flex-1 text-[10px] py-1 bg-zinc-800/90 rounded"
+                  >
+                    Replace
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeImage(index)}
+                    disabled={isLoading}
+                    className="flex-1 text-[10px] py-1 bg-red-900/90 rounded"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
 
-          {showSecondSearchPrompt && (
-            <div className="rounded border border-amber-800/60 bg-amber-950/30 p-4 space-y-3">
-              <p className="text-sm text-amber-200/90">
-                No exact marketplace match yet. You can take another photo for a
-                second search, or continue with an estimated price range and
-                review the listing on the next screen.
-              </p>
-              <button
-                type="button"
-                onClick={takeAnotherPhoto}
-                className="w-full py-3 bg-blue-600 rounded font-semibold hover:bg-blue-500 transition-colors"
-              >
-                Take another photo
-              </button>
-            </div>
+          {capturedImages.length < MAX_IMAGES && (
+            <button
+              type="button"
+              onClick={addAnotherAngle}
+              disabled={isLoading}
+              className="w-full py-3 border border-dashed border-zinc-600 rounded font-semibold text-zinc-200 hover:border-zinc-400 hover:bg-zinc-800/50 disabled:opacity-40 transition-colors"
+            >
+              + Add another angle
+            </button>
           )}
 
           {isLoading && (
             <p className="text-center text-sm text-zinc-400">
-              Analyzing product – this may take up to 10 seconds for best
-              accuracy…
+              Analyzing image {Math.min(analyzeStep || 1, capturedImages.length)}/
+              {capturedImages.length}… this may take up to a minute.
             </p>
           )}
 
-          {!showSecondSearchPrompt && (
-            <div className="flex gap-4">
-              <button
-                onClick={retake}
-                disabled={isLoading}
-                className="flex-1 py-3 bg-zinc-800 rounded font-semibold hover:bg-zinc-700 disabled:opacity-40 transition-colors"
-              >
-                Retake
-              </button>
-              <button
-                onClick={() => void identify()}
-                disabled={isLoading}
-                className="flex-1 py-3 bg-blue-600 rounded font-semibold hover:bg-blue-500 disabled:opacity-40 transition-colors"
-              >
-                {isLoading ? 'Analyzing…' : 'Identify'}
-              </button>
-            </div>
-          )}
+          <div className="flex gap-4">
+            <button
+              onClick={retakeAll}
+              disabled={isLoading}
+              className="flex-1 py-3 bg-zinc-800 rounded font-semibold hover:bg-zinc-700 disabled:opacity-40 transition-colors"
+            >
+              Start over
+            </button>
+            <button
+              onClick={() => void identify()}
+              disabled={isLoading}
+              className="flex-1 py-3 bg-blue-600 rounded font-semibold hover:bg-blue-500 disabled:opacity-40 transition-colors"
+            >
+              {isLoading
+                ? 'Analyzing…'
+                : capturedImages.length === 1
+                  ? 'Identify'
+                  : `Identify (${capturedImages.length} photos)`}
+            </button>
+          </div>
         </div>
       )}
       <canvas ref={canvasRef} className="hidden" />

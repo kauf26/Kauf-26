@@ -17,6 +17,9 @@ const Welcome = () => {
        <p className="text-[16px] font-black tracking-widest uppercase bg-gradient-to-r from-blue-600 via-purple-600 to-pink-500 bg-clip-text text-transparent">
          PICTURE □ POST □ SELL
        </p>
+       <p className="text-sm text-gray-600 mt-3 max-w-md mx-auto leading-relaxed">
+         For best results, take 3 photos: front, back, label/tag.
+       </p>
      </section>
 
      {/* Main Interaction Area - Logo triggers camera */}
