@@ -177,6 +177,62 @@ export const productDrafts = pgTable("product_drafts", {
  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+/** Central shared quantity for a draft across all marketplace listings */
+export const inventoryPools = pgTable("inventory_pools", {
+ id: serial("id").primaryKey(),
+ draftId: integer("draft_id")
+   .notNull()
+   .references(() => productDrafts.id, { onDelete: "cascade" })
+   .unique(),
+ quantity: integer("quantity").notNull().default(1),
+ version: integer("version").notNull().default(0),
+ status: text("status").notNull().default("active"),
+ sku: text("sku"),
+ createdAt: timestamp("created_at").defaultNow(),
+ updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const inventoryMarketplaceListings = pgTable(
+ "inventory_marketplace_listings",
+ {
+   id: serial("id").primaryKey(),
+   poolId: integer("pool_id")
+     .notNull()
+     .references(() => inventoryPools.id, { onDelete: "cascade" }),
+   marketplaceId: text("marketplace_id").notNull(),
+   listingId: text("listing_id"),
+   sku: text("sku"),
+   status: text("status").notNull().default("active"),
+   lastSyncedQuantity: integer("last_synced_quantity"),
+   updatedAt: timestamp("updated_at").defaultNow(),
+ }
+);
+
+export const inventorySyncEvents = pgTable("inventory_sync_events", {
+ id: serial("id").primaryKey(),
+ poolId: integer("pool_id")
+   .notNull()
+   .references(() => inventoryPools.id, { onDelete: "cascade" }),
+ eventType: text("event_type").notNull(),
+ marketplaceId: text("marketplace_id"),
+ message: text("message").notNull(),
+ quantityBefore: integer("quantity_before"),
+ quantityAfter: integer("quantity_after"),
+ metadata: jsonb("metadata"),
+ createdAt: timestamp("created_at").defaultNow(),
+});
+
+/** Idempotency: one decrement per marketplace order */
+export const inventorySaleDedup = pgTable("inventory_sale_dedup", {
+ id: serial("id").primaryKey(),
+ poolId: integer("pool_id")
+   .notNull()
+   .references(() => inventoryPools.id, { onDelete: "cascade" }),
+ marketplaceId: text("marketplace_id").notNull(),
+ externalOrderId: text("external_order_id").notNull(),
+ createdAt: timestamp("created_at").defaultNow(),
+});
+
 // --- SCHEMAS & TYPES ---
 export const insertUserSchema = createInsertSchema(users);
 export const insertProductSchema = createInsertSchema(products);
@@ -198,3 +254,7 @@ export type MarketplaceSettings = typeof marketplaceSettings.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type ProductDraft = typeof productDrafts.$inferSelect;
 export type InsertProductDraft = z.infer<typeof insertProductDraftSchema>;
+export type InventoryPool = typeof inventoryPools.$inferSelect;
+export type InventoryMarketplaceListing =
+ typeof inventoryMarketplaceListings.$inferSelect;
+export type InventorySyncEvent = typeof inventorySyncEvents.$inferSelect;
