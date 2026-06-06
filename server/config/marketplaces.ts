@@ -333,17 +333,6 @@ export const MASTER_MARKETPLACES: MasterMarketplace[] = [
     envKeys: ["KIDIZEN_API_KEY"],
     implementationStatus: "dry-run",
   },
-  {
-    id: "facebook",
-    name: "Facebook Marketplace",
-    currency: "USD",
-    country: "US",
-    apiMethod: "open",
-    enabledForPublishing: false,
-    credentialsRequired: ["accessToken", "catalogId"],
-    envKeys: ["FACEBOOK_ACCESS_TOKEN", "FACEBOOK_CATALOG_ID"],
-    implementationStatus: "live",
-  },
 ];
 
 const byId = new Map(MASTER_MARKETPLACES.map((m) => [m.id, m]));

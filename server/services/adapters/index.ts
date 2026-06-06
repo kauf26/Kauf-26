@@ -21,11 +21,6 @@ import {
   publishToEtsy,
 } from "./etsyAdapter";
 import {
-  formatFacebookListing,
-  isFacebookConfigured,
-  publishToFacebook,
-} from "./facebookAdapter";
-import {
   formatMercadoLibreListing,
   isMercadoLibreConfigured,
   publishToMercadoLibre,
@@ -67,12 +62,6 @@ const coreAdapters: MarketplaceAdapter[] = [
     format: formatAllegroListing,
     publish: (f, fetchImpl) => publishToAllegro(f, fetchImpl),
     isConfigured: isAllegroConfigured,
-  },
-  {
-    id: "facebook",
-    format: formatFacebookListing,
-    publish: (f, fetchImpl) => publishToFacebook(f, fetchImpl),
-    isConfigured: isFacebookConfigured,
   },
   {
     id: "amazon",

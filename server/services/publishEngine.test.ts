@@ -24,7 +24,6 @@ describe("publishToMarketplacesParallel", () => {
     process.env = { ...originalEnv };
     delete process.env.EBAY_CLIENT_ID;
     delete process.env.ALLEGRO_CLIENT_ID;
-    delete process.env.FACEBOOK_ACCESS_TOKEN;
   });
 
   afterEach(() => {
@@ -35,13 +34,13 @@ describe("publishToMarketplacesParallel", () => {
     const outcomes = await publishToMarketplacesParallel(minimalDraft, [
       "ebay",
       "allegro",
-      "facebook",
+      "etsy",
     ]);
 
     expect(outcomes).toHaveLength(3);
     expect(outcomes.every((o) => o.success)).toBe(true);
     expect(outcomes.map((o) => o.marketplace).sort()).toEqual(
-      ["allegro", "ebay", "facebook"].sort()
+      ["allegro", "ebay", "etsy"].sort()
     );
     expect(outcomes.every((o) => o.dryRun === true)).toBe(true);
   });
