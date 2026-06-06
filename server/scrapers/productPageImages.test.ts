@@ -38,7 +38,9 @@ describe("extractProductPageImageUrls", () => {
     expect(urls[0]).toBe("https://cdn.example.com/gallery-1.jpg");
     expect(urls[1]).toBe("https://cdn.example.com/gallery-2.jpg");
     expect(urls[2]).toBe("https://cdn.example.com/og-main.jpg");
-    expect(urls[5]).toBe("https://cdn.example.com/extra-4.jpg");
+    expect(urls[3]).toBe("https://cdn.example.com/extra-3.jpg");
+    expect(urls[5]).toBe("https://cdn.example.com/extra-5.jpg");
+    expect(urls).not.toContain("https://cdn.example.com/extra-6.jpg");
     expect(urls).not.toContain("https://cdn.example.com/extra-7.jpg");
   });
 
