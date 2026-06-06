@@ -1,16 +1,15 @@
 import type { DraftPublishPayload } from "../../publishToMarketplaces";
+import { draftPrice } from "./adapterUtils";
 import type { AdapterPublishResult, FormattedListing } from "./types";
 
 export function formatWebListing(
   draft: DraftPublishPayload,
   marketplaceId: string
 ): FormattedListing {
-  const a = draft.attributes ?? {};
-  const market = (a.marketPrices as Record<string, string>) ?? {};
   return {
     marketplace: marketplaceId,
     title: draft.title,
-    price: parseFloat(market.recommendedPrice ?? String(a.medianPrice ?? "0")) || 0,
+    price: draftPrice(draft),
     note: "No public API — manual listing required",
   };
 }

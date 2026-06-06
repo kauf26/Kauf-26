@@ -72,19 +72,26 @@ async function processQueue() {
      .where(eq(publishTasks.id, taskWithData.taskId));
 
    const raw = taskWithData.productData as Record<string, unknown> | null;
-   const draftPayload =
+   let draftPayload =
      raw && typeof raw === "object" && "draftId" in raw
-       ? {
-           draftId: Number(raw.draftId),
+       ? draftToPublishPayload({
+           id: Number(raw.draftId),
            title: String(raw.title ?? ""),
            sku: (raw.sku as string | null) ?? null,
-           images: Array.isArray(raw.images) ? (raw.images as string[]) : [],
-           attributes:
-             raw.attributes && typeof raw.attributes === "object"
-               ? (raw.attributes as Record<string, unknown>)
-               : {},
-         }
+           images: raw.images,
+           attributes: raw.attributes,
+         })
        : null;
+
+   if (draftPayload?.draftId) {
+     const [freshDraft] = await db
+       .select()
+       .from(productDrafts)
+       .where(eq(productDrafts.id, draftPayload.draftId));
+     if (freshDraft) {
+       draftPayload = draftToPublishPayload(freshDraft);
+     }
+   }
 
    try {
      const result = await processPublishTask({

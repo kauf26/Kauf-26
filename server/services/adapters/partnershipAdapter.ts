@@ -19,7 +19,7 @@ export function formatPartnershipListing(
     category: a.category ?? "",
     brand: a.brand ?? "",
     imageCount: draft.images?.length ?? 0,
-    note: "Partnership API — manual listing required until integration is complete",
+    note: "Waiting for partnership API keys; images and price are ready.",
   };
 }
 
@@ -28,12 +28,14 @@ export async function publishPartnershipListing(
   marketplaceId: string,
   displayName: string
 ): Promise<AdapterPublishResult> {
+  const price = formatted.price ?? 0;
+  const imageCount = formatted.imageCount ?? 0;
   console.log(
-    `[Publish][${displayName}] Partnership API — manual listing required`
+    `[Publish][${displayName}] Waiting for partnership API keys; images (${imageCount}) and price ($${price}) are ready.`
   );
   return dryRunResult(
     marketplaceId,
-    `${displayName}: Partnership API — manual listing required (dry-run success)`,
+    `${displayName}: Waiting for partnership API keys; images and price are ready.`,
     formatted
   );
 }

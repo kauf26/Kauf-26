@@ -1081,11 +1081,18 @@ async function runIdentifyPipeline(
          listings.description ||
          `KAUF-AI identified as: ${searchQuery}`,
        priceReliable: listings.priceReliable === true,
+       recommendedPrice: String(
+         listings.price ?? listings.medianPrice ?? "0.00"
+       ),
        medianPrice: String(listings.medianPrice ?? listings.price ?? "0.00"),
+       capturedImage: draftImages[0] ?? allImageDataUrls[0] ?? "",
+       capturedImages: allImageDataUrls,
        marketPrices: {
          allegroAvg: String(listings.allegroAvg ?? listings.price ?? "0.00"),
          ebayAvg: String(listings.ebayAvg ?? listings.ebayPrice ?? "0.00"),
-         recommendedPrice: String(listings.price ?? "0.00"),
+         recommendedPrice: String(
+           listings.price ?? listings.medianPrice ?? "0.00"
+         ),
        },
        source: listings.scraperSource ?? "ai_identified",
        matchType: listings.matchType ?? "generic",

@@ -1,4 +1,5 @@
 import type { DraftPublishPayload } from "../../publishToMarketplaces";
+import { draftPrice } from "./adapterUtils";
 import type { AdapterPublishResult, FetchFn, FormattedListing } from "./types";
 
 const GRAPH = "https://graph.facebook.com/v21.0";
@@ -11,9 +12,7 @@ export function formatFacebookListing(
   draft: DraftPublishPayload
 ): FormattedListing {
   const a = draft.attributes ?? {};
-  const market = (a.marketPrices as Record<string, string>) ?? {};
-  const price =
-    parseFloat(market.recommendedPrice ?? String(a.medianPrice ?? "0")) || 0;
+  const price = draftPrice(draft);
 
   return {
     retailer_id: draft.sku ?? `kauf26-${draft.draftId}`,

@@ -43,6 +43,28 @@ const CATEGORY_SUGGESTIONS = [
   "Other",
 ];
 
+function loadDraftImagesForSave(capturedImage: string): string[] {
+  const images: string[] = [];
+  const add = (img: string) => {
+    if (img.trim() && !images.includes(img)) images.push(img);
+  };
+  try {
+    const stored = sessionStorage.getItem("identifyCapturedImages");
+    if (stored) {
+      const parsed = JSON.parse(stored) as unknown;
+      if (Array.isArray(parsed)) {
+        for (const img of parsed) {
+          if (typeof img === "string") add(img);
+        }
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  add(capturedImage);
+  return images;
+}
+
 const DEFAULT_PRODUCT: ProductDraftState = {
 isExactMatch: false,
 matchType: "generic",
@@ -232,6 +254,7 @@ const handleContinue = async () => {
     const existingDraftId =
       sessionStorage.getItem("productDraftId") ??
       sessionStorage.getItem("identifyDraftId");
+    const draftImages = loadDraftImagesForSave(product.capturedImage);
     const res = await fetch("/api/drafts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -239,16 +262,24 @@ const handleContinue = async () => {
         id: existingDraftId ? Number(existingDraftId) : undefined,
         title: product.title,
         status: "draft",
+        images: draftImages,
         attributes: {
           capturedImage: product.capturedImage,
+          capturedImages: draftImages,
           modelName: product.title,
           brand: product.brand,
           condition: product.condition,
           category: product.category,
           aiDescription: product.description,
           recommendedPrice: parseFloat(product.price) || 0,
+          medianPrice: product.price,
           allegroAvg: parseFloat(product.allegroAverage) || 0,
           ebayAvg: parseFloat(product.ebayAverage) || 0,
+          marketPrices: {
+            recommendedPrice: product.price,
+            allegroAvg: product.allegroAverage,
+            ebayAvg: product.ebayAverage,
+          },
         },
       }),
     });

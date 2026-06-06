@@ -2,6 +2,8 @@ import express from 'express';
 import { db } from './db';
 import { productDrafts, publishJobs, publishTasks } from '../shared/schema';
 import { eq, inArray } from 'drizzle-orm';
+import { collectDraftImages } from './services/adapters/adapterUtils';
+import { MAX_PRODUCT_PAGE_IMAGES } from './scrapers/productPageImages';
 
 const router = express.Router();
 
@@ -24,7 +26,7 @@ function normalizeDraftAttributes(
     (a.marketPrices as Record<string, string> | undefined) ?? {};
   const recommended =
     marketPrices.recommendedPrice ??
-    String(a.medianPrice ?? a.price ?? "0.00");
+    String(a.recommendedPrice ?? a.medianPrice ?? a.price ?? "0.00");
 
   return {
     ...a,
@@ -34,17 +36,33 @@ function normalizeDraftAttributes(
     isExactMatch: a.isExactMatch === true,
     matchType: String(a.matchType ?? "generic"),
     longDescription: String(a.longDescription ?? a.aiDescription ?? "").trim(),
+    recommendedPrice: String(a.recommendedPrice ?? recommended),
     medianPrice: String(a.medianPrice ?? recommended),
     scraperMetadata:
       (a.scraperMetadata as Record<string, unknown> | undefined) ??
       (a._scraperMetadata as Record<string, unknown> | undefined) ??
       null,
     marketPrices: {
-      allegroAvg: marketPrices.allegroAvg ?? "0.00",
-      ebayAvg: marketPrices.ebayAvg ?? "0.00",
+      allegroAvg: marketPrices.allegroAvg ?? String(a.allegroAvg ?? "0.00"),
+      ebayAvg: marketPrices.ebayAvg ?? String(a.ebayAvg ?? "0.00"),
       recommendedPrice: recommended,
     },
   };
+}
+
+function resolveDraftImagesForSave(
+  bodyImages: unknown,
+  attributes: Record<string, unknown>,
+  existingImages: string[] = []
+): string[] {
+  const merged = collectDraftImages({
+    images: [
+      ...existingImages,
+      ...(Array.isArray(bodyImages) ? bodyImages : []),
+    ],
+    attributes,
+  });
+  return merged.slice(0, MAX_PRODUCT_PAGE_IMAGES);
 }
 
 // --- 1. SAVE OR UPDATE A DRAFT (POST) ---
@@ -66,12 +84,20 @@ router.post("/drafts", async (req, res) => {
        .where(eq(productDrafts.id, Number(id)));
 
      if (existingDraft) {
+       const priorImages = Array.isArray(existingDraft.images)
+         ? (existingDraft.images as string[])
+         : [];
+       const resolvedImages = resolveDraftImagesForSave(
+         images,
+         normalizedAttributes,
+         priorImages
+       );
        const [updatedDraft] = await db.update(productDrafts)
          .set({
            title,
            sku: sku || null,
            status: status || 'draft',
-           images: images || [],
+           images: resolvedImages,
            attributes: normalizedAttributes,
            updatedAt: new Date()
          })
@@ -83,13 +109,18 @@ router.post("/drafts", async (req, res) => {
      }
    }
 
+   const resolvedImages = resolveDraftImagesForSave(
+     images,
+     normalizedAttributes
+   );
+
    // Create new draft
    const [newDraft] = await db.insert(productDrafts)
      .values({
        title,
        sku: sku || null,
        status: status || 'draft',
-       images: images || [],
+       images: resolvedImages,
        attributes: normalizedAttributes,
      })
      .returning();

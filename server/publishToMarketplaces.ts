@@ -3,6 +3,10 @@
  */
 
 import { publishOne } from "./services/adapters";
+import {
+  collectDraftImages,
+  draftPrice,
+} from "./services/adapters/adapterUtils";
 import { SUPPORTED_MARKETPLACE_IDS } from "./config/marketplaces";
 
 export type DraftPublishPayload = {
@@ -64,14 +68,23 @@ export function draftToPublishPayload(draft: {
   images?: unknown;
   attributes?: unknown;
 }): DraftPublishPayload {
-  return {
+  const attributes =
+    draft.attributes && typeof draft.attributes === "object"
+      ? (draft.attributes as Record<string, unknown>)
+      : {};
+  const images = collectDraftImages({ images: draft.images, attributes });
+  const payload: DraftPublishPayload = {
     draftId: draft.id,
     title: draft.title,
     sku: draft.sku,
-    images: Array.isArray(draft.images) ? (draft.images as string[]) : [],
-    attributes:
-      draft.attributes && typeof draft.attributes === "object"
-        ? (draft.attributes as Record<string, unknown>)
-        : {},
+    images,
+    attributes,
   };
+  if (images.length === 0) {
+    console.warn(
+      `[Publish] draft ${draft.id}: no images on draft.images or attributes.capturedImage`
+    );
+  }
+  draftPrice(payload);
+  return payload;
 }

@@ -1,4 +1,5 @@
 import type { DraftPublishPayload } from "../../publishToMarketplaces";
+import { draftPrice } from "./adapterUtils";
 import type { AdapterPublishResult, FetchFn, FormattedListing } from "./types";
 
 function env(key: string): string {
@@ -13,9 +14,7 @@ function ebayBaseUrl(): string {
 
 export function formatEbayListing(draft: DraftPublishPayload): FormattedListing {
   const a = draft.attributes ?? {};
-  const market = (a.marketPrices as Record<string, string>) ?? {};
-  const price =
-    parseFloat(market.recommendedPrice ?? String(a.medianPrice ?? "0")) || 0;
+  const price = draftPrice(draft);
   const sku = draft.sku?.trim() || `kauf26-${draft.draftId}`;
 
   return {

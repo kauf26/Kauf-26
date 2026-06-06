@@ -1,4 +1,5 @@
 import type { DraftPublishPayload } from "../../publishToMarketplaces";
+import { draftPrice } from "./adapterUtils";
 import type { AdapterPublishResult, FetchFn, FormattedListing } from "./types";
 
 const ALLEGRO_API = "https://api.allegro.pl";
@@ -12,9 +13,7 @@ export function formatAllegroListing(
   draft: DraftPublishPayload
 ): FormattedListing {
   const a = draft.attributes ?? {};
-  const market = (a.marketPrices as Record<string, string>) ?? {};
-  const pricePln =
-    parseFloat(market.recommendedPrice ?? String(a.medianPrice ?? "0")) || 0;
+  const pricePln = draftPrice(draft);
 
   return {
     name: draft.title,

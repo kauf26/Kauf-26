@@ -9,12 +9,77 @@ export function hasEnv(...keys: string[]): boolean {
   return keys.every((k) => Boolean(env(k)));
 }
 
+function parsePositivePrice(value: unknown): number | null {
+  if (value == null || value === "") return null;
+  const n = typeof value === "number" ? value : parseFloat(String(value));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * First non-zero price from draft attributes / marketPrices (publish adapters).
+ */
 export function draftPrice(draft: DraftPublishPayload): number {
   const a = draft.attributes ?? {};
-  const market = (a.marketPrices as Record<string, string>) ?? {};
-  return (
-    parseFloat(market.recommendedPrice ?? String(a.medianPrice ?? "0")) || 0
+  const market = (a.marketPrices as Record<string, unknown>) ?? {};
+
+  const candidates: unknown[] = [
+    a.recommendedPrice,
+    a.medianPrice,
+    market.recommendedPrice,
+    a.price,
+  ];
+
+  for (const value of candidates) {
+    const parsed = parsePositivePrice(value);
+    if (parsed != null) return parsed;
+  }
+
+  console.warn(
+    `[Publish] draft ${draft.draftId}: no price found in attributes — using 0`
   );
+  return 0;
+}
+
+function isImageRef(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const s = value.trim();
+  if (!s) return false;
+  return (
+    s.startsWith("data:image/") ||
+    s.startsWith("http://") ||
+    s.startsWith("https://")
+  );
+}
+
+/**
+ * Merge draft.images with attributes.capturedImage / capturedImages / page URLs.
+ */
+export function collectDraftImages(draft: {
+  images?: unknown;
+  attributes?: Record<string, unknown>;
+}): string[] {
+  const a = draft.attributes ?? {};
+  const merged: string[] = [];
+  const seen = new Set<string>();
+
+  const add = (value: unknown) => {
+    if (!isImageRef(value) || seen.has(value)) return;
+    seen.add(value);
+    merged.push(value);
+  };
+
+  if (Array.isArray(draft.images)) {
+    for (const img of draft.images) add(img);
+  }
+  add(a.capturedImage);
+  if (Array.isArray(a.capturedImages)) {
+    for (const img of a.capturedImages) add(img);
+  }
+  if (Array.isArray(a.productPageImageUrls)) {
+    for (const url of a.productPageImageUrls) add(url);
+  }
+
+  return merged;
 }
 
 export function draftDescription(draft: DraftPublishPayload): string {
