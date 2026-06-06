@@ -1,6 +1,12 @@
 import type { DraftPublishPayload } from "../../publishToMarketplaces";
 import type { AdapterPublishResult, FormattedListing, MarketplaceAdapter } from "./types";
-import { draftDescription, draftPrice, draftSku, dryRunResult } from "./adapterUtils";
+import {
+  draftDescription,
+  draftImageCount,
+  draftPrice,
+  draftSku,
+  dryRunResult,
+} from "./adapterUtils";
 
 export function formatPartnershipListing(
   draft: DraftPublishPayload,
@@ -18,7 +24,7 @@ export function formatPartnershipListing(
     sku: draftSku(draft),
     category: a.category ?? "",
     brand: a.brand ?? "",
-    imageCount: draft.images?.length ?? 0,
+    imageCount: draftImageCount(draft),
     note: "Waiting for partnership API keys; images and price are ready.",
   };
 }

@@ -1,5 +1,5 @@
 import type { DraftPublishPayload } from "../../publishToMarketplaces";
-import { draftPrice } from "./adapterUtils";
+import { draftImageCount, draftPrice } from "./adapterUtils";
 import type { AdapterPublishResult, FetchFn, FormattedListing } from "./types";
 
 function env(key: string): string {
@@ -27,7 +27,8 @@ export function formatEbayListing(draft: DraftPublishPayload): FormattedListing 
     quantity: 1,
     marketplaceId: env("EBAY_MARKETPLACE_ID") || "EBAY_US",
     categoryId: env("EBAY_CATEGORY_ID") || "93427",
-    imageCount: draft.images?.length ?? 0,
+    imageCount: draftImageCount(draft),
+    images: draft.images ?? [],
     listingFormat: "FIXED_PRICE",
   };
 }

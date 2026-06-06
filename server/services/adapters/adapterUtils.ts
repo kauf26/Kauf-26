@@ -40,6 +40,11 @@ export function draftPrice(draft: DraftPublishPayload): number {
   return 0;
 }
 
+/** @alias draftPrice — shared price resolver for all marketplace adapters */
+export function getPrice(draft: DraftPublishPayload): number {
+  return draftPrice(draft);
+}
+
 function isImageRef(value: unknown): value is string {
   if (typeof value !== "string") return false;
   const s = value.trim();
@@ -80,6 +85,10 @@ export function collectDraftImages(draft: {
   }
 
   return merged;
+}
+
+export function draftImageCount(draft: DraftPublishPayload): number {
+  return collectDraftImages(draft).length;
 }
 
 export function draftDescription(draft: DraftPublishPayload): string {

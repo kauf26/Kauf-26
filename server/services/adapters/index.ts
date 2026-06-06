@@ -1,4 +1,5 @@
 import type { DraftPublishPayload } from "../../publishToMarketplaces";
+import { draftToPublishPayload } from "../../publishToMarketplaces";
 import { MASTER_MARKETPLACES } from "../../config/marketplaces";
 import {
   formatAllegroListing,
@@ -149,7 +150,14 @@ export async function publishOne(
     };
   }
 
-  const formatted = adapter.format(draft);
+  const normalized = draftToPublishPayload({
+    id: draft.draftId,
+    title: draft.title,
+    sku: draft.sku,
+    images: draft.images,
+    attributes: draft.attributes,
+  });
+  const formatted = adapter.format(normalized);
   try {
     const result = await adapter.publish(formatted, fetchImpl);
     return {

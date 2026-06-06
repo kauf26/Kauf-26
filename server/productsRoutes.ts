@@ -104,7 +104,9 @@ router.post("/drafts", async (req, res) => {
          .where(eq(productDrafts.id, Number(id)))
          .returning();
 
-       console.log(`[KAUF26] Updated draft ID: ${updatedDraft.id}`);
+       console.log(
+         `[KAUF26] Updated draft ID: ${updatedDraft.id} images=${resolvedImages.length}`
+       );
        return res.status(200).json(updatedDraft);
      }
    }
@@ -125,7 +127,9 @@ router.post("/drafts", async (req, res) => {
      })
      .returning();
 
-   console.log(`[KAUF26] Created new draft ID: ${newDraft.id}`);
+   console.log(
+     `[KAUF26] Created new draft ID: ${newDraft.id} images=${resolvedImages.length}`
+   );
    return res.status(201).json(newDraft);
 
  } catch (error) {

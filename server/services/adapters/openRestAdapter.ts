@@ -7,6 +7,7 @@ import type {
 } from "./types";
 import {
   draftDescription,
+  draftImageCount,
   draftPrice,
   draftSku,
   dryRunResult,
@@ -93,7 +94,7 @@ export function baseOpenPayload(
     brand: a.brand ?? "",
     condition: a.condition ?? "Used",
     images: draft.images ?? [],
-    imageCount: draft.images?.length ?? 0,
+    imageCount: draftImageCount(draft),
     ...extra,
   };
 }

@@ -2,6 +2,7 @@ import type { DraftPublishPayload } from "../../publishToMarketplaces";
 import type { AdapterPublishResult, FetchFn, FormattedListing } from "./types";
 import {
   draftDescription,
+  draftImageCount,
   draftPrice,
   draftSku,
   dryRunResult,
@@ -19,7 +20,7 @@ export function formatMercadoLibreListing(
     marketplace: "mercadolibre",
     sku: draftSku(draft),
     site_id: env("MERCADOLIBRE_SITE_ID") || "MLA",
-    imageCount: draft.images?.length ?? 0,
+    imageCount: draftImageCount(draft),
     apiBody: {
       title: draft.title.slice(0, 60),
       category_id: env("MERCADOLIBRE_CATEGORY_ID") || "MLA3530",
