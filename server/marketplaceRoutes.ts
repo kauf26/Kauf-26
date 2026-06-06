@@ -1,63 +1,60 @@
 import express from 'express';
-import { db } from './db'; // Adjust path if your initialized drizzle db instance is elsewhere
+import { db } from './db';
 import { publishJobs, publishTasks } from '../shared/schema';
 import { eq } from 'drizzle-orm';
+import { MARKETPLACES, resolveMarketplaceTargets } from './config/marketplaces';
+import { publishDraft } from './services/publishEngine';
 
 const router = express.Router();
 
 // POST /api/marketplaces/publish
+// Body: { draftId, marketplaces?: string[], marketplaceIds?: string[], sync?: boolean }
 router.post('/publish', async (req, res) => {
- const { productData, marketplaceIds, draftId } = req.body;
+ const { draftId, marketplaces, marketplaceIds, sync } = req.body;
 
- let payload = productData;
- if (draftId != null) {
-   const { db } = await import('./db');
-   const { productDrafts } = await import('../shared/schema');
-   const { draftToPublishPayload } = await import('./publishToMarketplaces');
-   const [draft] = await db
-     .select()
-     .from(productDrafts)
-     .where(eq(productDrafts.id, Number(draftId)));
-   if (!draft) {
-     return res.status(404).json({ error: 'Draft not found.' });
-   }
-   payload = draftToPublishPayload(draft);
+ if (draftId == null || Number.isNaN(Number(draftId))) {
+   return res.status(400).json({ error: 'draftId is required.' });
  }
 
- if (!payload || typeof payload !== 'object') {
-   return res.status(400).json({ error: 'productData or draftId is required.' });
- }
+ const requested = Array.isArray(marketplaces)
+   ? marketplaces
+   : Array.isArray(marketplaceIds)
+     ? marketplaceIds
+     : undefined;
 
- if (!marketplaceIds || !Array.isArray(marketplaceIds) || marketplaceIds.length === 0) {
-   return res.status(400).json({ error: 'No target marketplaces provided.' });
+ const targets = resolveMarketplaceTargets(requested);
+ if (targets.length === 0) {
+   return res.status(400).json({
+     error: 'No enabled marketplaces provided.',
+   });
  }
 
  try {
-   // 1. Insert the master job using Drizzle
-   const [newJob] = await db.insert(publishJobs)
-     .values({
-       productData: payload,
-     })
-     .returning();
-
-   // 2. Insert individual tasks for each selected marketplace
-   const taskValues = marketplaceIds.map((id) => ({
-     jobId: newJob.id,
-     marketplaceId: id,
-     status: 'pending',
-     attempts: 0,
-   }));
-
-   await db.insert(publishTasks).values(taskValues);
+   const report = await publishDraft(Number(draftId), targets, {
+     sync: sync === true,
+     createJob: true,
+   });
 
    return res.status(202).json({
      success: true,
-     message: 'Publishing tasks queued.',
-     jobId: newJob.id,
+     message: sync
+       ? 'Publishing completed.'
+       : 'Publishing tasks queued.',
+     jobId: report.jobId,
+     draftId: report.draftId,
+     marketplaces: report.marketplaces,
+     outcomes: report.outcomes,
+     succeeded: report.succeeded,
+     failed: report.failed,
+     dryRun: report.dryRun,
    });
- } catch (error: any) {
-   console.error('Queue error:', error);
-   return res.status(500).json({ error: 'Database error while queueing tasks.' });
+ } catch (error: unknown) {
+   const message = error instanceof Error ? error.message : 'Queue error';
+   console.error('[Marketplaces] publish error:', error);
+   if (message.includes('not found')) {
+     return res.status(404).json({ error: message });
+   }
+   return res.status(500).json({ error: message });
  }
 });
 
@@ -66,7 +63,6 @@ router.get('/status/:jobId', async (req, res) => {
  const jobId = parseInt(req.params.jobId);
 
  try {
-   // Fetch all tasks associated with this job
    const tasks = await db.select()
      .from(publishTasks)
      .where(eq(publishTasks.jobId, jobId));
@@ -75,34 +71,48 @@ router.get('/status/:jobId', async (req, res) => {
      return res.status(404).json({ error: 'Job not found.' });
    }
 
-   // Transform raw rows into the exact nested format your frontend expects
    const marketplaces: Record<string, string> = {};
-   let allCompleted = true;
+   const details: Record<string, { status: string; error?: string | null }> = {};
    let anyProcessingOrPending = false;
+   let failed = 0;
+   let completed = 0;
 
    tasks.forEach((task) => {
-     marketplaces[task.marketplaceId] = task.status || 'pending';
+     const status = task.status || 'pending';
+     marketplaces[task.marketplaceId] = status;
+     details[task.marketplaceId] = {
+       status,
+       error: task.errorMessage,
+     };
 
-     if (task.status !== 'completed' && task.status !== 'failed') {
+     if (status === 'completed') completed++;
+     if (status === 'failed') failed++;
+     if (status !== 'completed' && status !== 'failed') {
        anyProcessingOrPending = true;
      }
    });
 
-   // Determine the global parent status
    let parentStatus = 'processing';
    if (!anyProcessingOrPending) {
-     parentStatus = 'completed';
+     parentStatus = failed > 0 && completed === 0 ? 'failed' : 'completed';
    }
 
    return res.json({
      jobId,
      status: parentStatus,
      marketplaces,
+     details,
+     summary: { completed, failed, total: tasks.length },
    });
- } catch (error: any) {
+ } catch (error: unknown) {
    console.error('Status fetch error:', error);
    return res.status(500).json({ error: 'Failed to fetch job status.' });
  }
+});
+
+// GET /api/marketplaces/config
+router.get('/config', (_req, res) => {
+  return res.json({ marketplaces: MARKETPLACES });
 });
 
 export default router;

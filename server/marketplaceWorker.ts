@@ -4,6 +4,23 @@ import { eq, and, or, lt } from 'drizzle-orm';
 import { processPublishTask, MAX_ATTEMPTS } from './queueManager';
 import { draftToPublishPayload } from './publishToMarketplaces';
 
+/** Exponential backoff before retrying failed tasks (ms). */
+function retryBackoffMs(attempts: number): number {
+  return Math.min(30_000, 1000 * Math.pow(2, Math.max(0, attempts - 1)));
+}
+
+function isReadyForRetry(
+  status: string | null,
+  attempts: number | null,
+  updatedAt: Date | null
+): boolean {
+  if (status !== 'failed') return true;
+  const a = attempts ?? 0;
+  if (a >= MAX_ATTEMPTS) return false;
+  const elapsed = Date.now() - (updatedAt?.getTime() ?? 0);
+  return elapsed >= retryBackoffMs(a);
+}
+
 async function processQueue() {
  try {
    const [taskWithData] = await db
@@ -13,6 +30,7 @@ async function processQueue() {
        marketplaceId: publishTasks.marketplaceId,
        status: publishTasks.status,
        attempts: publishTasks.attempts,
+       updatedAt: publishTasks.updatedAt,
        productData: publishJobs.productData,
      })
      .from(publishTasks)
@@ -30,6 +48,16 @@ async function processQueue() {
      .for('update', { skipLocked: true });
 
    if (!taskWithData) return;
+
+   if (
+     !isReadyForRetry(
+       taskWithData.status,
+       taskWithData.attempts,
+       taskWithData.updatedAt
+     )
+   ) {
+     return;
+   }
 
    const currentAttempts = (taskWithData.attempts ?? 0) + 1;
 
