@@ -131,7 +131,7 @@ export default function InventoryQuantityCounter({
     );
   }
 
-  const remaining = snapshot?.quantity ?? Number(inputQty) || 0;
+  const remaining = (snapshot?.quantity ?? Number(inputQty)) || 0;
   const outOfStock = snapshot?.status === "out_of_stock" || remaining === 0;
 
   return (
