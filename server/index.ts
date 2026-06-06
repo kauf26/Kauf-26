@@ -16,6 +16,7 @@ import {
 } from "./scrapers/luxuryPricing";
 import { extractBrandModelFromTitle } from "./scrapers/googleSearchApify";
 import { debugIdentify } from "./scrapers/scrapeDebug";
+import { MAX_PRODUCT_PAGE_IMAGES } from "./scrapers/productPageImages";
 import { extractReferenceNumbers } from "./scrapers/visionMatch";
 import { stripExternalUrlFields } from "./listingSanitizer";
 import { SUPPORTED_MARKETPLACE_IDS } from "./publishToMarketplaces";
@@ -121,7 +122,21 @@ type ScrapedListing = ScrapedProduct & {
   priceMax?: string | number;
   listingCount?: number;
   exactMatchCount?: number;
+  imageUrls?: string[];
+  primaryImageUrl?: string;
 };
+
+function mergeDraftImages(
+  captured: string[],
+  pageUrls: string[] | undefined
+): string[] {
+  const merged = [...captured];
+  for (const url of pageUrls ?? []) {
+    if (merged.length >= MAX_PRODUCT_PAGE_IMAGES) break;
+    if (!merged.includes(url)) merged.push(url);
+  }
+  return merged.slice(0, MAX_PRODUCT_PAGE_IMAGES);
+}
 
 function visionToListing(vision: VisionProduct): ScrapedListing {
   return {
@@ -1042,11 +1057,16 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
      ? "requires_review"
      : "ready_for_posting";
 
+   const pageImageUrls = Array.isArray(listings.imageUrls)
+     ? listings.imageUrls.filter((u): u is string => typeof u === "string")
+     : [];
+   const draftImages = mergeDraftImages(allImageDataUrls, pageImageUrls);
+
    const draftData = {
      title: listings.title ?? searchQuery,
      sku: listings.refNumber || `AUTO-${Date.now()}`,
      status: draftStatus,
-     images: allImageDataUrls,
+     images: draftImages,
      attributes: {
        brand: normalizeBrand(listings.brand) || normalizeBrand(vision.brand),
        model: String(listings.model ?? "").trim(),
@@ -1084,6 +1104,8 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
        identifiedAt: new Date().toISOString(),
        imagesProcessed: imageInputs.length,
        visionSources,
+       productPageImageUrls: pageImageUrls,
+       productPageImageCount: pageImageUrls.length,
      }
    };
 
@@ -1109,7 +1131,7 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
      : await prepareDraftPublishing(Number(draftId));
 
    // Normalized response for ProductDraft / sessionStorage (Task A)
-   const capturedImage = allImageDataUrls[0];
+   const capturedImage = draftImages[0] ?? allImageDataUrls[0];
    const market = fillMarketAverages({
      price: listings.price ?? 0,
      allegroAvg: listings.allegroAvg ?? listings.price,
