@@ -53,6 +53,8 @@ export type RawListing = {
   material?: string;
   color?: string;
   url?: string;
+  /** Up to 6 gallery URLs from product page (document order) */
+  imageUrls?: string[];
 };
 
 export type VisionMatchContext = {

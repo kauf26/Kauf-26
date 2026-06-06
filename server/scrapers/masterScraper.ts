@@ -39,6 +39,7 @@ import {
   type ScraperSource,
   type VisionMatchContext,
 } from "./listingUtils";
+import { enrichProductWithPageImages } from "./productPageScraper";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -275,6 +276,24 @@ function attachScrapeMeta(
   }
 ): Record<string, unknown> {
   return { ...result, ...meta };
+}
+
+async function withProductPageImages(
+  result: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const url = String(
+    result.productUrl ?? result.url ?? result.link ?? ""
+  ).trim();
+  if (!url) return result;
+  try {
+    return await enrichProductWithPageImages(result);
+  } catch (err) {
+    console.warn(
+      "[MasterScraper] Product page image extraction failed:",
+      err instanceof Error ? err.message : err
+    );
+    return result;
+  }
 }
 
 /** Exact marketplace listing — preserve fields as returned (no description trim). */
@@ -733,11 +752,14 @@ export const scrapeProduct = async (
             matchType: "exact",
           };
           const scored = scoreResult(matchVision, lensLead);
-          return attachScrapeMeta(buildExactProduct(lensLead, query), {
-            timedOut: false,
-            matchConfidence: confidenceFromScore(scored.score),
-            matchScore: scored.score,
-          });
+          return attachScrapeMeta(
+            await withProductPageImages(buildExactProduct(lensLead, query)),
+            {
+              timedOut: false,
+              matchConfidence: confidenceFromScore(scored.score),
+              matchScore: scored.score,
+            }
+          );
         }
         console.warn(
           "[MasterScraper] Google Lens brand conflict — Stage 2 keyword race"
@@ -928,7 +950,7 @@ export const scrapeProduct = async (
   logNoExactMatchWarning(matchVision, queryPlan, raw, candidates);
 
   if (raw.isExactMatch === true) {
-    const result = buildExactProduct(raw, query);
+    const result = await withProductPageImages(buildExactProduct(raw, query));
     console.log("[MasterScraper] Price stats:", {
       price: result.price,
       priceReliable: result.priceReliable,
@@ -936,16 +958,21 @@ export const scrapeProduct = async (
       scraperSource: result.scraperSource,
       brand: result.brand,
       title: result.title,
+      imageCount: Array.isArray(result.imageUrls)
+        ? result.imageUrls.length
+        : 0,
       matchConfidence,
       timedOut: anyScraperTimedOut,
     });
     return attachScrapeMeta(result, meta);
   }
 
-  const result = mergeSimilarProduct(raw, {
-    visionTitle: matchVision.visionTitle,
-    visionCategory: undefined,
-  });
+  const result = await withProductPageImages(
+    mergeSimilarProduct(raw, {
+      visionTitle: matchVision.visionTitle,
+      visionCategory: undefined,
+    })
+  );
   console.log(
     "[MasterScraper] Returning similar match (needsManualReview=true) — no exact winner"
   );
