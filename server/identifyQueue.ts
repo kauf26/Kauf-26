@@ -5,6 +5,12 @@
 
 import type { IdentifyImageInput } from "./identifyImages";
 
+export {
+  runVisionPhase,
+  VisionIdentifyError,
+  type VisionPhaseResult,
+} from "./identifyVision";
+
 export const IDENTIFY_QUEUE_CONCURRENCY = Number(
   process.env.IDENTIFY_QUEUE_CONCURRENCY ?? 3
 );

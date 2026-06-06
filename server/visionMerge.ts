@@ -3,6 +3,7 @@ export type VisionConfidence = "high" | "medium" | "low";
 export type VisionProduct = {
   title: string;
   brand?: string;
+  model?: string;
   category?: string;
   condition?: string;
   price?: number | null;
@@ -38,15 +39,27 @@ export function formatSourceLabels(indices: number[]): string {
   return `${head}, and ${imageLabel(unique[unique.length - 1])}`;
 }
 
-function normalizeKey(value: string, field: "title" | "brand" | "category"): string {
+function normalizeKey(
+  value: string,
+  field:
+    | "title"
+    | "brand"
+    | "category"
+    | "model"
+    | "color"
+    | "material"
+    | "style"
+): string {
   const trimmed = value.trim();
   if (field === "brand") return trimmed.toLowerCase();
   return trimmed.toLowerCase().replace(/\s+/g, " ");
 }
 
+const DESCRIPTION_MAX_CHARS = 300;
+
 function pickScalarField(
   items: VisionPerImage[],
-  field: "title" | "brand" | "category"
+  field: "title" | "brand" | "category" | "model" | "color" | "material" | "style"
 ): { value: string; sourceIndices: number[] } {
   const candidates = items
     .map((item) => ({
@@ -124,52 +137,39 @@ function pickScalarField(
   };
 }
 
-const AGGREGATE_SPLIT_RE = /\s*(?:,|;|\/|\band\b|\bwith\b)\s*/i;
-
-function splitAggregateTokens(value: string): string[] {
-  return value
-    .split(AGGREGATE_SPLIT_RE)
-    .map((t) => t.trim())
-    .filter((t) => t.length > 0);
-}
-
-function mergeAggregateField(
+function pickTitleForAggregatedBrand(
   items: VisionPerImage[],
-  field: "color" | "material" | "style"
+  aggregatedBrand: string
 ): { value: string; sourceIndices: number[] } {
-  const tokenSources = new Map<string, { display: string; indices: Set<number> }>();
+  const brandKey = normalizeKey(aggregatedBrand, "brand");
+  const candidates = items
+    .map((item) => ({
+      value: item.title.trim(),
+      imageIndex: item.imageIndex,
+      rank: CONF_RANK[item.confidence],
+      brandMatches:
+        brandKey.length > 0 &&
+        normalizeKey(String(item.brand ?? ""), "brand") === brandKey,
+    }))
+    .filter((c) => c.value.length > 0);
 
-  for (const item of items) {
-    const raw = String(item[field] ?? "").trim();
-    if (!raw) continue;
-    for (const token of splitAggregateTokens(raw)) {
-      const key = token.toLowerCase();
-      const existing = tokenSources.get(key);
-      if (!existing) {
-        tokenSources.set(key, {
-          display: token,
-          indices: new Set([item.imageIndex]),
-        });
-      } else {
-        existing.indices.add(item.imageIndex);
-        if (token.length > existing.display.length) {
-          existing.display = token;
-        }
-      }
-    }
-  }
-
-  if (tokenSources.size === 0) {
+  if (candidates.length === 0) {
     return { value: "", sourceIndices: [] };
   }
 
-  const ordered = [...tokenSources.values()];
-  const value = ordered.map((e) => e.display).join(", ");
-  const sourceIndices = [
-    ...new Set(ordered.flatMap((e) => [...e.indices])),
-  ].sort((a, b) => a - b);
+  const pool =
+    brandKey.length > 0 && candidates.some((c) => c.brandMatches)
+      ? candidates.filter((c) => c.brandMatches)
+      : candidates;
 
-  return { value, sourceIndices };
+  const best = [...pool].sort(
+    (a, b) => b.rank - a.rank || b.value.length - a.value.length
+  )[0];
+
+  return {
+    value: best.value,
+    sourceIndices: [best.imageIndex],
+  };
 }
 
 function mergeDescriptions(items: VisionPerImage[]): {
@@ -194,10 +194,65 @@ function mergeDescriptions(items: VisionPerImage[]): {
     indices.push(item.imageIndex);
   }
 
+  let value = parts.join(" ");
+  if (value.length > DESCRIPTION_MAX_CHARS) {
+    value = value.slice(0, DESCRIPTION_MAX_CHARS).trim();
+    const lastSpace = value.lastIndexOf(" ");
+    if (lastSpace > DESCRIPTION_MAX_CHARS * 0.6) {
+      value = value.slice(0, lastSpace).trim();
+    }
+  }
+
   return {
-    value: parts.join(" "),
+    value,
     sourceIndices: [...new Set(indices)].sort((a, b) => a - b),
   };
+}
+
+export function summarizeFieldVotes(
+  perImage: VisionPerImage[],
+  field: "brand" | "model"
+): Record<string, number> {
+  const votes = new Map<string, { count: number; display: string }>();
+  for (const item of perImage) {
+    const raw = String(item[field] ?? "").trim();
+    if (!raw) continue;
+    const key = raw.toLowerCase();
+    const existing = votes.get(key);
+    if (existing) {
+      existing.count++;
+    } else {
+      votes.set(key, { count: 1, display: raw });
+    }
+  }
+  const out: Record<string, number> = {};
+  for (const { display, count } of votes.values()) {
+    out[display] = count;
+  }
+  return out;
+}
+
+/** Scraper query from aggregated brand + model (majority vote), falling back to title. */
+export function buildScraperSearchQuery(vision: VisionProduct): string {
+  const title = vision.title.trim();
+  const brand = String(vision.brand ?? "").trim();
+  const model = String(vision.model ?? "").trim();
+
+  if (brand && model) {
+    const blob = title.toLowerCase();
+    if (
+      blob.includes(brand.toLowerCase()) &&
+      blob.includes(model.toLowerCase())
+    ) {
+      return title;
+    }
+    return `${brand} ${model}`.trim();
+  }
+  if (brand && title.toLowerCase().includes(brand.toLowerCase())) {
+    return title;
+  }
+  if (brand) return brand;
+  return title;
 }
 
 function pickCondition(items: VisionPerImage[]): {
@@ -261,6 +316,7 @@ export function mergeVisionResults(
       sources: {
         title: imageLabel(only.imageIndex),
         brand: only.brand?.trim() ? imageLabel(only.imageIndex) : "",
+        model: only.model?.trim() ? imageLabel(only.imageIndex) : "",
         category: only.category?.trim() ? imageLabel(only.imageIndex) : "",
         color: only.color?.trim() ? imageLabel(only.imageIndex) : "",
         material: only.material?.trim() ? imageLabel(only.imageIndex) : "",
@@ -271,18 +327,20 @@ export function mergeVisionResults(
     };
   }
 
-  const titlePick = pickScalarField(perImage, "title");
   const brandPick = pickScalarField(perImage, "brand");
+  const modelPick = pickScalarField(perImage, "model");
+  const titlePick = pickTitleForAggregatedBrand(perImage, brandPick.value);
   const categoryPick = pickScalarField(perImage, "category");
-  const colorPick = mergeAggregateField(perImage, "color");
-  const materialPick = mergeAggregateField(perImage, "material");
-  const stylePick = mergeAggregateField(perImage, "style");
+  const colorPick = pickScalarField(perImage, "color");
+  const materialPick = pickScalarField(perImage, "material");
+  const stylePick = pickScalarField(perImage, "style");
   const descriptionPick = mergeDescriptions(perImage);
   const conditionPick = pickCondition(perImage);
 
   const sources: VisionSources = {
     title: formatSourceLabels(titlePick.sourceIndices),
     brand: formatSourceLabels(brandPick.sourceIndices),
+    model: formatSourceLabels(modelPick.sourceIndices),
     category: formatSourceLabels(categoryPick.sourceIndices),
     color: formatSourceLabels(colorPick.sourceIndices),
     material: formatSourceLabels(materialPick.sourceIndices),
@@ -294,6 +352,7 @@ export function mergeVisionResults(
   const vision: VisionProduct = {
     title: titlePick.value || perImage[0].title,
     brand: brandPick.value,
+    model: modelPick.value,
     category: categoryPick.value,
     condition: conditionPick.value,
     price: null,
@@ -317,24 +376,34 @@ export function logVisionMergeSources(
   merged: VisionProduct,
   primaryImageIndex: number
 ): void {
-  console.log("[Identify] Multi-image vision merge:", {
+  const brandVotes = summarizeFieldVotes(perImage, "brand");
+  const modelVotes = summarizeFieldVotes(perImage, "model");
+
+  console.log("[Identify] Multi-image vision aggregation:", {
     imagesProcessed: perImage.length,
     primaryImageIndex,
-    sources,
-    mergedTitle: merged.title,
-    mergedBrand: merged.brand,
+    brandVotes,
+    modelVotes,
+    chosenBrand: merged.brand,
+    chosenModel: merged.model,
+    chosenTitle: merged.title,
+    scraperQuery: buildScraperSearchQuery(merged),
+    fieldSources: sources,
     mergedCategory: merged.category,
     mergedColor: merged.color,
     mergedMaterial: merged.material,
     mergedStyle: merged.style,
     mergedConfidence: merged.confidence,
+    descriptionChars: merged.description?.length ?? 0,
   });
+
   for (const item of perImage) {
     console.log(
       `[Identify] Image ${item.imageIndex + 1} vision:`,
       JSON.stringify({
         title: item.title,
         brand: item.brand,
+        model: item.model,
         category: item.category,
         color: item.color,
         material: item.material,

@@ -33,6 +33,8 @@ import {
   enqueueIdentifyJob,
   IdentifyJobTimeoutError,
   IDENTIFY_JOB_TIMEOUT_MS,
+  runVisionPhase,
+  VisionIdentifyError,
   type IdentifyJobData,
 } from "./identifyQueue";
 import {
@@ -42,8 +44,6 @@ import {
   type IdentifyImageInput,
 } from "./identifyImages";
 import {
-  logVisionMergeSources,
-  mergeVisionResults,
   type VisionConfidence,
   type VisionPerImage,
   type VisionProduct,
@@ -503,6 +503,7 @@ Return ONLY valid JSON:
 {
   "title": "specific product name",
   "brand": "brand or text on product if visible, else empty string",
+  "model": "model name or line (e.g. Chronospace, Submariner, Eco-Drive) without brand, or empty string",
   "category": "accurate marketplace category (e.g. Home & Kitchen, Electronics, Clothing — never \"General\")",
   "condition": "one of: New, Used, Like New",
   "price": resale price in USD as a number only if you are confident from visible context; otherwise null (never guess a low placeholder),
@@ -589,6 +590,21 @@ async function callVisionForImage(
   return { ...parsed, imageIndex };
 }
 
+function inferModelFromTitle(title: string, brand: string): string {
+  const t = title.trim();
+  const b = brand.trim();
+  if (!t) return "";
+  if (b) {
+    const lower = t.toLowerCase();
+    const brandLower = b.toLowerCase();
+    if (lower.startsWith(brandLower)) {
+      return t.slice(b.length).trim();
+    }
+  }
+  const parts = t.split(/\s+/).filter(Boolean);
+  return parts.length > 1 ? parts.slice(1).join(" ") : "";
+}
+
 function parseVisionResponse(content: string): VisionProduct | null {
   const trimmed = content.trim();
   const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
@@ -603,9 +619,15 @@ function parseVisionResponse(content: string): VisionProduct | null {
       rawConf === "high" || rawConf === "medium" || rawConf === "low"
         ? rawConf
         : "medium";
+    const brand = parsed.brand?.trim() || "";
+    const model =
+      String(parsed.model ?? "").trim() ||
+      inferModelFromTitle(title, brand);
+
     return {
       title,
-      brand: parsed.brand?.trim() || "",
+      brand,
+      model,
       category: coalesceCategory(categoryFromVision),
       condition: parsed.condition || "Used",
       price:
@@ -888,45 +910,38 @@ async function runIdentifyPipeline(
    );
 
    console.log(
-     `🤖 [2/5] Calling OpenAI vision for ${imageInputs.length} image(s) (max ${VISION_TIMEOUT_MS}ms each, parallel) — scraper starts only after merge...`
+     `🤖 [2/5] Calling OpenAI vision for ${imageInputs.length} image(s) (max ${VISION_TIMEOUT_MS}ms each, parallel) — scraper starts only after aggregation...`
    );
    const visionStart = Date.now();
-   const visionResults = await Promise.all(
-     imageInputs.map((image, index) => callVisionForImage(image, index))
-   );
-   step = logStep("Vision complete", visionStart);
-
-   const perImageVision = visionResults.filter(
-     (result): result is VisionPerImage => result != null
-   );
-
-   if (perImageVision.length === 0) {
-     console.warn("❌ Vision could not identify product from any image");
-     res.status(422).json({
-       message:
-         "Could not identify product – please try again with better lighting",
-     });
-     return;
+   let visionPhase;
+   try {
+     visionPhase = await runVisionPhase(job, callVisionForImage);
+   } catch (err) {
+     if (err instanceof VisionIdentifyError) {
+       console.warn("❌ Vision could not identify product from any image");
+       res.status(422).json({
+         message:
+           "Could not identify product – please try again with better lighting",
+       });
+       return;
+     }
+     throw err;
    }
+   step = logStep("Vision aggregate complete", visionStart);
 
    const {
      vision,
      sources: visionSources,
      primaryImageIndex,
-   } = mergeVisionResults(perImageVision);
-   logVisionMergeSources(
-     perImageVision,
-     visionSources,
-     vision,
-     primaryImageIndex
-   );
+     searchQuery,
+     perImage: perImageVision,
+   } = visionPhase;
 
    const primaryImage =
      imageInputs[primaryImageIndex] ?? imageInputs[0];
    const base64Image = primaryImage.buffer.toString("base64");
    const allImageDataUrls = imageInputs.map(toDataUrl);
 
-   const searchQuery = vision.title;
    console.log("🔍 [3/5] Merged vision:", JSON.stringify(vision, null, 2));
 
    let listings: ScrapedListing;
@@ -942,6 +957,9 @@ async function runIdentifyPipeline(
          vision: {
            visionTitle: vision.title,
            visionBrand: vision.brand ?? "",
+           modelNumbers: vision.model
+             ? [vision.model]
+             : undefined,
          },
          imageBase64: base64Image,
          imageMimeType: primaryImage.mimetype || "image/jpeg",
