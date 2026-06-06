@@ -2,7 +2,15 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { saveListingSession, type MatchType } from '@/lib/pendingAnalysis';
 
-const MAX_IMAGES = 3;
+const MAX_IMAGES = 5;
+
+const ANGLE_ORDINALS = [
+  'first',
+  'second',
+  'third',
+  'fourth',
+  'fifth',
+] as const;
 const MAX_EXPORT_DIM = 1024;
 const JPEG_QUALITY = 0.85;
 
@@ -532,11 +540,9 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
   }, [showCamera, stream, capturedImages.length]);
 
   const angleLabel =
-    capturedImages.length === 0
-      ? 'first'
-      : capturedImages.length === 1
-        ? 'second'
-        : 'third';
+    capturedImages.length < ANGLE_ORDINALS.length
+      ? ANGLE_ORDINALS[capturedImages.length]
+      : `${capturedImages.length + 1}th`;
 
   const captureLabel =
     capturedImages.length === 0 ? 'Take Photo' : `Take ${angleLabel} photo`;
@@ -546,7 +552,7 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
       <div className="shrink-0">
         <h1 className="text-lg sm:text-xl font-bold tracking-tight">KAUF26 Scanner</h1>
         <p className="text-xs text-zinc-400 mt-0.5">
-          For best results, take 3 photos: front, back, label/tag.
+          For best results, take up to 5 photos: front, back, label/tag, and details.
         </p>
       </div>
 
@@ -656,7 +662,7 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
         )
       ) : (
         <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
             {capturedImages.map((img, index) => (
               <div key={`${index}-${img.slice(0, 24)}`} className="relative group">
                 <img
@@ -724,7 +730,7 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
                 ? 'Analyzing…'
                 : capturedImages.length === 1
                   ? 'Identify'
-                  : `Identify (${capturedImages.length} photos)`}
+                  : `Submit all (${capturedImages.length} photos)`}
             </button>
           </div>
         </div>

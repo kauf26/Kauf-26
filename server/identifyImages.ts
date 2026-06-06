@@ -1,6 +1,6 @@
 import type { Request } from "express";
 
-export const MAX_IDENTIFY_IMAGES = 3;
+export const MAX_IDENTIFY_IMAGES = 5;
 
 export type IdentifyImageInput = {
   buffer: Buffer;

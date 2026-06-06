@@ -18,7 +18,7 @@ const Welcome = () => {
          PICTURE □ POST □ SELL
        </p>
        <p className="text-sm text-gray-600 mt-3 max-w-md mx-auto leading-relaxed">
-         For best results, take 3 photos: front, back, label/tag.
+         For best results, take up to 5 photos: front, back, label/tag, and details.
        </p>
      </section>
 

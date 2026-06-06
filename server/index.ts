@@ -1214,7 +1214,7 @@ const server = createServer(app);
  server.listen(PORT, "0.0.0.0", () => {
    console.log(`🚀 Unified Kauf26 engine running on port ${PORT}`);
    console.log(`📋 API endpoints available:`);
-   console.log(`   - POST /api/identify (1–3 images → OpenAI vision merge → scrape → draft)`);
+   console.log(`   - POST /api/identify (1–5 images → OpenAI vision merge → scrape → draft)`);
    console.log(`   - POST /api/catalog/scrape (JSON { query } → masterScraper)`);
    console.log(`   - GET  /api/health`);
    console.log(`   - GET/POST /api/drafts (productsRoutes → PostgreSQL)`);
