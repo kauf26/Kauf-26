@@ -27,6 +27,14 @@ import {
   IdentifyJobTimeoutError,
   IDENTIFY_JOB_TIMEOUT_MS,
 } from "./identifyQueue";
+import {
+  logVisionMergeSources,
+  mergeVisionResults,
+  type VisionConfidence,
+  type VisionPerImage,
+  type VisionProduct,
+  type VisionSources,
+} from "./visionMerge";
 
 /** Skip vague scraper categories like "General" */
 function isWeakCategory(category: string): boolean {
@@ -79,22 +87,14 @@ interface ScrapedProduct {
  ebayPrice?: string | number;
 }
 
-type VisionConfidence = "high" | "medium" | "low";
+type MatchType = "exact" | "similar" | "generic";
 
-type VisionProduct = {
-  title: string;
-  brand?: string;
-  category?: string;
-  condition?: string;
-  price?: number | null;
-  description?: string;
-  material?: string;
-  color?: string;
-  style?: string;
-  confidence: VisionConfidence;
+type IdentifyImageInput = {
+  buffer: Buffer;
+  mimetype: string;
 };
 
-type MatchType = "exact" | "similar" | "generic";
+const MAX_IDENTIFY_IMAGES = 3;
 
 type ScrapedListing = ScrapedProduct & {
   title?: string;
@@ -486,6 +486,126 @@ Cleaning cloth (blurry/generic): { "title": "Eyeglass cleaning cloth", "brand": 
 
 Mug example: { "title": "Starbucks 16oz Ceramic Mug", "brand": "Starbucks", "category": "Home & Kitchen", "condition": "Used", "price": null, "confidence": "high", "description": "..." }`;
 
+function dataUrlToImageBuffer(
+  dataUrl: string
+): IdentifyImageInput | null {
+  const trimmed = dataUrl.trim();
+  const match = trimmed.match(/^data:([^;]+);base64,(.+)$/s);
+  if (match) {
+    return {
+      mimetype: match[1],
+      buffer: Buffer.from(match[2], "base64"),
+    };
+  }
+  if (/^[A-Za-z0-9+/=\s]+$/.test(trimmed)) {
+    return {
+      mimetype: "image/jpeg",
+      buffer: Buffer.from(trimmed.replace(/\s/g, ""), "base64"),
+    };
+  }
+  return null;
+}
+
+function extractIdentifyImages(req: Request): IdentifyImageInput[] {
+  const files = req.files as
+    | {
+        image?: Express.Multer.File[];
+        images?: Express.Multer.File[];
+      }
+    | undefined;
+
+  const fromMulter: IdentifyImageInput[] = [];
+  if (files?.image?.[0]) {
+    fromMulter.push({
+      buffer: files.image[0].buffer,
+      mimetype: files.image[0].mimetype || "image/jpeg",
+    });
+  }
+  if (files?.images?.length) {
+    for (const file of files.images) {
+      fromMulter.push({
+        buffer: file.buffer,
+        mimetype: file.mimetype || "image/jpeg",
+      });
+    }
+  }
+  if (fromMulter.length > 0) {
+    return fromMulter.slice(0, MAX_IDENTIFY_IMAGES);
+  }
+
+  const body = req.body as { image?: string; images?: string[] };
+  if (Array.isArray(body.images)) {
+    const parsed = body.images
+      .slice(0, MAX_IDENTIFY_IMAGES)
+      .map((entry) => dataUrlToImageBuffer(String(entry ?? "")))
+      .filter((entry): entry is IdentifyImageInput => entry != null);
+    if (parsed.length > 0) return parsed;
+  }
+  if (body.image) {
+    const single = dataUrlToImageBuffer(String(body.image));
+    return single ? [single] : [];
+  }
+  return [];
+}
+
+function toDataUrl(image: IdentifyImageInput): string {
+  const mime = image.mimetype || "image/jpeg";
+  return `data:${mime};base64,${image.buffer.toString("base64")}`;
+}
+
+async function callVisionForImage(
+  image: IdentifyImageInput,
+  imageIndex: number
+): Promise<VisionPerImage | null> {
+  const base64Image = image.buffer.toString("base64");
+  console.log(
+    `🤖 [Vision] Image ${imageIndex + 1}: calling OpenAI (max ${VISION_TIMEOUT_MS}ms)...`
+  );
+
+  const visionResponse = await Promise.race([
+    openai.chat.completions.create({
+      model: "gpt-4o",
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "text", text: VISION_IDENTIFY_PROMPT },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:${image.mimetype || "image/jpeg"};base64,${base64Image}`,
+              },
+            },
+          ],
+        },
+      ],
+    }),
+    new Promise<null>((resolve) =>
+      setTimeout(() => resolve(null), VISION_TIMEOUT_MS)
+    ),
+  ]);
+
+  if (!visionResponse) {
+    console.warn(
+      `[Identify] Vision timed out for image ${imageIndex + 1} after ${VISION_TIMEOUT_MS}ms`
+    );
+    return null;
+  }
+
+  const visionRaw = visionResponse.choices[0].message.content || "";
+  console.log(`🔬 [Vision] Image ${imageIndex + 1} raw:`, visionRaw);
+  const parsed = parseVisionResponse(visionRaw);
+  if (!parsed?.title?.trim()) {
+    console.warn(
+      `[Identify] Vision could not identify product from image ${imageIndex + 1}`
+    );
+    return null;
+  }
+
+  return { ...parsed, imageIndex };
+}
+
 function parseVisionResponse(content: string): VisionProduct | null {
   const trimmed = content.trim();
   const jsonMatch = trimmed.match(/\{[\s\S]*\}/);
@@ -762,71 +882,47 @@ function applyScrapeMeta(
 /** Vision + scrapers + draft save (runs inside identify queue). */
 async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
  const identifyStart = Date.now();
- const identifyAttempt = Math.min(
-   1,
-   Math.max(0, Number((req.body as { attempt?: string })?.attempt ?? 0))
- );
- if (identifyAttempt >= 1) {
-   console.log("[Identify] Second attempt – allowing fallback to generic");
- }
  const logStep = (label: string, since: number) => {
    console.log(`[Identify] ${label}: ${Date.now() - since}ms`);
    return Date.now();
  };
  let step = identifyStart;
 
+   const imageInputs = extractIdentifyImages(req);
+   const totalBytes = imageInputs.reduce((sum, img) => sum + img.buffer.length, 0);
+
    console.log(
-     "📸 [1/5] Image received. File size:",
-     req.file?.size,
-     "attempt:",
-     identifyAttempt
+     "📸 [1/5] Images received:",
+     imageInputs.length,
+     "total bytes:",
+     totalBytes
    );
 
-   if (!req.file) {
-     console.log("❌ No file in request");
-     res.status(400).json({ error: "No image uploaded" });
-     return;
-   }
-
-   const base64Image = req.file.buffer.toString('base64');
-
-   console.log(`🤖 [2/5] Calling OpenAI vision (max ${VISION_TIMEOUT_MS}ms)...`);
-   const visionResponse = await Promise.race([
-     openai.chat.completions.create({
-       model: "gpt-4o",
-       response_format: { type: "json_object" },
-       messages: [{
-         role: "user",
-         content: [
-           { type: "text", text: VISION_IDENTIFY_PROMPT },
-           { type: "image_url", image_url: { url: `data:image/jpeg;base64,${base64Image}` } }
-         ]
-       }],
-     }),
-     new Promise<null>((resolve) =>
-       setTimeout(() => resolve(null), VISION_TIMEOUT_MS)
-     ),
-   ]);
-
-   if (!visionResponse) {
-     console.warn(`[Identify] Vision timed out after ${VISION_TIMEOUT_MS}ms`);
-     res.status(422).json({
-       message: "Vision identification timed out — try again",
+   if (imageInputs.length === 0) {
+     console.log("❌ No images in request");
+     res.status(400).json({
+       error: "No image uploaded",
+       message:
+         "Send multipart field `image` or `images[]`, or JSON { image } / { images: [] }",
      });
      return;
    }
 
-   const visionRaw = visionResponse.choices[0].message.content || "";
-   console.log("🔬 [Vision] Raw model response:", visionRaw);
-   const vision = parseVisionResponse(visionRaw);
-   step = logStep("Vision complete", step);
    console.log(
-     "🔬 [Vision] Parsed vision object:",
-     vision ? JSON.stringify(vision, null, 2) : "(parse failed — no valid title)"
+     `🤖 [2/5] Calling OpenAI vision for ${imageInputs.length} image(s) (max ${VISION_TIMEOUT_MS}ms each, parallel)...`
+   );
+   const visionStart = Date.now();
+   const visionResults = await Promise.all(
+     imageInputs.map((image, index) => callVisionForImage(image, index))
+   );
+   step = logStep("Vision complete", visionStart);
+
+   const perImageVision = visionResults.filter(
+     (result): result is VisionPerImage => result != null
    );
 
-   if (!vision?.title?.trim()) {
-     console.warn("❌ Vision could not identify product from image");
+   if (perImageVision.length === 0) {
+     console.warn("❌ Vision could not identify product from any image");
      res.status(422).json({
        message:
          "Could not identify product – please try again with better lighting",
@@ -834,13 +930,25 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
      return;
    }
 
-   console.log(
-     "🔬 [Vision] Full parsed JSON:",
-     JSON.stringify(vision, null, 2)
+   const {
+     vision,
+     sources: visionSources,
+     primaryImageIndex,
+   } = mergeVisionResults(perImageVision);
+   logVisionMergeSources(
+     perImageVision,
+     visionSources,
+     vision,
+     primaryImageIndex
    );
 
+   const primaryImage =
+     imageInputs[primaryImageIndex] ?? imageInputs[0];
+   const base64Image = primaryImage.buffer.toString("base64");
+   const allImageDataUrls = imageInputs.map(toDataUrl);
+
    const searchQuery = vision.title;
-   console.log("🔍 [3/5] Vision identified:", JSON.stringify(vision, null, 2));
+   console.log("🔍 [3/5] Merged vision:", JSON.stringify(vision, null, 2));
 
    let listings: ScrapedListing;
    let fallbackToVision = false;
@@ -857,7 +965,7 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
            visionBrand: vision.brand ?? "",
          },
          imageBase64: base64Image,
-         imageMimeType: req.file.mimetype || "image/jpeg",
+         imageMimeType: primaryImage.mimetype || "image/jpeg",
        })) as ScrapedListing | null;
      } catch (scraperErr) {
        console.warn(
@@ -939,7 +1047,7 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
      title: listings.title ?? searchQuery,
      sku: listings.refNumber || `AUTO-${Date.now()}`,
      status: draftStatus,
-     images: [`data:${req.file.mimetype};base64,${base64Image}`],
+     images: allImageDataUrls,
      attributes: {
        brand: normalizeBrand(listings.brand) || normalizeBrand(vision.brand),
        model: String(listings.model ?? "").trim(),
@@ -974,7 +1082,9 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
        listingsFound,
        priceMin: String(listings.priceMin ?? ""),
        priceMax: String(listings.priceMax ?? ""),
-       identifiedAt: new Date().toISOString()
+       identifiedAt: new Date().toISOString(),
+       imagesProcessed: imageInputs.length,
+       visionSources,
      }
    };
 
@@ -1000,7 +1110,7 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
      : await prepareDraftPublishing(Number(draftId));
 
    // Normalized response for ProductDraft / sessionStorage (Task A)
-   const capturedImage = `data:${req.file.mimetype};base64,${base64Image}`;
+   const capturedImage = allImageDataUrls[0];
    const market = fillMarketAverages({
      price: listings.price ?? 0,
      allegroAvg: listings.allegroAvg ?? listings.price,
@@ -1019,6 +1129,8 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
    res.json({
      success: true,
      draftId,
+     imagesProcessed: imageInputs.length,
+     sources: visionSources,
      publishJobId,
      message: requiresManualReview
        ? "Product identified, but pricing information is incomplete. Please review before posting."
@@ -1068,6 +1180,7 @@ async function runIdentifyPipeline(req: Request, res: Response): Promise<void> {
        allegroAvg: market.allegroAvg,
        ebayAvg: market.ebayAvg,
        capturedImage,
+       capturedImages: allImageDataUrls,
        isExactMatch,
        matchType,
        scraperSource: listings.scraperSource,
@@ -1088,7 +1201,10 @@ app.post(
     res.setTimeout(httpTimeout);
     next();
   },
-  upload.single("image"),
+  upload.fields([
+    { name: "image", maxCount: 1 },
+    { name: "images", maxCount: MAX_IDENTIFY_IMAGES },
+  ]),
   async (req: Request, res: Response) => {
     try {
       await enqueueIdentifyJob(() => runIdentifyPipeline(req, res));
@@ -1134,7 +1250,7 @@ const server = createServer(app);
  server.listen(PORT, "0.0.0.0", () => {
    console.log(`🚀 Unified Kauf26 engine running on port ${PORT}`);
    console.log(`📋 API endpoints available:`);
-   console.log(`   - POST /api/identify (multipart image → OpenAI → scrape → draft)`);
+   console.log(`   - POST /api/identify (1–3 images → OpenAI vision merge → scrape → draft)`);
    console.log(`   - POST /api/catalog/scrape (JSON { query } → masterScraper)`);
    console.log(`   - GET  /api/health`);
    console.log(`   - GET/POST /api/drafts (productsRoutes → PostgreSQL)`);
