@@ -1259,6 +1259,7 @@ const server = createServer(app);
    console.log(`   - POST /api/create-checkout-session`);
    console.log(`   - POST /api/create-hold`);
    console.log(`   - POST /api/marketplaces/publish`);
+   console.log(`   - POST /api/marketplaces/publish-all`);
    console.log(`   - GET  /api/marketplaces/status/:jobId`);
    startMarketplaceWorker();
  });
