@@ -1,28 +1,12 @@
-export const MASTER_MARKETPLACES = [
-    { id: "ebay", name: "eBay", currency: "USD", country: "US", apiMethod: "open" },
-    { id: "amazon", name: "Amazon", currency: "USD", country: "US", apiMethod: "open" },
-    { id: "mercari", name: "Mercari US", currency: "USD", country: "US", apiMethod: "partnership" },
-    { id: "mercari-jp", name: "Mercari Japan", currency: "JPY", country: "JP", apiMethod: "partnership" },
-    { id: "stockx", name: "StockX", currency: "USD", country: "US", apiMethod: "partnership" },
-    { id: "grailed", name: "Grailed", currency: "USD", country: "US", apiMethod: "open" },
-    { id: "whatnot", name: "Whatnot", currency: "USD", country: "US", apiMethod: "partnership" },
-    { id: "depop", name: "Depop", currency: "USD", country: "US", apiMethod: "partnership" },
-    { id: "discogs", name: "Discogs", currency: "USD", country: "US", apiMethod: "open" },
-    { id: "poshmark", name: "Poshmark", currency: "USD", country: "US", apiMethod: "partnership" },
-    { id: "etsy", name: "Etsy", currency: "USD", country: "US", apiMethod: "open" },
-    { id: "shopify", name: "Shopify", currency: "USD", country: "Global", apiMethod: "open" },
-    { id: "woocommerce", name: "WooCommerce", currency: "USD", country: "Global", apiMethod: "open" },
-    { id: "squarespace", name: "Squarespace", currency: "USD", country: "US", apiMethod: "open" },
-    { id: "wix", name: "Wix eCommerce", currency: "USD", country: "Global", apiMethod: "open" },
-    { id: "prestashop", name: "PrestaShop", currency: "EUR", country: "Global", apiMethod: "open" },
-    { id: "mercadolibre", name: "Mercado Libre", currency: "USD", country: "LATAM", apiMethod: "open" },
-    { id: "pinterest", name: "Pinterest", currency: "USD", country: "US", apiMethod: "open" },
-    { id: "tiktokshop", name: "TikTok Shop", currency: "USD", country: "Global", apiMethod: "partnership" },
-    { id: "vinted", name: "Vinted", currency: "EUR", country: "Europe", apiMethod: "partnership" },
-    { id: "shopee", name: "Shopee", currency: "USD", country: "SEA", apiMethod: "open" },
-    { id: "falabella", name: "Falabella", currency: "USD", country: "LATAM", apiMethod: "partnership" },
-    { id: "bolcom", name: "Bol.com", currency: "EUR", country: "NL", apiMethod: "open" },
-    { id: "allegro", name: "Allegro", currency: "PLN", country: "PL", apiMethod: "open" },
-    { id: "cdiscount", name: "Cdiscount", currency: "EUR", country: "FR", apiMethod: "open" },
-    { id: "kidizen", name: "Kidizen", currency: "USD", country: "US", apiMethod: "open" }
-   ] as const;
+/**
+ * Re-export canonical marketplace list from server config (single source of truth).
+ */
+export {
+  MASTER_MARKETPLACES,
+  type MasterMarketplace,
+  type MarketplaceApiMethod,
+  type ImplementationStatus,
+  getEnabledMarketplaceIds,
+  getMarketplaceConfig,
+  SUPPORTED_MARKETPLACE_IDS,
+} from "../server/config/marketplaces";

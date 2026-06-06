@@ -23,10 +23,12 @@ const Welcome = () => {
      </section>
 
      {/* Main Interaction Area - Logo triggers camera */}
-     <div className="w-full max-w-[320px] aspect-square flex items-center justify-center">
+     <div className="w-full max-w-md px-4 flex flex-col items-center justify-center flex-1 min-h-0">
        {showCamera ? (
-         <div className="w-full h-full rounded-3xl overflow-hidden border-4 border-gray-100 shadow-2xl">
-           {/* The component below should now initiate the camera feed immediately */}
+         <div
+           className="w-full min-h-[min(72vh,640px)] flex flex-col rounded-3xl overflow-hidden border-4 border-gray-100 shadow-2xl"
+           style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+         >
            <ProductCamera onScrapeSuccess={(result) => {
              navigate("/identification-results", { state: { productData: result } });
            }} />

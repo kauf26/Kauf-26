@@ -2,19 +2,24 @@
 /**
  * Kauf26 CLI
  *
- *   kauft publish <draftId> --marketplaces ebay,allegro,facebook
- *   npm run kauft -- publish 112 --marketplaces ebay,allegro
+ *   kauft publish <draftId> --marketplaces ebay,allegro,amazon
+ *   kauft publish-all <draftId>
+ *   npm run kauft -- publish 112 --marketplaces ebay,etsy,shopify
  */
 import "dotenv/config";
 import {
   publishDraft,
+  publishDraftToAll,
   formatPublishReport,
 } from "../server/services/publishEngine";
-import { getEnabledMarketplaceIds } from "../server/config/marketplaces";
+import {
+  getEnabledMarketplaceIds,
+  MASTER_MARKETPLACES,
+} from "../server/config/marketplaces";
 
 function parseArgs(argv: string[]) {
   const cmd = argv[0];
-  if (cmd !== "publish") {
+  if (cmd !== "publish" && cmd !== "publish-all") {
     return null;
   }
 
@@ -29,15 +34,7 @@ function parseArgs(argv: string[]) {
       .filter(Boolean);
   }
 
-  const positional = argv
-    .slice(2)
-    .filter((a, i) => i !== flagIdx - 2 && i !== flagIdx - 1 && !a.startsWith("--"));
-
-  if (!marketplaces?.length && positional.length > 0) {
-    marketplaces = positional;
-  }
-
-  return { draftId, marketplaces };
+  return { cmd, draftId, marketplaces };
 }
 
 async function main() {
@@ -47,18 +44,28 @@ async function main() {
     console.log(`Kauf26 CLI
 
 Usage:
-  kauft publish <draftId> --marketplaces ebay,allegro,facebook
-  npm run kauft -- publish 112 --marketplaces ebay,allegro
+  kauft publish <draftId> --marketplaces ebay,allegro,amazon,etsy
+  kauft publish-all <draftId>
+  npm run kauft -- publish 112 --marketplaces ebay,etsy,shopify
+  npm run kauft -- publish-all 112
 
-Enabled marketplaces: ${getEnabledMarketplaceIds().join(", ")}
+Enabled for publishing (${getEnabledMarketplaceIds().length}): ${getEnabledMarketplaceIds().join(", ")}
+
+All platforms (${MASTER_MARKETPLACES.length}): ${MASTER_MARKETPLACES.map((m) => m.id).join(", ")}
 `);
     process.exit(parsed ? 1 : 0);
   }
 
-  const report = await publishDraft(parsed.draftId, parsed.marketplaces, {
-    sync: true,
-    createJob: true,
-  });
+  const report =
+    parsed.cmd === "publish-all"
+      ? await publishDraftToAll(parsed.draftId, {
+          sync: true,
+          createJob: true,
+        })
+      : await publishDraft(parsed.draftId, parsed.marketplaces, {
+          sync: true,
+          createJob: true,
+        });
 
   console.log(formatPublishReport(report));
   process.exit(report.failed > 0 ? 1 : 0);

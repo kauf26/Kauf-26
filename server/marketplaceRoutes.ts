@@ -2,8 +2,13 @@ import express from 'express';
 import { db } from './db';
 import { publishJobs, publishTasks } from '../shared/schema';
 import { eq } from 'drizzle-orm';
-import { MARKETPLACES, resolveMarketplaceTargets } from './config/marketplaces';
-import { publishDraft } from './services/publishEngine';
+import {
+  MASTER_MARKETPLACES,
+  resolveMarketplaceTargets,
+  getEnabledMarketplaceIds,
+} from './config/marketplaces';
+import { publishDraft, publishDraftToAll } from './services/publishEngine';
+import { marketplaceEnvConfigured } from './services/marketplaceCredentials';
 
 const router = express.Router();
 
@@ -110,9 +115,54 @@ router.get('/status/:jobId', async (req, res) => {
  }
 });
 
+// POST /api/marketplaces/publish-all
+// Body: { draftId, sync?: boolean }
+router.post('/publish-all', async (req, res) => {
+  const { draftId, sync } = req.body;
+
+  if (draftId == null || Number.isNaN(Number(draftId))) {
+    return res.status(400).json({ error: 'draftId is required.' });
+  }
+
+  try {
+    const report = await publishDraftToAll(Number(draftId), {
+      sync: sync === true,
+      createJob: true,
+    });
+
+    return res.status(202).json({
+      success: true,
+      message: sync
+        ? `Publishing completed to ${report.marketplaces.length} marketplaces.`
+        : `Publishing queued for ${report.marketplaces.length} marketplaces.`,
+      jobId: report.jobId,
+      draftId: report.draftId,
+      imagesProcessed: undefined,
+      marketplaces: report.marketplaces,
+      outcomes: report.outcomes,
+      succeeded: report.succeeded,
+      failed: report.failed,
+      dryRun: report.dryRun,
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Queue error';
+    console.error('[Marketplaces] publish-all error:', error);
+    if (message.includes('not found')) {
+      return res.status(404).json({ error: message });
+    }
+    return res.status(500).json({ error: message });
+  }
+});
+
 // GET /api/marketplaces/config
 router.get('/config', (_req, res) => {
-  return res.json({ marketplaces: MARKETPLACES });
+  return res.json({
+    marketplaces: MASTER_MARKETPLACES.map((m) => ({
+      ...m,
+      envConfigured: marketplaceEnvConfigured(m.id),
+    })),
+    enabledCount: getEnabledMarketplaceIds().length,
+  });
 });
 
 export default router;

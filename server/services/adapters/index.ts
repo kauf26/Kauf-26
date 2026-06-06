@@ -1,61 +1,115 @@
 import type { DraftPublishPayload } from "../../publishToMarketplaces";
+import { MASTER_MARKETPLACES } from "../../config/marketplaces";
 import {
   formatAllegroListing,
   isAllegroConfigured,
   publishToAllegro,
 } from "./allegroAdapter";
 import {
+  formatAmazonListing,
+  isAmazonConfigured,
+  publishToAmazon,
+} from "./amazonAdapter";
+import {
   formatEbayListing,
   isEbayConfigured,
   publishToEbay,
 } from "./ebayAdapter";
 import {
+  formatEtsyListing,
+  isEtsyConfigured,
+  publishToEtsy,
+} from "./etsyAdapter";
+import {
   formatFacebookListing,
   isFacebookConfigured,
   publishToFacebook,
 } from "./facebookAdapter";
+import {
+  formatMercadoLibreListing,
+  isMercadoLibreConfigured,
+  publishToMercadoLibre,
+} from "./mercadolibreAdapter";
+import { openMarketplaceAdapters } from "./openMarketplaceAdapters";
+import { createPartnershipAdapter } from "./partnershipAdapter";
+import {
+  formatShopifyListing,
+  isShopifyConfigured,
+  publishToShopify,
+} from "./shopifyAdapter";
 import type { FetchFn, MarketplaceAdapter } from "./types";
 import { formatWebListing, publishToWebMarketplace } from "./webAdapter";
+import {
+  formatWooCommerceListing,
+  isWooCommerceConfigured,
+  publishToWooCommerce,
+} from "./woocommerceAdapter";
 
 export type { AdapterPublishResult, FetchFn, MarketplaceAdapter } from "./types";
 
-const registry: MarketplaceAdapter[] = [
+const PARTNERSHIP_IDS = MASTER_MARKETPLACES.filter(
+  (m) => m.apiMethod === "partnership"
+).map((m) => ({ id: m.id, name: m.name }));
+
+const partnershipAdapters = PARTNERSHIP_IDS.map((m) =>
+  createPartnershipAdapter(m.id, m.name)
+);
+
+const coreAdapters: MarketplaceAdapter[] = [
   {
     id: "ebay",
     format: formatEbayListing,
-    publish: (f) => publishToEbay(f),
+    publish: (f, fetchImpl) => publishToEbay(f, fetchImpl),
     isConfigured: isEbayConfigured,
   },
   {
     id: "allegro",
     format: formatAllegroListing,
-    publish: (f) => publishToAllegro(f),
+    publish: (f, fetchImpl) => publishToAllegro(f, fetchImpl),
     isConfigured: isAllegroConfigured,
   },
   {
     id: "facebook",
     format: formatFacebookListing,
-    publish: (f) => publishToFacebook(f),
+    publish: (f, fetchImpl) => publishToFacebook(f, fetchImpl),
     isConfigured: isFacebookConfigured,
   },
   {
-    id: "poshmark",
-    format: (d) => formatWebListing(d, "poshmark"),
-    publish: (f) => publishToWebMarketplace(f, "poshmark"),
-    isConfigured: () => false,
+    id: "amazon",
+    format: formatAmazonListing,
+    publish: (f, fetchImpl) => publishToAmazon(f, fetchImpl),
+    isConfigured: isAmazonConfigured,
   },
   {
-    id: "mercari",
-    format: (d) => formatWebListing(d, "mercari"),
-    publish: (f) => publishToWebMarketplace(f, "mercari"),
-    isConfigured: () => false,
+    id: "etsy",
+    format: formatEtsyListing,
+    publish: (f, fetchImpl) => publishToEtsy(f, fetchImpl),
+    isConfigured: isEtsyConfigured,
   },
   {
-    id: "offerup",
-    format: (d) => formatWebListing(d, "offerup"),
-    publish: (f) => publishToWebMarketplace(f, "offerup"),
-    isConfigured: () => false,
+    id: "shopify",
+    format: formatShopifyListing,
+    publish: (f, fetchImpl) => publishToShopify(f, fetchImpl),
+    isConfigured: isShopifyConfigured,
   },
+  {
+    id: "woocommerce",
+    format: formatWooCommerceListing,
+    publish: (f, fetchImpl) => publishToWooCommerce(f, fetchImpl),
+    isConfigured: isWooCommerceConfigured,
+  },
+  {
+    id: "mercadolibre",
+    format: formatMercadoLibreListing,
+    publish: (f, fetchImpl) => publishToMercadoLibre(f, fetchImpl),
+    isConfigured: isMercadoLibreConfigured,
+  },
+];
+
+const registry: MarketplaceAdapter[] = [
+  ...coreAdapters,
+  ...openMarketplaceAdapters,
+  ...partnershipAdapters,
 ];
 
 const adapterMap = new Map(registry.map((a) => [a.id, a]));
@@ -66,6 +120,10 @@ export function getAdapter(marketplaceId: string): MarketplaceAdapter | undefine
 
 export function getAllAdapterIds(): string[] {
   return [...adapterMap.keys()];
+}
+
+export function getRegisteredAdapters(): MarketplaceAdapter[] {
+  return [...registry];
 }
 
 /** Publish one marketplace (used by queue worker). */
@@ -82,6 +140,18 @@ export async function publishOne(
 }> {
   const adapter = getAdapter(marketplaceId);
   if (!adapter) {
+    const cfg = MASTER_MARKETPLACES.find((m) => m.id === marketplaceId);
+    if (cfg?.apiMethod === "web") {
+      const formatted = formatWebListing(draft, marketplaceId);
+      const result = await publishToWebMarketplace(formatted, marketplaceId);
+      return {
+        success: true,
+        marketplaceId,
+        listingId: result.listingId,
+        message: result.message,
+        dryRun: true,
+      };
+    }
     return {
       success: false,
       marketplaceId,
@@ -92,10 +162,7 @@ export async function publishOne(
 
   const formatted = adapter.format(draft);
   try {
-    const result = await (fetchImpl
-      ? publishWithFetch(adapter, formatted, fetchImpl)
-      : adapter.publish(formatted));
-
+    const result = await adapter.publish(formatted, fetchImpl);
     return {
       success: true,
       marketplaceId,
@@ -112,22 +179,5 @@ export async function publishOne(
       message,
       dryRun: false,
     };
-  }
-}
-
-async function publishWithFetch(
-  adapter: MarketplaceAdapter,
-  formatted: Record<string, unknown>,
-  fetchImpl: FetchFn
-) {
-  switch (adapter.id) {
-    case "ebay":
-      return publishToEbay(formatted, fetchImpl);
-    case "allegro":
-      return publishToAllegro(formatted, fetchImpl);
-    case "facebook":
-      return publishToFacebook(formatted, fetchImpl);
-    default:
-      return adapter.publish(formatted);
   }
 }

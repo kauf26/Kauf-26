@@ -6,6 +6,72 @@ const MAX_IMAGES = 3;
 const MAX_EXPORT_DIM = 1024;
 const JPEG_QUALITY = 0.85;
 
+function CameraIcon({ className = 'w-8 h-8' }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+      <circle cx="12" cy="13" r="4" />
+    </svg>
+  );
+}
+
+type CaptureShutterButtonProps = {
+  onClick: () => void;
+  disabled?: boolean;
+  label: string;
+};
+
+function CaptureShutterButton({
+  onClick,
+  disabled = false,
+  label,
+}: CaptureShutterButtonProps) {
+  const [pressed, setPressed] = useState(false);
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      onPointerDown={() => setPressed(true)}
+      onPointerUp={() => setPressed(false)}
+      onPointerLeave={() => setPressed(false)}
+      onPointerCancel={() => setPressed(false)}
+      className={[
+        'relative flex items-center justify-center',
+        'w-[72px] h-[72px] min-w-[48px] min-h-[48px] rounded-full',
+        'bg-emerald-500 text-white shadow-lg shadow-emerald-900/40',
+        'ring-4 ring-white/40 ring-offset-2 ring-offset-black/50',
+        'transition-transform duration-150 ease-out',
+        'hover:bg-emerald-400 active:bg-emerald-600',
+        'disabled:opacity-40 disabled:pointer-events-none',
+        'touch-manipulation select-none',
+        pressed ? 'scale-95' : 'scale-100',
+      ].join(' ')}
+      style={{ padding: 16 }}
+    >
+      {pressed && (
+        <span
+          className="absolute inset-0 rounded-full bg-white/25 animate-ping"
+          aria-hidden
+        />
+      )}
+      <CameraIcon className="w-8 h-8 relative z-10" />
+      <span className="sr-only">{label}</span>
+    </button>
+  );
+}
+
 const VIDEO_CONSTRAINTS: MediaTrackConstraints = {
   width: { ideal: 1920 },
   height: { ideal: 1080 },
@@ -472,11 +538,14 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
         ? 'second'
         : 'third';
 
+  const captureLabel =
+    capturedImages.length === 0 ? 'Take Photo' : `Take ${angleLabel} photo`;
+
   return (
-    <div className="max-w-2xl mx-auto p-6 bg-zinc-900 border border-zinc-800 rounded-lg text-white space-y-4">
-      <div>
-        <h1 className="text-xl font-bold tracking-tight">KAUF26 Scanner Node</h1>
-        <p className="text-xs text-zinc-400 mt-1">
+    <div className="flex flex-col h-full min-h-0 max-w-2xl mx-auto p-3 sm:p-4 bg-zinc-900 border border-zinc-800 rounded-lg text-white space-y-3">
+      <div className="shrink-0">
+        <h1 className="text-lg sm:text-xl font-bold tracking-tight">KAUF26 Scanner</h1>
+        <p className="text-xs text-zinc-400 mt-0.5">
           For best results, take 3 photos: front, back, label/tag.
         </p>
       </div>
@@ -488,72 +557,101 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
       )}
 
       <input
+        id="product-camera-file-input"
         ref={fileInputRef}
         type="file"
         accept="image/*"
         multiple
-        className="hidden"
+        className="sr-only"
+        disabled={isLoading}
         onChange={(e) => void handleFileUpload(e)}
       />
 
       {showCamera ? (
         !stream ? (
-          <div className="space-y-3">
+          <div className="space-y-3 flex-1 flex flex-col justify-center">
             <button
+              type="button"
               onClick={() => void startCamera()}
-              className="w-full py-3 bg-blue-600 rounded font-semibold hover:bg-blue-500 transition-colors"
+              className="w-full min-h-[48px] py-4 bg-blue-600 rounded-xl font-bold text-lg hover:bg-blue-500 active:scale-[0.98] transition-transform"
             >
               Start Camera
             </button>
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isLoading}
-              className="w-full py-3 bg-zinc-800 rounded font-semibold hover:bg-zinc-700 disabled:opacity-40 transition-colors"
+            <label
+              htmlFor="product-camera-file-input"
+              className={[
+                'flex items-center justify-center gap-2 w-full min-h-[48px] py-4',
+                'rounded-xl bg-zinc-800 font-bold text-lg text-white',
+                'hover:bg-zinc-700 active:scale-[0.98] transition-transform cursor-pointer',
+                isLoading ? 'opacity-40 pointer-events-none' : '',
+              ].join(' ')}
             >
+              <CameraIcon className="w-6 h-6" />
               Upload photo
-            </button>
+            </label>
           </div>
         ) : (
-          <div className="space-y-4">
-            <p className="text-sm text-zinc-400">
+          <div className="flex flex-col flex-1 min-h-0 gap-2">
+            <p className="text-sm text-zinc-400 shrink-0 px-1">
               {capturedImages.length === 0
                 ? 'Capture or upload your first photo.'
                 : `Capture your ${angleLabel} angle (${capturedImages.length + 1}/${MAX_IMAGES}).`}
             </p>
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              className="w-full rounded border border-zinc-700 bg-black"
-            />
-            <button
-              onClick={() => void capturePhoto()}
-              disabled={isLoading}
-              className="w-full py-3 bg-emerald-600 rounded font-semibold hover:bg-emerald-500 disabled:opacity-40 transition-colors"
-            >
-              {capturedImages.length === 0 ? 'Capture Photo' : `Take ${angleLabel} photo`}
-            </button>
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isLoading}
-              className="w-full py-2 text-sm text-zinc-300 underline hover:text-white"
-            >
-              Or upload from gallery
-            </button>
-            {capturedImages.length > 0 && (
-              <button
-                type="button"
-                onClick={() => {
-                  setIsCapturingMore(false);
-                  stopStream();
+
+            <div className="relative flex-1 min-h-[240px] sm:min-h-[320px] rounded-xl overflow-hidden bg-black border border-zinc-700">
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+
+              <div
+                className="absolute inset-x-0 bottom-0 flex flex-col items-center gap-3 px-4 pt-10 bg-gradient-to-t from-black/90 via-black/50 to-transparent"
+                style={{
+                  paddingBottom: 'max(24px, env(safe-area-inset-bottom, 24px))',
                 }}
-                className="w-full py-2 text-sm text-zinc-400 hover:text-white"
               >
-                Done adding angles
-              </button>
-            )}
+                <p className="text-white text-lg font-bold drop-shadow-md">
+                  {captureLabel}
+                </p>
+
+                <CaptureShutterButton
+                  onClick={() => void capturePhoto()}
+                  disabled={isLoading}
+                  label={captureLabel}
+                />
+
+                <label
+                  htmlFor="product-camera-file-input"
+                  className={[
+                    'inline-flex items-center justify-center gap-2 min-h-[48px] px-5 py-3',
+                    'rounded-full bg-zinc-800/90 text-white text-sm font-semibold',
+                    'border border-zinc-600 shadow-md',
+                    'transition-all duration-150',
+                    'hover:bg-zinc-700 active:scale-95 active:bg-zinc-600',
+                    'cursor-pointer touch-manipulation select-none',
+                    isLoading ? 'opacity-40 pointer-events-none' : '',
+                  ].join(' ')}
+                >
+                  <CameraIcon className="w-5 h-5" />
+                  Upload from gallery
+                </label>
+
+                {capturedImages.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCapturingMore(false);
+                      stopStream();
+                    }}
+                    className="min-h-[44px] px-4 text-sm font-medium text-zinc-300 hover:text-white underline underline-offset-2"
+                  >
+                    Done adding angles
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         )
       ) : (

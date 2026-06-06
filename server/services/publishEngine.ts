@@ -122,6 +122,14 @@ function summarize(outcomes: MarketplaceOutcome[]): Pick<
 /**
  * Main entry: load draft, resolve marketplaces, publish in parallel (or queue).
  */
+/** Publish to every marketplace with enabledForPublishing: true */
+export async function publishDraftToAll(
+  draftId: number,
+  options: PublishDraftOptions = {}
+): Promise<PublishReport> {
+  return publishDraft(draftId, undefined, options);
+}
+
 export async function publishDraft(
   draftId: number,
   marketplaceNames?: string[],
