@@ -1,7 +1,9 @@
 /**
  * In-memory FIFO identify queue with configurable concurrency.
- * (Lightweight implementation — add `p-queue` later if you prefer that library.)
+ * Job payload carries all uploaded images — vision runs on every image before scraping.
  */
+
+import type { IdentifyImageInput } from "./identifyImages";
 
 export const IDENTIFY_QUEUE_CONCURRENCY = Number(
   process.env.IDENTIFY_QUEUE_CONCURRENCY ?? 3
@@ -10,6 +12,11 @@ export const IDENTIFY_QUEUE_CONCURRENCY = Number(
 export const IDENTIFY_JOB_TIMEOUT_MS = Number(
   process.env.IDENTIFY_JOB_TIMEOUT_MS ?? 120_000
 );
+
+export type IdentifyJobData = {
+  /** All images uploaded in a single request — scraper must not run until vision merges these. */
+  images: IdentifyImageInput[];
+};
 
 export class IdentifyJobTimeoutError extends Error {
   constructor(message: string) {
@@ -22,6 +29,7 @@ type QueueTask<T> = {
   run: () => Promise<T>;
   resolve: (value: T) => void;
   reject: (error: unknown) => void;
+  jobData: IdentifyJobData;
 };
 
 const waiting: QueueTask<unknown>[] = [];
@@ -36,10 +44,10 @@ export function getIdentifyQueueStats() {
   };
 }
 
-function logQueueSnapshot(label: string, jobId: number) {
+function logQueueSnapshot(label: string, jobId: number, imageCount: number) {
   const stats = getIdentifyQueueStats();
   console.log(
-    `[IdentifyQueue] ${label} job=#${jobId} waiting=${stats.waiting} active=${stats.active} concurrency=${stats.concurrency}`
+    `[IdentifyQueue] ${label} job=#${jobId} images=${imageCount} waiting=${stats.waiting} active=${stats.active} concurrency=${stats.concurrency}`
   );
 }
 
@@ -51,7 +59,9 @@ function pumpQueue() {
 
     void (async () => {
       const start = Date.now();
-      if (jobId != null) logQueueSnapshot("started", jobId);
+      if (jobId != null) {
+        logQueueSnapshot("started", jobId, task.jobData.images.length);
+      }
       try {
         const result = await task.run();
         task.resolve(result);
@@ -60,7 +70,11 @@ function pumpQueue() {
       } finally {
         active--;
         if (jobId != null) {
-          logQueueSnapshot(`finished in ${Date.now() - start}ms`, jobId);
+          logQueueSnapshot(
+            `finished in ${Date.now() - start}ms`,
+            jobId,
+            task.jobData.images.length
+          );
         }
         pumpQueue();
       }
@@ -68,16 +82,20 @@ function pumpQueue() {
   }
 }
 
-export function enqueueIdentifyJob<T>(run: () => Promise<T>): Promise<T> {
+export function enqueueIdentifyJob<T>(
+  jobData: IdentifyJobData,
+  run: (jobData: IdentifyJobData) => Promise<T>
+): Promise<T> {
   const jobId = ++jobSeq;
-  logQueueSnapshot("enqueued", jobId);
+  logQueueSnapshot("enqueued", jobId, jobData.images.length);
 
   let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
 
   const queued = new Promise<T>((resolve, reject) => {
     const task: QueueTask<T> & { jobId: number } = {
       jobId,
-      run,
+      jobData,
+      run: () => run(jobData),
       resolve,
       reject,
     };
@@ -89,7 +107,7 @@ export function enqueueIdentifyJob<T>(run: () => Promise<T>): Promise<T> {
     timeoutHandle = setTimeout(() => {
       reject(
         new IdentifyJobTimeoutError(
-          `Identify job #${jobId} exceeded ${IDENTIFY_JOB_TIMEOUT_MS}ms`
+          `Identify job #${jobId} (${jobData.images.length} image(s)) exceeded ${IDENTIFY_JOB_TIMEOUT_MS}ms`
         )
       );
     }, IDENTIFY_JOB_TIMEOUT_MS);
