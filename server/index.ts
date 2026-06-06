@@ -17,6 +17,7 @@ import {
 import { extractBrandModelFromTitle } from "./scrapers/brandFromTitle";
 import {
   coalesceBrandWithTitle,
+  titleParsedBrandIsModelName,
   validateBrandTitleConsistency,
 } from "./scrapers/listingUtils";
 import { debugIdentify } from "./scrapers/scrapeDebug";
@@ -230,17 +231,25 @@ function enrichBrandModelFromScraper(
   vision: VisionProduct
 ): void {
   const titleForParse = String(final.title ?? scraper.title ?? "");
+  const brandOpts = {
+    visionModel: String(vision.model ?? "").trim(),
+    listingModel: String(scraper.model ?? final.model ?? "").trim(),
+  };
   const coalesced = coalesceBrandWithTitle(
     titleForParse,
     scraper.brand ?? final.brand,
-    vision.brand
+    vision.brand,
+    brandOpts
   );
   const parsed = extractBrandModelFromTitle(titleForParse);
 
   final.brand =
     coalesced.brand ||
-    normalizeBrand(parsed.brand) ||
-    normalizeBrand(scraper.brand);
+    normalizeBrand(scraper.brand) ||
+    normalizeBrand(vision.brand) ||
+    (titleParsedBrandIsModelName(parsed.brand, brandOpts)
+      ? ""
+      : normalizeBrand(parsed.brand));
   if (!String(final.model ?? "").trim()) {
     final.model = String(scraper.model ?? parsed.model ?? "").trim();
   }
@@ -321,7 +330,8 @@ function mergeVisionAndScraper(
     const brandFromTitle = coalesceBrandWithTitle(
       final.title,
       scraper.brand,
-      vision.brand
+      vision.brand,
+      { visionModel: vision.model, listingModel: scraper.model }
     );
     final.brand = brandFromTitle.brand;
     final.model = String(scraper.model ?? "").trim();
@@ -402,7 +412,8 @@ function mergeVisionAndScraper(
     const brandFromTitle = coalesceBrandWithTitle(
       final.title,
       scraper.brand,
-      vision.brand
+      vision.brand,
+      { visionModel: vision.model, listingModel: scraper.model }
     );
     final.brand = brandFromTitle.brand;
     final.isExactMatch = true;
@@ -414,8 +425,9 @@ function mergeVisionAndScraper(
 
   const finalBrandCheck = coalesceBrandWithTitle(
     String(final.title ?? ""),
-    final.brand,
-    vision.brand
+    scraper.brand ?? final.brand,
+    vision.brand,
+    { visionModel: vision.model, listingModel: scraper.model ?? final.model }
   );
   if (finalBrandCheck.corrected || finalBrandCheck.brand !== final.brand) {
     console.warn(
@@ -957,6 +969,7 @@ async function runIdentifyPipeline(
          vision: {
            visionTitle: vision.title,
            visionBrand: vision.brand ?? "",
+           visionModel: vision.model ?? "",
            modelNumbers: vision.model
              ? [vision.model]
              : undefined,

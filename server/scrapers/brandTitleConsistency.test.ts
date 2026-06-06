@@ -24,6 +24,18 @@ describe("coalesceBrandWithTitle", () => {
     );
     expect(result.brand).toBe("Breitling");
   });
+
+  it("uses Breitling when model-first title would parse Chronospace as brand", () => {
+    const result = coalesceBrandWithTitle(
+      "Chronospace Automatic Chronograph",
+      "Breitling",
+      "Breitling",
+      { visionModel: "Chronospace" }
+    );
+    expect(result.brand).toBe("Breitling");
+    expect(result.source).toBe("vision.model_not_brand");
+    expect(result.corrected).toBe(true);
+  });
 });
 
 describe("aggregateListings", () => {

@@ -364,7 +364,11 @@ async function runGoogleSearch(
   const brandResolution = coalesceBrandWithTitle(
     repTitle,
     canonical.brand || String(aggregated.brand ?? ""),
-    visionBrand
+    visionBrand,
+    {
+      visionModel: matchCtx.visionModel,
+      listingModel: canonical.model || String(aggregated.model ?? ""),
+    }
   );
   aggregated.brand = brandResolution.brand;
   if (canonical.model && !aggregated.model) {

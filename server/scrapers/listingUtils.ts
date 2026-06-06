@@ -61,6 +61,8 @@ export type RawListing = {
 export type VisionMatchContext = {
   visionTitle: string;
   visionBrand?: string;
+  /** Vision model name — used to avoid treating model-first titles as brand */
+  visionModel?: string;
   /** Model / reference numbers from search optimizer (e.g. b13050) */
   modelNumbers?: string[];
   /** Dynamic band from peer listing prices in this scrape batch */
@@ -316,11 +318,27 @@ export type BrandTitleResolution = {
   corrected: boolean;
 };
 
+export type BrandCoalesceOptions = {
+  visionModel?: string;
+  listingModel?: string;
+};
+
+export function titleParsedBrandIsModelName(
+  parsedBrand: string,
+  opts?: BrandCoalesceOptions
+): boolean {
+  const pb = parsedBrand.toLowerCase();
+  const vm = String(opts?.visionModel ?? "").trim().toLowerCase();
+  const lm = String(opts?.listingModel ?? "").trim().toLowerCase();
+  return Boolean((vm && pb === vm) || (lm && pb === lm));
+}
+
 /** Pick brand that appears in the listing title — never attach a vision brand the title omits. */
 export function coalesceBrandWithTitle(
   title: string,
   listingBrand?: string,
-  visionBrand?: string
+  visionBrand?: string,
+  opts?: BrandCoalesceOptions
 ): BrandTitleResolution {
   const titleStr = String(title ?? "").trim();
   const lb = sanitizeBrand(listingBrand);
@@ -333,6 +351,18 @@ export function coalesceBrandWithTitle(
     return { brand: lb, source: "listing.brand", corrected: false };
   }
   if (fromTitle && titleMentionsBrand(titleStr, fromTitle)) {
+    const trustedBrand = lb || vb;
+    if (
+      trustedBrand &&
+      titleParsedBrandIsModelName(fromTitle, opts) &&
+      fromTitle.toLowerCase() !== trustedBrand.toLowerCase()
+    ) {
+      return {
+        brand: trustedBrand,
+        source: "vision.model_not_brand",
+        corrected: true,
+      };
+    }
     const corrected = Boolean(lb && lb.toLowerCase() !== fromTitle.toLowerCase());
     return {
       brand: fromTitle,
@@ -485,7 +515,11 @@ export function aggregateListings(
   const brandResolution = coalesceBrandWithTitle(
     repTitle,
     rep.brand,
-    matchCtx.visionBrand
+    matchCtx.visionBrand,
+    {
+      visionModel: matchCtx.visionModel,
+      listingModel: rep.model,
+    }
   );
   validateBrandTitleConsistency(repTitle, brandResolution.brand, "aggregateListings");
 
