@@ -4,13 +4,13 @@
  */
 
 const BLOCKED_HOST_RE =
-  /(?:^|\.)((?:facebook|instagram|yelp|twitter|x|tiktok|linkedin|pinterest|reddit|maps\.google|google\.com\/maps|tripadvisor|foursquare)\.[a-z.]+)/i;
+  /(?:^|\.)((?:instagram|yelp|twitter|x|tiktok|linkedin|pinterest|reddit|maps\.google|google\.com\/maps|tripadvisor|foursquare)\.[a-z.]+)/i;
 
 const BLOCKED_PATH_RE =
   /\/(menu|menus|events?|hours|contact|about|blog|reels?|stories|posts?|groups?|pages?|p\/|biz\/|restaurant)/i;
 
 const BLOCKED_TITLE_RE =
-  /\b(menu|happy hour|wing night|hours|open at|closed at|reservation|follow us|reel|instagram|facebook page|yelp review|must-?try bar|food gem|review of)\b/i;
+  /\b(menu|happy hour|wing night|hours|open at|closed at|reservation|follow us|reel|instagram|yelp review|must-?try bar|food gem|review of)\b/i;
 
 /** Known resale / retail marketplaces */
 const MARKETPLACE_HOST_RE =
