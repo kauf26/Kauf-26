@@ -39,20 +39,6 @@ export const BROWSER_AUTH_MARKETPLACES: BrowserAuthMarketplace[] = [
     strategy: "standard",
   },
   {
-    id: "grailed",
-    name: "Grailed",
-    loginUrl: "https://www.grailed.com/users/sign_in",
-    verifyUrl: "https://www.grailed.com/sell",
-    strategy: "standard",
-  },
-  {
-    id: "mercari",
-    name: "Mercari",
-    loginUrl: "https://www.mercari.com/login/",
-    verifyUrl: "https://www.mercari.com/mypage/",
-    strategy: "standard",
-  },
-  {
     id: "shopify",
     name: "Shopify",
     loginUrl: "https://accounts.shopify.com/store-login",

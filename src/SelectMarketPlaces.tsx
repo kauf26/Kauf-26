@@ -7,47 +7,59 @@ import {
 } from "@/lib/pendingAnalysis";
 import InventoryQuantityCounter from "@/components/InventoryQuantityCounter";
 
-type Marketplace =
-| "ebay" | "amazon" | "walmart" | "wish" | "reverb"
-| "offerup" | "etsy" | "shopify" | "woocommerce"
-| "aliexpress" | "mercadolibre" | "rakuten"
-| "bigcommerce" | "prestashop"
-| "allegro" | "bol" | "cdiscount" | "zalando"
-| "mercadolibre_br" | "mercadolibre_ar"
-| "lazada" | "shopee" | "flipkart"
-| "gmarket" | "coupang" | "daraz" | "depop";
+function getFlagEmoji(countryCode: string): string {
+  if (countryCode === "GL") return "🌍";
+  const iso = countryCode === "UK" ? "GB" : countryCode;
+  if (!/^[A-Za-z]{2}$/.test(iso)) return "🌍";
+  const upper = iso.toUpperCase();
+  return String.fromCodePoint(
+    ...[...upper].map((c) => 0x1f1e6 - 65 + c.charCodeAt(0))
+  );
+}
 
-const US_MARKETS = [
-  { id: "ebay", name: "eBay", currency: "USD" },
-  { id: "amazon", name: "Amazon", currency: "USD" },
-  { id: "mercari", name: "Mercari", currency: "USD" },
-  { id: "mercari-jp", name: "Mercari JP", currency: "JPY" },
-  { id: "stockx", name: "StockX", currency: "USD" },
-  { id: "grailed", name: "Grailed", currency: "USD" },
-  { id: "whatnot", name: "Whatnot", currency: "USD" },
-  { id: "depop", name: "Depop", currency: "USD" },
-  { id: "discogs", name: "Discogs", currency: "USD" },
-  { id: "poshmark", name: "Poshmark", currency: "USD" },
- ] as const;
- 
- const GLOBAL_MARKETS = [
-  { id: "etsy", name: "Etsy", currency: "USD" },
-  { id: "shopify", name: "Shopify", currency: "USD" },
-  { id: "woocommerce", name: "WooCommerce", currency: "USD" },
-  { id: "squarespace", name: "Squarespace", currency: "USD" },
-  { id: "wix", name: "Wix eCommerce", currency: "USD" },
-  { id: "prestashop", name: "PrestaShop", currency: "EUR" },
-  { id: "mercadolibre", name: "Mercado Libre", currency: "USD" },
-  { id: "pinterest", name: "Pinterest", currency: "USD" },
-  { id: "tiktokshop", name: "TikTok Shop", currency: "USD" },
-  { id: "vinted", name: "Vinted", currency: "EUR" },
-  { id: "shopee", name: "Shopee", currency: "USD" },
-  { id: "falabella", name: "Falabella", currency: "USD" },
-  { id: "bolcom", name: "Bol.com", currency: "EUR" },
-  { id: "allegro", name: "Allegro", currency: "PLN" },
-  { id: "cdiscount", name: "Cdiscount", currency: "EUR" },
-  { id: "kidizen", name: "Kidizen", currency: "USD" },
- ] as const;
+const MARKETPLACES = [
+  { id: "aliexpress", name: "AliExpress", currency: "CNY", region: "China", countryCode: "CN" },
+  { id: "allegro", name: "Allegro", currency: "PLN", region: "Poland", countryCode: "PL" },
+  { id: "amazon", name: "Amazon", currency: "USD", region: "USA", countryCode: "US" },
+  { id: "bigcommerce", name: "BigCommerce", currency: "USD", region: "Global", countryCode: "GL" },
+  { id: "bolcom", name: "Bol.com", currency: "EUR", region: "Netherlands", countryCode: "NL" },
+  { id: "depop", name: "Depop", currency: "USD", region: "UK/USA", countryCode: "UK" },
+  { id: "ebay", name: "eBay", currency: "USD", region: "USA", countryCode: "US" },
+  { id: "etsy", name: "Etsy", currency: "USD", region: "USA", countryCode: "US" },
+  { id: "flipkart", name: "Flipkart", currency: "INR", region: "India", countryCode: "IN" },
+  { id: "fruugo", name: "Fruugo", currency: "GBP", region: "Europe", countryCode: "GB" },
+  { id: "lazada", name: "Lazada", currency: "SGD", region: "Southeast Asia", countryCode: "SG" },
+  { id: "magento", name: "Magento (Adobe Commerce)", currency: "USD", region: "Global", countryCode: "GL" },
+  { id: "mercadolibre", name: "MercadoLibre", currency: "ARS", region: "Latin America", countryCode: "AR" },
+  {
+    id: "mercadolibre_br",
+    name: "Mercado Livre (Brazil)",
+    currency: "BRL",
+    region: "Brazil",
+    countryCode: "BR",
+  },
+  { id: "newegg", name: "Newegg", currency: "USD", region: "USA", countryCode: "US" },
+  { id: "poshmark", name: "Poshmark", currency: "USD", region: "USA", countryCode: "US" },
+  { id: "rakuten", name: "Rakuten", currency: "JPY", region: "Japan", countryCode: "JP" },
+  { id: "shopee", name: "Shopee", currency: "SGD", region: "Southeast Asia", countryCode: "SG" },
+  { id: "shopify", name: "Shopify", currency: "USD", region: "Global", countryCode: "GL" },
+  { id: "stockx", name: "StockX", currency: "USD", region: "USA", countryCode: "US" },
+  { id: "taobao", name: "Taobao", currency: "CNY", region: "China", countryCode: "CN" },
+  { id: "tiktokshop", name: "TikTok Shop", currency: "USD", region: "Global", countryCode: "GL" },
+  { id: "vinted", name: "Vinted", currency: "EUR", region: "Europe", countryCode: "LV" },
+  { id: "wayfair", name: "Wayfair", currency: "USD", region: "USA", countryCode: "US" },
+  { id: "woocommerce", name: "WooCommerce", currency: "USD", region: "Global", countryCode: "GL" },
+  { id: "zalando", name: "Zalando", currency: "EUR", region: "Germany", countryCode: "DE" },
+] as const;
+
+type Marketplace = (typeof MARKETPLACES)[number]["id"];
+
+const US_MARKETS = MARKETPLACES.filter(
+  (m) => m.region === "USA" || m.region.includes("USA")
+);
+const GLOBAL_MARKETS = MARKETPLACES.filter(
+  (m) => m.region !== "USA" && !m.region.includes("USA")
+);
 
 export default function SelectMarketplaces() {
   const [, setLocation] = useLocation();
@@ -94,7 +106,15 @@ export default function SelectMarketplaces() {
     setDraft(next);
   };
 
-  const renderMarketList = (markets: readonly { id: Marketplace; name: string; currency: string }[]) => {
+  const renderMarketList = (
+    markets: readonly {
+      id: Marketplace;
+      name: string;
+      currency: string;
+      region: string;
+      countryCode: string;
+    }[]
+  ) => {
     return (
       <div className="space-y-2">
         {markets.map((m) => {
@@ -111,7 +131,9 @@ export default function SelectMarketplaces() {
             >
               <div>
                 <div className={`text-sm font-medium ${isSelected ? "text-emerald-400" : "text-red-200"}`}>
-                  {m.name}
+                  <span>
+                    {getFlagEmoji(m.countryCode)} {m.name}
+                  </span>
                 </div>
                 <div className="text-xs text-zinc-500 uppercase">{m.id}</div>
               </div>
@@ -266,14 +288,14 @@ export default function SelectMarketplaces() {
             <div className="text-xs font-semibold uppercase mb-2 flex gap-1 tracking-wider text-zinc-400">
               <span>🇺🇸</span> US-Based Marketplaces
             </div>
-            {renderMarketList(US_MARKETS as any)}
+            {renderMarketList(US_MARKETS)}
           </div>
 
           <div className="border-t border-zinc-800 pt-4">
             <div className="text-xs font-semibold uppercase mb-2 flex gap-1 tracking-wider text-zinc-400">
               <span>🌐</span> International Channels
             </div>
-            {renderMarketList(GLOBAL_MARKETS as any)}
+            {renderMarketList(GLOBAL_MARKETS)}
           </div>
 
           <button

@@ -44,16 +44,16 @@ describe("publish price/image mapping", () => {
     expect(formatted.imageCount).toBeGreaterThan(0);
   });
 
-  it("partnership (mercari, stockx, whatnot): price > 0 and imageCount > 0", () => {
-    for (const id of ["mercari", "stockx", "whatnot"] as const) {
+  it("partnership (stockx, depop, vinted): price > 0 and imageCount > 0", () => {
+    for (const id of ["stockx", "depop", "vinted"] as const) {
       const formatted = formatPartnershipListing(payload, id, id);
       expect(formatted.price).toBeGreaterThan(0);
       expect(formatted.imageCount).toBeGreaterThan(0);
     }
   });
 
-  it("pinterest: price > 0 and imageCount > 0", () => {
-    const adapter = getAdapter("pinterest");
+  it("shopee open adapter: price > 0 and imageCount > 0", () => {
+    const adapter = getAdapter("shopee");
     expect(adapter).toBeDefined();
     const formatted = adapter!.format(payload);
     expect(formatted.price).toBeGreaterThan(0);

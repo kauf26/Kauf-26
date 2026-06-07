@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useProductDraft } from './ProductDraftContext';
 
-// Type definition for a marketplace
 type Marketplace = {
     id: string;
     name: string;
@@ -11,37 +10,33 @@ type Marketplace = {
     status: 'idle' | 'loading' | 'error';
 };
 
-// Sample marketplace data - replace with your real API data later
 const allMarketplaces: Marketplace[] = [
-
-    // Local Platforms
-    { id: "ebay", name: "eBay", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
+    { id: "aliexpress", name: "AliExpress", currency: "CNY", country: "🇨🇳", region: "Global", status: "idle" },
+    { id: "allegro", name: "Allegro", currency: "PLN", country: "🇵🇱", region: "Global", status: "idle" },
     { id: "amazon", name: "Amazon", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
-    { id: "mercari", name: "Mercari US", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
-    { id: "mercari-jp", name: "Mercari Japan", currency: "JPY", country: "🇯🇵", region: "Global", status: "idle" },
-    { id: "stockx", name: "StockX", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
-    { id: "grailed", name: "Grailed", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
-    { id: "whatnot", name: "Whatnot", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
-    { id: "tcgplayer", name: "TCGplayer", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
-    { id: "discogs", name: "Discogs", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
-    { id: "poshmark", name: "Poshmark", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
-    { id: "gumtree", name: "Gumtree", currency: "AUD", country: "🇦🇺", region: "Global", status: "idle" },
-    // Global Platforms
+    { id: "bigcommerce", name: "BigCommerce", currency: "USD", country: "🌍", region: "Global", status: "idle" },
+    { id: "bolcom", name: "Bol.com", currency: "EUR", country: "🇳🇱", region: "Global", status: "idle" },
+    { id: "depop", name: "Depop", currency: "USD", country: "🇬🇧", region: "US", status: "idle" },
+    { id: "ebay", name: "eBay", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
     { id: "etsy", name: "Etsy", currency: "USD", country: "🇺🇸", region: "Global", status: "idle" },
-    { id: "shopify", name: "Shopify", currency: "USD", country: "🇨🇦", region: "Global", status: "idle" },
-    { id: "woocommerce", name: "WooCommerce", currency: "USD", country: "🇺🇸", region: "Global", status: "idle" },
-    { id: "squarespace", name: "Squarespace", currency: "USD", country: "🇺🇸", region: "Global", status: "idle" },
-    { id: "wix", name: "Wix eCommerce", currency: "USD", country: "🇮🇱", region: "Global", status: "idle" },
-    { id: "prestashop", name: "PrestaShop", currency: "EUR", country: "🇫🇷", region: "Global", status: "idle" },
-    { id: "mercadolibre", name: "Mercado Libre", currency: "USD", country: "🇲🇽", region: "Global", status: "idle" },
-    { id: "pinterest", name: "Pinterest", currency: "USD", country: "🇺🇸", region: "Global", status: "idle" },
-    { id: "tiktokshop", name: "TikTok Shop", currency: "USD", country: "🌏", region: "Global", status: "idle" },
-    { id: "wallapop", name: "Wallapop", currency: "EUR", country: "🇪🇸", region: "Global", status: "idle" },
-    { id: "vinted", name: "Vinted", currency: "EUR", country: "🇪🇺", region: "Global", status: "idle" },
-    { id: "shopee", name: "Shopee", currency: "BRL", country: "🇧🇷", region: "Global", status: "idle" },
-    { id: "olx", name: "OLX", currency: "BRL", country: "🇧🇷", region: "Global", status: "idle" },
-    { id: "falabella", name: "Falabella", currency: "USD", country: "🇨🇱", region: "Global", status: "idle" },
-    { id: "bolcom", name: "Bol.com", currency: "EUR", country: "🇳🇱", region: "Global", status: "idle" }
+    { id: "flipkart", name: "Flipkart", currency: "INR", country: "🇮🇳", region: "Global", status: "idle" },
+    { id: "fruugo", name: "Fruugo", currency: "GBP", country: "🇬🇧", region: "Global", status: "idle" },
+    { id: "lazada", name: "Lazada", currency: "SGD", country: "🇸🇬", region: "Global", status: "idle" },
+    { id: "magento", name: "Magento", currency: "USD", country: "🌍", region: "Global", status: "idle" },
+    { id: "mercadolibre", name: "MercadoLibre", currency: "ARS", country: "🇦🇷", region: "Global", status: "idle" },
+    { id: "mercadolibre_br", name: "Mercado Livre (Brazil)", currency: "BRL", country: "🇧🇷", region: "Global", status: "idle" },
+    { id: "newegg", name: "Newegg", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
+    { id: "poshmark", name: "Poshmark", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
+    { id: "rakuten", name: "Rakuten", currency: "JPY", country: "🇯🇵", region: "Global", status: "idle" },
+    { id: "shopee", name: "Shopee", currency: "SGD", country: "🇸🇬", region: "Global", status: "idle" },
+    { id: "shopify", name: "Shopify", currency: "USD", country: "🌍", region: "Global", status: "idle" },
+    { id: "stockx", name: "StockX", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
+    { id: "taobao", name: "Taobao", currency: "CNY", country: "🇨🇳", region: "Global", status: "idle" },
+    { id: "tiktokshop", name: "TikTok Shop", currency: "USD", country: "🌍", region: "Global", status: "idle" },
+    { id: "vinted", name: "Vinted", currency: "EUR", country: "🇱🇻", region: "Global", status: "idle" },
+    { id: "wayfair", name: "Wayfair", currency: "USD", country: "🇺🇸", region: "US", status: "idle" },
+    { id: "woocommerce", name: "WooCommerce", currency: "USD", country: "🌍", region: "Global", status: "idle" },
+    { id: "zalando", name: "Zalando", currency: "EUR", country: "🇩🇪", region: "Global", status: "idle" },
 ];
 
 export default function MarketplacePublish() {
@@ -141,7 +136,6 @@ export default function MarketplacePublish() {
         Select where you want to list your items. Green = selected, red = not selected.
       </p>
 
-      {/* US Marketplaces Section */}
       <div style={{ marginBottom: '32px' }}>
         <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#e4e4e7', borderBottom: '1px solid #3f3f46', paddingBottom: '8px', marginBottom: '16px' }}>
           🇺🇸 US Marketplaces
@@ -149,7 +143,6 @@ export default function MarketplacePublish() {
         {usMarketplaces.map(renderMarketplaceCard)}
       </div>
 
-      {/* Global Marketplaces Section */}
       <div>
         <h2 style={{ fontSize: '20px', fontWeight: '600', color: '#e4e4e7', borderBottom: '1px solid #3f3f46', paddingBottom: '8px', marginBottom: '16px' }}>
           🌍 Global Marketplaces
@@ -157,7 +150,6 @@ export default function MarketplacePublish() {
         {globalMarketplaces.map(renderMarketplaceCard)}
       </div>
 
-      {/* Optional: Publish button */}
       <div style={{ marginTop: '32px', textAlign: 'center' }}>
         <button
          onClick={async () => {
@@ -171,7 +163,6 @@ export default function MarketplacePublish() {
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
                   selectedMarketplaces: [...selectedIds],
-                  // Add other draft fields here if needed
               })
             });
 
@@ -203,4 +194,4 @@ export default function MarketplacePublish() {
      </div>
    </div>
  );
-} 
+}

@@ -122,9 +122,10 @@ export const getMarketplaceCondition = (marketplaceId: string, isNew: boolean): 
  const conditionMap: Record<string, { new: string; used: string }> = {
    ebay: { new: "1000", used: "3000" },
    vinted: { new: "new_with_tags", used: "very_good" },
-   wallapop: { new: "new", used: "as_new" },
-   backmarket: { new: "new", used: "reconditioned" },
-   default: { new: "new", used: "used" }
+   allegro: { new: "new", used: "used" },
+   depop: { new: "brand_new", used: "used" },
+   stockx: { new: "new", used: "used" },
+   default: { new: "new", used: "used" },
  };
 
  const platform = conditionMap[marketplaceId] || conditionMap.default;
@@ -132,6 +133,33 @@ export const getMarketplaceCondition = (marketplaceId: string, isNew: boolean): 
 };
 
 export const getMarketplaceCurrency = (marketplaceId: string): string => {
- const euroPlatforms = ['vinted', 'wallapop', 'backmarket', 'cdiscount', 'allegro'];
- return euroPlatforms.includes(marketplaceId) ? 'EUR' : 'USD';
+ const currencyByPlatform: Record<string, string> = {
+   aliexpress: "CNY",
+   allegro: "PLN",
+   amazon: "USD",
+   bigcommerce: "USD",
+   bolcom: "EUR",
+   depop: "USD",
+   ebay: "USD",
+   etsy: "USD",
+   flipkart: "INR",
+   fruugo: "GBP",
+   lazada: "SGD",
+   magento: "USD",
+   mercadolibre: "ARS",
+   mercadolibre_br: "BRL",
+   newegg: "USD",
+   poshmark: "USD",
+   rakuten: "JPY",
+   shopee: "SGD",
+   shopify: "USD",
+   stockx: "USD",
+   taobao: "CNY",
+   tiktokshop: "USD",
+   vinted: "EUR",
+   wayfair: "USD",
+   woocommerce: "USD",
+   zalando: "EUR",
+ };
+ return currencyByPlatform[marketplaceId] ?? "USD";
 };

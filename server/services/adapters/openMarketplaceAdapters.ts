@@ -35,32 +35,29 @@ function spec(
 
 export const openMarketplaceAdapters: MarketplaceAdapter[] = [
   spec(
-    "discogs",
-    "Discogs",
-    ["DISCOGS_API_TOKEN"],
-    (draft) => ({
-      price: baseOpenPayload(draft, "discogs").price,
-      condition: "Mint (M)",
-      status: "Draft",
-      comments: baseOpenPayload(draft, "discogs").description,
-    }),
-    () => "https://api.discogs.com/marketplace/listings",
-    () => ({
-      Authorization: `Discogs token=${env("DISCOGS_API_TOKEN")}`,
-    })
-  ),
-  spec(
-    "grailed",
-    "Grailed",
-    ["GRAILED_API_KEY"],
+    "aliexpress",
+    "AliExpress",
+    ["ALIEXPRESS_APP_KEY", "ALIEXPRESS_APP_SECRET"],
     (draft) => ({
       title: draft.title,
-      description: baseOpenPayload(draft, "grailed").description,
-      price: baseOpenPayload(draft, "grailed").price,
-      size: "OS",
+      price: baseOpenPayload(draft, "aliexpress").price,
+      description: baseOpenPayload(draft, "aliexpress").description,
     }),
-    () => "https://api.grailed.com/v1/listings",
-    () => ({ Authorization: `Bearer ${env("GRAILED_API_KEY")}` })
+    () => "https://api-sg.aliexpress.com/sync"
+  ),
+  spec(
+    "bigcommerce",
+    "BigCommerce",
+    ["BIGCOMMERCE_STORE_HASH", "BIGCOMMERCE_ACCESS_TOKEN"],
+    (draft) => ({
+      name: draft.title,
+      price: baseOpenPayload(draft, "bigcommerce").price,
+      description: baseOpenPayload(draft, "bigcommerce").description,
+      sku: baseOpenPayload(draft, "bigcommerce").sku,
+    }),
+    () =>
+      `https://api.bigcommerce.com/stores/${env("BIGCOMMERCE_STORE_HASH")}/v3/catalog/products`,
+    () => ({ "X-Auth-Token": env("BIGCOMMERCE_ACCESS_TOKEN") })
   ),
   spec(
     "shopee",
@@ -88,106 +85,127 @@ export const openMarketplaceAdapters: MarketplaceAdapter[] = [
     () => "https://api.bol.com/retailer/offers"
   ),
   spec(
-    "cdiscount",
-    "Cdiscount",
-    ["CDISCOUNT_SELLER_ID", "CDISCOUNT_API_KEY"],
-    (draft) => ({
-      SellerProductId: baseOpenPayload(draft, "cdiscount").sku,
-      ProductName: draft.title,
-      Description: baseOpenPayload(draft, "cdiscount").description,
-      Price: baseOpenPayload(draft, "cdiscount").price,
-    }),
-    () => "https://wsvc.cdiscount.com/MarketplaceAPIService.svc/json/CreateProduct"
-  ),
-  spec(
-    "kidizen",
-    "Kidizen",
-    ["KIDIZEN_API_KEY"],
+    "flipkart",
+    "Flipkart",
+    ["FLIPKART_APP_ID", "FLIPKART_APP_SECRET"],
     (draft) => ({
       title: draft.title,
-      description: baseOpenPayload(draft, "kidizen").description,
-      price_cents: Math.round(Number(baseOpenPayload(draft, "kidizen").price) * 100),
+      price: baseOpenPayload(draft, "flipkart").price,
+      sku: baseOpenPayload(draft, "flipkart").sku,
     }),
-    () => "https://api.kidizen.com/v1/listings",
-    () => ({ Authorization: `Bearer ${env("KIDIZEN_API_KEY")}` })
+    () => "https://api.flipkart.net/sellers/v2/products"
   ),
   spec(
-    "squarespace",
-    "Squarespace",
-    ["SQUARESPACE_API_KEY"],
+    "fruugo",
+    "Fruugo",
+    ["FRUUGO_API_KEY", "FRUUGO_MERCHANT_ID"],
     (draft) => ({
-      type: "PHYSICAL",
-      storePageId: env("SQUARESPACE_STORE_PAGE_ID"),
+      title: draft.title,
+      price: baseOpenPayload(draft, "fruugo").price,
+      description: baseOpenPayload(draft, "fruugo").description,
+    }),
+    () => "https://api.fruugo.com/v1/products",
+    () => ({ Authorization: `Bearer ${env("FRUUGO_API_KEY")}` })
+  ),
+  spec(
+    "lazada",
+    "Lazada",
+    ["LAZADA_APP_KEY", "LAZADA_APP_SECRET"],
+    (draft) => ({
       name: draft.title,
-      description: baseOpenPayload(draft, "squarespace").description,
-      variants: [
-        {
-          sku: baseOpenPayload(draft, "squarespace").sku,
-          pricing: {
-            basePrice: {
-              value: String(baseOpenPayload(draft, "squarespace").price),
-              currency: "USD",
-            },
-          },
-        },
-      ],
+      price: baseOpenPayload(draft, "lazada").price,
+      description: baseOpenPayload(draft, "lazada").description,
     }),
-    () => "https://api.squarespace.com/1.0/commerce/products",
-    () => ({ Authorization: `Bearer ${env("SQUARESPACE_API_KEY")}` })
+    () => "https://api.lazada.com/rest/product/create"
   ),
   spec(
-    "wix",
-    "Wix",
-    ["WIX_API_KEY", "WIX_SITE_ID"],
+    "magento",
+    "Magento",
+    ["MAGENTO_BASE_URL", "MAGENTO_ACCESS_TOKEN"],
     (draft) => ({
       product: {
+        sku: baseOpenPayload(draft, "magento").sku,
         name: draft.title,
-        description: baseOpenPayload(draft, "wix").description,
-        priceData: { price: baseOpenPayload(draft, "wix").price },
-        sku: baseOpenPayload(draft, "wix").sku,
-      },
-    }),
-    () => `https://www.wixapis.com/stores/v1/products`,
-    () => ({
-      Authorization: env("WIX_API_KEY"),
-      "wix-site-id": env("WIX_SITE_ID"),
-    })
-  ),
-  spec(
-    "prestashop",
-    "PrestaShop",
-    ["PRESTASHOP_SITE_URL", "PRESTASHOP_API_KEY"],
-    (draft) => ({
-      product: {
-        name: [{ language: { id: 1 }, value: draft.title }],
-        description: [
-          {
-            language: { id: 1 },
-            value: baseOpenPayload(draft, "prestashop").description,
-          },
-        ],
-        price: String(baseOpenPayload(draft, "prestashop").price),
-        active: 0,
-        reference: baseOpenPayload(draft, "prestashop").sku,
+        price: baseOpenPayload(draft, "magento").price,
+        status: 2,
       },
     }),
     () => {
-      const base = env("PRESTASHOP_SITE_URL").replace(/\/$/, "");
-      return `${base}/api/products?ws_key=${env("PRESTASHOP_API_KEY")}`;
+      const base = env("MAGENTO_BASE_URL").replace(/\/$/, "");
+      return `${base}/rest/V1/products`;
     },
-    () => ({ "Content-Type": "application/json" })
+    () => ({ Authorization: `Bearer ${env("MAGENTO_ACCESS_TOKEN")}` })
   ),
   spec(
-    "pinterest",
-    "Pinterest",
-    ["PINTEREST_ACCESS_TOKEN"],
+    "mercadolibre_br",
+    "Mercado Livre Brazil",
+    [
+      "MERCADOLIBRE_CLIENT_ID",
+      "MERCADOLIBRE_CLIENT_SECRET",
+      "MERCADOLIBRE_REFRESH_TOKEN",
+      "MERCADOLIBRE_BR_SITE_ID",
+    ],
     (draft) => ({
       title: draft.title,
-      description: baseOpenPayload(draft, "pinterest").description,
-      price: baseOpenPayload(draft, "pinterest").price,
-      availability: "IN_STOCK",
+      price: baseOpenPayload(draft, "mercadolibre_br").price,
+      currency_id: "BRL",
+      site_id: env("MERCADOLIBRE_BR_SITE_ID") || "MLB",
     }),
-    () => "https://api.pinterest.com/v5/catalogs/items",
-    () => ({ Authorization: `Bearer ${env("PINTEREST_ACCESS_TOKEN")}` })
+    () => "https://api.mercadolibre.com/items"
+  ),
+  spec(
+    "newegg",
+    "Newegg",
+    ["NEWEGG_SELLER_ID", "NEWEGG_API_KEY"],
+    (draft) => ({
+      ItemNumber: baseOpenPayload(draft, "newegg").sku,
+      SellingPrice: baseOpenPayload(draft, "newegg").price,
+      Description: baseOpenPayload(draft, "newegg").description,
+    }),
+    () => "https://api.newegg.com/marketplace/itemmanagement"
+  ),
+  spec(
+    "rakuten",
+    "Rakuten",
+    ["RAKUTEN_SERVICE_SECRET", "RAKUTEN_LICENSE_KEY"],
+    (draft) => ({
+      title: draft.title,
+      price: baseOpenPayload(draft, "rakuten").price,
+      description: baseOpenPayload(draft, "rakuten").description,
+    }),
+    () => "https://api.rms.rakuten.co.jp/es/2.0/items/manage-numbers"
+  ),
+  spec(
+    "taobao",
+    "Taobao",
+    ["TAOBAO_APP_KEY", "TAOBAO_APP_SECRET"],
+    (draft) => ({
+      title: draft.title,
+      price: baseOpenPayload(draft, "taobao").price,
+      description: baseOpenPayload(draft, "taobao").description,
+    }),
+    () => "https://eco.taobao.com/router/rest"
+  ),
+  spec(
+    "wayfair",
+    "Wayfair",
+    ["WAYFAIR_CLIENT_ID", "WAYFAIR_CLIENT_SECRET"],
+    (draft) => ({
+      name: draft.title,
+      price: baseOpenPayload(draft, "wayfair").price,
+      description: baseOpenPayload(draft, "wayfair").description,
+    }),
+    () => "https://api.wayfair.com/v1/product-catalog-api/products"
+  ),
+  spec(
+    "zalando",
+    "Zalando",
+    ["ZALANDO_CLIENT_ID", "ZALANDO_CLIENT_SECRET"],
+    (draft) => ({
+      name: draft.title,
+      price: baseOpenPayload(draft, "zalando").price,
+      description: baseOpenPayload(draft, "zalando").description,
+    }),
+    () => "https://api.zalando.com/products"
   ),
 ];

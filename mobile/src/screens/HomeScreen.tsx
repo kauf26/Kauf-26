@@ -15,26 +15,34 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { API_BASE_URL } from '../services/api';
 
-const LOCAL_MARKETPLACES = [
-  { id: 'ebay', name: 'eBay', icon: 'cart', color: '#e53238' },
-  { id: 'amazon', name: 'Amazon', icon: 'logo-amazon', color: '#ff9900' },
-  { id: 'walmart', name: 'Walmart', icon: 'storefront', color: '#0071ce' },
-  { id: 'wish', name: 'Wish', icon: 'star', color: '#2fb7ec' },
-  { id: 'reverb', name: 'Reverb', icon: 'musical-notes', color: '#f04f59' },
+const MARKETPLACES = [
+  { id: 'aliexpress', name: 'AliExpress', icon: 'pricetag' as const, color: '#e62e04' },
+  { id: 'allegro', name: 'Allegro', icon: 'cart' as const, color: '#ff5a00' },
+  { id: 'amazon', name: 'Amazon', icon: 'logo-amazon' as const, color: '#ff9900' },
+  { id: 'bigcommerce', name: 'BigCommerce', icon: 'cart' as const, color: '#34313f' },
+  { id: 'bolcom', name: 'Bol.com', icon: 'storefront' as const, color: '#0000ff' },
+  { id: 'depop', name: 'Depop', icon: 'shirt' as const, color: '#ff2300' },
+  { id: 'ebay', name: 'eBay', icon: 'cart' as const, color: '#e53238' },
+  { id: 'etsy', name: 'Etsy', icon: 'basket' as const, color: '#f45800' },
+  { id: 'flipkart', name: 'Flipkart', icon: 'bag' as const, color: '#2874f0' },
+  { id: 'fruugo', name: 'Fruugo', icon: 'globe' as const, color: '#00a651' },
+  { id: 'lazada', name: 'Lazada', icon: 'pricetags' as const, color: '#0f146d' },
+  { id: 'magento', name: 'Magento', icon: 'cube' as const, color: '#f26322' },
+  { id: 'mercadolibre', name: 'MercadoLibre', icon: 'globe' as const, color: '#ffe600' },
+  { id: 'mercadolibre_br', name: 'Mercado Livre BR', icon: 'globe' as const, color: '#ffe600' },
+  { id: 'newegg', name: 'Newegg', icon: 'hardware-chip' as const, color: '#f7941d' },
+  { id: 'poshmark', name: 'Poshmark', icon: 'shirt-outline' as const, color: '#7b2d8e' },
+  { id: 'rakuten', name: 'Rakuten', icon: 'storefront' as const, color: '#bf0000' },
+  { id: 'shopee', name: 'Shopee', icon: 'bag-handle' as const, color: '#ee4d2d' },
+  { id: 'shopify', name: 'Shopify', icon: 'bag' as const, color: '#95bf47' },
+  { id: 'stockx', name: 'StockX', icon: 'footsteps' as const, color: '#006340' },
+  { id: 'taobao', name: 'Taobao', icon: 'pricetag' as const, color: '#ff5000' },
+  { id: 'tiktokshop', name: 'TikTok Shop', icon: 'musical-notes' as const, color: '#000000' },
+  { id: 'vinted', name: 'Vinted', icon: 'shirt' as const, color: '#09b1ba' },
+  { id: 'wayfair', name: 'Wayfair', icon: 'home' as const, color: '#7b2d8e' },
+  { id: 'woocommerce', name: 'WooCommerce', icon: 'logo-wordpress' as const, color: '#96588a' },
+  { id: 'zalando', name: 'Zalando', icon: 'shirt' as const, color: '#ff6900' },
 ];
-
-const GLOBAL_MARKETPLACES = [
-  { id: 'etsy', name: 'Etsy', icon: 'basket', color: '#f45800' },
-  { id: 'shopify', name: 'Shopify', icon: 'bag', color: '#95bf47' },
-  { id: 'woocommerce', name: 'WooCommerce', icon: 'logo-wordpress', color: '#96588a' },
-  { id: 'aliexpress', name: 'AliExpress', icon: 'pricetag', color: '#e62e04' },
-  { id: 'mercadolibre', name: 'Mercado Libre', icon: 'globe', color: '#ffe600' },
-  { id: 'rakuten', name: 'Rakuten', icon: 'storefront', color: '#bf0000' },
-  { id: 'bigcommerce', name: 'BigCommerce', icon: 'cart', color: '#34313f' },
-  { id: 'prestashop', name: 'PrestaShop', icon: 'bag-handle', color: '#df0067' },
-];
-
-const MARKETPLACES = [...LOCAL_MARKETPLACES, ...GLOBAL_MARKETPLACES];
 
 export default function HomeScreen() {
   const [image, setImage] = useState<string | null>(null);

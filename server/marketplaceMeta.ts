@@ -1,48 +1,42 @@
-/** Target language + listing currency per marketplace **/
-export const marketplaceLocale: Record<string, { lang: string, currency: string }> = {
-  // --- GLOBAL P2P ---
+/** Target language + listing currency per marketplace (26 approved platforms). */
+export const marketplaceLocale: Record<string, { lang: string; currency: string }> = {
+  aliexpress: { lang: "zh", currency: "CNY" },
+  allegro: { lang: "pl", currency: "PLN" },
+  amazon: { lang: "en", currency: "USD" },
+  bigcommerce: { lang: "en", currency: "USD" },
+  bolcom: { lang: "nl", currency: "EUR" },
+  depop: { lang: "en", currency: "USD" },
   ebay: { lang: "en", currency: "USD" },
   etsy: { lang: "en", currency: "USD" },
-  discogs: { lang: "en", currency: "USD" },
-  reverb: { lang: "en", currency: "USD" },
-  stockx: { lang: "en", currency: "USD" },
-  grailed: { lang: "en", currency: "USD" },
-  depop: { lang: "en", currency: "USD" },
+  flipkart: { lang: "en", currency: "INR" },
+  fruugo: { lang: "en", currency: "GBP" },
+  lazada: { lang: "en", currency: "SGD" },
+  magento: { lang: "en", currency: "USD" },
+  mercadolibre: { lang: "es", currency: "ARS" },
+  mercadolibre_br: { lang: "pt", currency: "BRL" },
+  newegg: { lang: "en", currency: "USD" },
   poshmark: { lang: "en", currency: "USD" },
- 
-  // --- FRANCE & SPAIN ANCHORS ---
-  wallapop: { lang: "es", currency: "EUR" },
-  vinted: { lang: "fr", currency: "EUR" },
-  backmarket: { lang: "fr", currency: "EUR" },
-  cdiscount: { lang: "fr", currency: "EUR" },
-  manomano: { lang: "fr", currency: "EUR" },
-  rakuten_fr: { lang: "fr", currency: "EUR" },
-  vestiaire: { lang: "fr", currency: "EUR" },
- 
-  // --- REGIONAL & HOBBY ---
-  mercadolibre: { lang: "es", currency: "USD" },
-  cardmarket: { lang: "en", currency: "EUR" },
-  allegro: { lang: "pl" , currency: "PLN" },
-  gumtree: { lang: "en", currency: "GBP" },
-  bonanza: { lang: "en", currency: "USD" },
-  abebooks: { lang: "en", currency: "USD" },
-  biblio: { lang: "en", currency: "USD" },
-  rubylane: { lang: "en", currency: "USD" },
- 
-  // --- DIRECT STORES ---
+  rakuten: { lang: "ja", currency: "JPY" },
+  shopee: { lang: "en", currency: "SGD" },
   shopify: { lang: "en", currency: "USD" },
+  stockx: { lang: "en", currency: "USD" },
+  taobao: { lang: "zh", currency: "CNY" },
+  tiktokshop: { lang: "en", currency: "USD" },
+  vinted: { lang: "en", currency: "EUR" },
+  wayfair: { lang: "en", currency: "USD" },
   woocommerce: { lang: "en", currency: "USD" },
-  wix: { lang: "en", currency: "USD" },
- };
- 
- export const currencyRates: Record<string, number> = {
+  zalando: { lang: "de", currency: "EUR" },
+};
+
+export const currencyRates: Record<string, number> = {
   USD: 1,
   EUR: 0.92,
   GBP: 0.79,
   JPY: 149.5,
-  MXN: 17.2,
   BRL: 5.1,
-  AUD: 1.52,
-  PLN: 4.01, // Added for Allegro
- };
- 
+  ARS: 900,
+  CNY: 7.2,
+  INR: 83,
+  SGD: 1.35,
+  PLN: 4.01,
+};

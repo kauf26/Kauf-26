@@ -35,13 +35,14 @@
 
 | Role | Primary file(s) |
 |------|-----------------|
-| Publish config (6 platforms) | `server/config/marketplaces.ts` |
+| Publish config (26 platforms) | `server/config/marketplaces.ts` |
 | Publish engine (parallel `allSettled`) | `server/services/publishEngine.ts` |
 | Adapter registry | `server/services/adapters/index.ts` |
 | eBay adapter | `server/services/adapters/ebayAdapter.ts` |
 | Allegro adapter | `server/services/adapters/allegroAdapter.ts` |
-| Facebook adapter | `server/services/adapters/facebookAdapter.ts` |
-| Web-only stubs (Poshmark, Mercari, OfferUp) | `server/services/adapters/webAdapter.ts` |
+| Open REST stubs (Shopee, Bol.com, BigCommerce, …) | `server/services/adapters/openMarketplaceAdapters.ts` |
+| Partnership stubs (StockX, Depop, Poshmark, …) | `server/services/adapters/partnershipAdapter.ts` |
+| Web-only fallback | `server/services/adapters/webAdapter.ts` |
 | Thin facade / payload mapping | `server/publishToMarketplaces.ts` |
 | HTTP API | `server/marketplaceRoutes.ts` |
 | Async worker + retries | `server/marketplaceWorker.ts` |
@@ -54,7 +55,8 @@
 
 | File | Purpose |
 |------|---------|
-| `src/config/marketplaces.ts` | UI list of **26** aspirational marketplaces (Shopify, Amazon, StockX, …) — **not** used by `publishEngine` |
+| `src/config/marketplaces.ts` | Re-exports `MASTER_MARKETPLACES` from server config |
+| `src/SelectMarketPlaces.tsx` | UI marketplace picker (26 approved IDs) |
 | `src/marketplaces.ts`, `src/MarketplacePublish.tsx` | Frontend marketplace selection UI |
 | `scripts/publish-draft.ts` | Legacy queue-only CLI (superseded by `kauft publish` for sync runs) |
 
@@ -201,16 +203,15 @@ Even when Apify finds exact matches, `brandsConflict` in the race can zero out c
 
 ### Authoritative publish config — `server/config/marketplaces.ts`
 
-| Name | Enabled | API | Auth | Adapter status |
-|------|---------|-----|------|----------------|
-| **ebay** | ✅ | REST | OAuth | Implemented (`ebayAdapter.ts`); dry-run without creds |
-| **allegro** | ✅ | REST | OAuth (client credentials) | Implemented (`allegroAdapter.ts`); dry-run without creds |
-| **facebook** | ✅ | Graph | OAuth (access token) | Implemented (`facebookAdapter.ts`); catalog products API |
-| **poshmark** | ❌ | web | none | Stub — manual export only |
-| **mercari** | ❌ | web | none | Stub — manual export only |
-| **offerup** | ❌ | web | none | Stub — manual export only |
+**26 approved platforms:** `aliexpress`, `allegro`, `amazon`, `bigcommerce`, `bolcom`, `depop`, `ebay`, `etsy`, `flipkart`, `fruugo`, `lazada`, `magento`, `mercadolibre`, `mercadolibre_br`, `newegg`, `poshmark`, `rakuten`, `shopee`, `shopify`, `stockx`, `taobao`, `tiktokshop`, `vinted`, `wayfair`, `woocommerce`, `zalando`.
 
-**Defaults:** `DEFAULT_PUBLISH_MARKETPLACES` env (e.g. `ebay,allegro,facebook`).
+| Tier | Examples | Adapter status |
+|------|----------|----------------|
+| **live** | eBay, Allegro | REST adapters with credentials |
+| **dry-run** | Amazon, Etsy, Shopify, Shopee, … | Open REST stubs until env keys set |
+| **partnership-stub** | StockX, Depop, Poshmark, TikTok Shop, Vinted | Partnership adapter logs + dry-run |
+
+**Defaults:** `DEFAULT_PUBLISH_MARKETPLACES=ebay,allegro,amazon,etsy,shopify`
 
 **API surface:**
 
@@ -219,9 +220,9 @@ Even when Apify finds exact matches, `brandsConflict` in the race can zero out c
 - `GET /api/marketplaces/config`
 - CLI: `npm run kauft -- publish <draftId> --marketplaces ebay,allegro`
 
-### Frontend / aspirational list — `src/config/marketplaces.ts`
+### Frontend — aligned with server config
 
-26 marketplaces (Shopify, Amazon, StockX, Depop, …) for UI only. **Not connected** to `publishEngine` or adapters.
+`src/SelectMarketPlaces.tsx`, `src/MarketplacePublish.tsx`, and `src/pages/settings.tsx` use the same 26 marketplace IDs. Server rejects unknown IDs at publish time.
 
 ---
 
@@ -251,7 +252,8 @@ All three REST/Graph adapters **dry-run**: log payload, return stub `listingId`,
 
 **eBay:** `EBAY_CLIENT_ID`, `EBAY_CLIENT_SECRET`, `EBAY_REFRESH_TOKEN`, optional `EBAY_*_POLICY_ID`, `EBAY_SANDBOX`  
 **Allegro:** `ALLEGRO_CLIENT_ID`, `ALLEGRO_CLIENT_SECRET`  
-**Facebook:** `FACEBOOK_ACCESS_TOKEN`, `FACEBOOK_CATALOG_ID`
+**Partnership stubs:** `STOCKX_API_KEY`, `DEPOP_API_KEY`, `POSHMARK_PARTNERSHIP_KEY`, `TIKTOKSHOP_*`, `VINTED_API_KEY`  
+See `.env.example` for all 26 platform env blocks.
 
 ---
 

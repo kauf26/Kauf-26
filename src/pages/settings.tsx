@@ -37,7 +37,39 @@ interface MarketplaceDef {
   fields: MarketplaceField[];
 }
 
+function mp(
+  id: string,
+  name: string,
+  country: string,
+  devUrl: string,
+  signupUrl: string,
+  color = "text-zinc-300",
+  fields: MarketplaceField[] = [
+    {
+      key: "apiKey",
+      label: "API Key",
+      placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx",
+      secret: true,
+    },
+  ]
+): MarketplaceDef {
+  return { id, name, color, country, signupUrl, devUrl, fields };
+}
+
 const MARKETPLACES: MarketplaceDef[] = [
+  mp("aliexpress", "AliExpress", "🇨🇳 China", "https://open.aliexpress.com", "https://open.aliexpress.com"),
+  {
+    id: "allegro",
+    name: "Allegro",
+    color: "text-orange-400",
+    country: "🇵🇱 Poland",
+    signupUrl: "https://allegro.pl",
+    devUrl: "https://developer.allegro.pl",
+    fields: [
+      { key: "clientId", label: "Client ID", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx" },
+      { key: "clientSecret", label: "Client Secret", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
+    ],
+  },
   {
     id: "ebay",
     name: "eBay",
@@ -104,42 +136,26 @@ const MARKETPLACES: MarketplaceDef[] = [
       { key: "consumerSecret", label: "Consumer Secret", placeholder: "cs_xxxxxxxxxxxxxxxx", secret: true },
     ],
   },
+  mp(
+    "bigcommerce",
+    "BigCommerce",
+    "🌍 Global",
+    "https://developer.bigcommerce.com",
+    "https://www.bigcommerce.com"
+  ),
   {
-    id: "squarespace",
-    name: "Squarespace",
-    color: "text-gray-300",
-    country: "🇺🇸 United States",
-    signupUrl: "https://www.squarespace.com",
-    devUrl: "https://developers.squarespace.com",
+    id: "bolcom",
+    name: "Bol.com",
+    color: "text-blue-500",
+    country: "🇳🇱 Netherlands",
+    signupUrl: "https://www.bol.com/nl/rnwy/account/verkopen-op-bol/introductie",
+    devUrl: "https://developers.bol.com",
     fields: [
-      { key: "apiKey", label: "API Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", helpUrl: "https://developers.squarespace.com/commerce-apis", secret: true },
-      { key: "websiteId", label: "Website ID", placeholder: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" },
+      { key: "clientId", label: "Client ID", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx" },
+      { key: "clientSecret", label: "Client Secret", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
     ],
   },
-  {
-    id: "wix",
-    name: "Wix eCommerce",
-    color: "text-blue-300",
-    country: "🇮🇱 Israel",
-    signupUrl: "https://www.wix.com/upgrade/website",
-    devUrl: "https://dev.wix.com",
-    fields: [
-      { key: "apiKey", label: "API Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", helpUrl: "https://dev.wix.com/api/rest/getting-started/api-keys", secret: true },
-      { key: "siteId", label: "Site ID", placeholder: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" },
-    ],
-  },
-  {
-    id: "prestashop",
-    name: "PrestaShop",
-    color: "text-indigo-400",
-    country: "🇫🇷 France",
-    signupUrl: "https://www.prestashop.com",
-    devUrl: "https://devdocs.prestashop-project.org",
-    fields: [
-      { key: "storeUrl", label: "Store URL", placeholder: "https://yourstore.com" },
-      { key: "apiKey", label: "API Key (Webservice Key)", placeholder: "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", secret: true },
-    ],
-  },
+  mp("depop", "Depop", "🇬🇧 UK / 🇺🇸 USA", "https://www.depop.com/developers", "https://www.depop.com"),
   {
     id: "stockx",
     name: "StockX",
@@ -152,33 +168,13 @@ const MARKETPLACES: MarketplaceDef[] = [
       { key: "email", label: "Account Email", placeholder: "you@example.com" },
     ],
   },
-  {
-    id: "mercari",
-    name: "Mercari US",
-    color: "text-red-400",
-    country: "🇺🇸 United States",
-    signupUrl: "https://www.mercari.com/signup",
-    devUrl: "https://developer.mercari.com",
-    fields: [
-      { key: "apiKey", label: "API Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
-      { key: "clientId", label: "Client ID", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx" },
-    ],
-  },
-  {
-    id: "mercari-jp",
-    name: "Mercari Japan",
-    color: "text-red-300",
-    country: "🇯🇵 Japan",
-    signupUrl: "https://jp.mercari.com",
-    devUrl: "https://developer.mercari.com",
-    fields: [
-      { key: "apiKey", label: "API Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
-      { key: "clientId", label: "Client ID", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx" },
-    ],
-  },
+  mp("flipkart", "Flipkart", "🇮🇳 India", "https://developer.flipkart.net", "https://www.flipkart.com"),
+  mp("fruugo", "Fruugo", "🇪🇺 Europe", "https://developer.fruugo.com", "https://www.fruugo.com"),
+  mp("lazada", "Lazada", "🌏 Southeast Asia", "https://open.lazada.com", "https://www.lazada.com"),
+  mp("magento", "Magento (Adobe Commerce)", "🌍 Global", "https://developer.adobe.com/commerce", "https://business.adobe.com/products/magento/magento-commerce.html"),
   {
     id: "mercadolibre",
-    name: "Mercado Libre",
+    name: "MercadoLibre",
     color: "text-yellow-300",
     country: "🇲🇽 Latin America (Mexico, Brazil, Argentina & more)",
     signupUrl: "https://www.mercadolibre.com",
@@ -190,18 +186,19 @@ const MARKETPLACES: MarketplaceDef[] = [
     ],
   },
   {
-    id: "pinterest",
-    name: "Pinterest",
-    color: "text-red-500",
-    country: "🇺🇸 United States",
-    signupUrl: "https://business.pinterest.com",
-    devUrl: "https://developers.pinterest.com",
+    id: "mercadolibre_br",
+    name: "Mercado Livre (Brazil)",
+    color: "text-yellow-400",
+    country: "🇧🇷 Brazil",
+    signupUrl: "https://www.mercadolivre.com.br",
+    devUrl: "https://developers.mercadolivre.com.br",
     fields: [
-      { key: "appId", label: "App ID", placeholder: "XXXXXXXXXXXXXXXXXX", helpUrl: "https://developers.pinterest.com/apps" },
-      { key: "appSecret", label: "App Secret", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
-      { key: "accessToken", label: "Access Token", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
+      { key: "clientId", label: "Client ID (App ID)", placeholder: "XXXXXXXXXX" },
+      { key: "clientSecret", label: "Client Secret", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
+      { key: "accessToken", label: "Access Token", placeholder: "APP_USR-XXXX", secret: true },
     ],
   },
+  mp("newegg", "Newegg", "🇺🇸 United States", "https://developer.newegg.com", "https://www.newegg.com"),
   {
     id: "tiktokshop",
     name: "TikTok Shop",
@@ -213,56 +210,6 @@ const MARKETPLACES: MarketplaceDef[] = [
       { key: "appKey", label: "App Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", helpUrl: "https://partner.tiktokshop.com/doc/page/63" },
       { key: "appSecret", label: "App Secret", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
       { key: "accessToken", label: "Access Token", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
-    ],
-  },
-  {
-    id: "grailed",
-    name: "Grailed",
-    color: "text-slate-300",
-    country: "🇺🇸 United States",
-    signupUrl: "https://www.grailed.com/sell",
-    devUrl: "https://www.grailed.com",
-    fields: [
-      { key: "email", label: "Account Email", placeholder: "you@example.com" },
-      { key: "apiKey", label: "API Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
-    ],
-  },
-  {
-    id: "whatnot",
-    name: "Whatnot",
-    color: "text-pink-400",
-    country: "🇺🇸 United States",
-    signupUrl: "https://www.whatnot.com/sell",
-    devUrl: "https://www.whatnot.com",
-    fields: [
-      { key: "email", label: "Account Email", placeholder: "you@example.com" },
-      { key: "apiKey", label: "API Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
-    ],
-  },
-  {
-
-    id: "discogs",
-    name: "Discogs",
-    color: "text-yellow-500",
-    country: "🇺🇸 United States",
-    signupUrl: "https://www.discogs.com/users/create",
-    devUrl: "https://www.discogs.com/developers",
-    fields: [
-      { key: "consumerKey", label: "Consumer Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", helpUrl: "https://www.discogs.com/settings/developers" },
-      { key: "consumerSecret", label: "Consumer Secret", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
-      { key: "accessToken", label: "Access Token", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
-    ],
-  },
-  {
-    id: "gumtree",
-    name: "Gumtree",
-    color: "text-green-500",
-    country: "🇦🇺 Australia",
-    signupUrl: "https://www.gumtree.com.au/register",
-    devUrl: "https://www.gumtree.com.au",
-    fields: [
-      { key: "email", label: "Account Email", placeholder: "you@example.com" },
-      { key: "apiKey", label: "API Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
     ],
   },
   {
@@ -278,18 +225,7 @@ const MARKETPLACES: MarketplaceDef[] = [
       { key: "accessToken", label: "Access Token", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
     ],
   },
-  {
-    id: "wallapop",
-    name: "Wallapop",
-    color: "text-teal-400",
-    country: "🇪🇸 Spain",
-    signupUrl: "https://es.wallapop.com/register",
-    devUrl: "https://wallapop.com",
-    fields: [
-      { key: "email", label: "Account Email", placeholder: "you@example.com" },
-      { key: "apiKey", label: "API Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
-    ],
-  },
+  mp("rakuten", "Rakuten", "🇯🇵 Japan", "https://webservice.rakuten.co.jp", "https://www.rakuten.co.jp"),
   {
     id: "vinted",
     name: "Vinted",
@@ -316,43 +252,9 @@ const MARKETPLACES: MarketplaceDef[] = [
       { key: "shopId", label: "Shop ID", placeholder: "000000" },
     ],
   },
-  {
-    id: "olx",
-    name: "OLX",
-    color: "text-purple-300",
-    country: "🇧🇷 Brazil / Latin America",
-    signupUrl: "https://www.olx.com.br/cadastro",
-    devUrl: "https://developers.olx.com.br",
-    fields: [
-      { key: "clientId", label: "Client ID", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", helpUrl: "https://developers.olx.com.br" },
-      { key: "clientSecret", label: "Client Secret", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
-      { key: "accessToken", label: "Access Token", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
-    ],
-  },
-  {
-    id: "falabella",
-    name: "Falabella",
-    color: "text-emerald-400",
-    country: "🇨🇱 Chile / South America",
-    signupUrl: "https://www.falabella.com/falabella-cl/page/vende-en-falabella",
-    devUrl: "https://developers.falabella.com",
-    fields: [
-      { key: "apiKey", label: "API Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", helpUrl: "https://developers.falabella.com", secret: true },
-      { key: "sellerId", label: "Seller ID", placeholder: "XXXXXXXXXX" },
-    ],
-  },
-  {
-    id: "bolcom",
-    name: "Bol.com",
-    color: "text-blue-500",
-    country: "🇳🇱 Netherlands & Belgium",
-    signupUrl: "https://www.bol.com/nl/rnwy/account/verkopen-op-bol/introductie",
-    devUrl: "https://developers.bol.com",
-    fields: [
-      { key: "clientId", label: "Client ID", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", helpUrl: "https://developers.bol.com" },
-      { key: "clientSecret", label: "Client Secret", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
-    ],
-  },
+  mp("taobao", "Taobao", "🇨🇳 China", "https://open.taobao.com", "https://www.taobao.com"),
+  mp("wayfair", "Wayfair", "🇺🇸 United States", "https://developer.wayfair.com", "https://www.wayfair.com"),
+  mp("zalando", "Zalando", "🇩🇪 Germany", "https://partner.zalando.com", "https://www.zalando.com"),
 ];
 
 function MarketplaceCard({ def, savedCreds }: { def: MarketplaceDef; savedCreds: Record<string, string> | null }) {
