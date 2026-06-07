@@ -44,6 +44,19 @@ const MARKETPLACES = [
   { id: 'zalando', name: 'Zalando', icon: 'shirt' as const, color: '#ff6900' },
 ];
 
+const US_MARKETPLACE_IDS = new Set([
+  'amazon',
+  'depop',
+  'ebay',
+  'newegg',
+  'poshmark',
+  'stockx',
+  'wayfair',
+]);
+
+const LOCAL_MARKETPLACES = MARKETPLACES.filter((m) => US_MARKETPLACE_IDS.has(m.id));
+const GLOBAL_MARKETPLACES = MARKETPLACES.filter((m) => !US_MARKETPLACE_IDS.has(m.id));
+
 export default function HomeScreen() {
   const [image, setImage] = useState<string | null>(null);
   const [title, setTitle] = useState('');

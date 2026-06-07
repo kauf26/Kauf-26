@@ -6,6 +6,59 @@ import {
   type ListingSession,
 } from "@/lib/pendingAnalysis";
 import InventoryQuantityCounter from "@/components/InventoryQuantityCounter";
+import {
+  MASTER_MARKETPLACES,
+  SUPPORTED_MARKETPLACE_IDS,
+} from "@/masterMarketplaces";
+
+export type Marketplace = (typeof SUPPORTED_MARKETPLACE_IDS)[number];
+
+/** UI-only display metadata keyed by canonical marketplace ID. */
+const MARKETPLACE_UI_META: Record<
+  Marketplace,
+  { region: string; countryCode: string }
+> = {
+  aliexpress: { region: "China", countryCode: "CN" },
+  allegro: { region: "Poland", countryCode: "PL" },
+  amazon: { region: "USA", countryCode: "US" },
+  bigcommerce: { region: "Global", countryCode: "GL" },
+  bolcom: { region: "Netherlands", countryCode: "NL" },
+  depop: { region: "UK/USA", countryCode: "UK" },
+  ebay: { region: "USA", countryCode: "US" },
+  etsy: { region: "USA", countryCode: "US" },
+  flipkart: { region: "India", countryCode: "IN" },
+  fruugo: { region: "Europe", countryCode: "GB" },
+  lazada: { region: "Southeast Asia", countryCode: "SG" },
+  magento: { region: "Global", countryCode: "GL" },
+  mercadolibre: { region: "Latin America", countryCode: "AR" },
+  mercadolibre_br: { region: "Brazil", countryCode: "BR" },
+  newegg: { region: "USA", countryCode: "US" },
+  poshmark: { region: "USA", countryCode: "US" },
+  rakuten: { region: "Japan", countryCode: "JP" },
+  shopee: { region: "Southeast Asia", countryCode: "SG" },
+  shopify: { region: "Global", countryCode: "GL" },
+  stockx: { region: "USA", countryCode: "US" },
+  taobao: { region: "China", countryCode: "CN" },
+  tiktokshop: { region: "Global", countryCode: "GL" },
+  vinted: { region: "Europe", countryCode: "LV" },
+  wayfair: { region: "USA", countryCode: "US" },
+  woocommerce: { region: "Global", countryCode: "GL" },
+  zalando: { region: "Germany", countryCode: "DE" },
+};
+
+const configById = new Map(MASTER_MARKETPLACES.map((m) => [m.id, m]));
+
+const MARKETPLACES = SUPPORTED_MARKETPLACE_IDS.map((id) => {
+  const cfg = configById.get(id);
+  const meta = MARKETPLACE_UI_META[id];
+  return {
+    id,
+    name: cfg?.name ?? id,
+    currency: cfg?.currency ?? "USD",
+    region: meta.region,
+    countryCode: meta.countryCode,
+  };
+});
 
 function getFlagEmoji(countryCode: string): string {
   if (countryCode === "GL") return "🌍";
@@ -16,43 +69,6 @@ function getFlagEmoji(countryCode: string): string {
     ...[...upper].map((c) => 0x1f1e6 - 65 + c.charCodeAt(0))
   );
 }
-
-const MARKETPLACES = [
-  { id: "aliexpress", name: "AliExpress", currency: "CNY", region: "China", countryCode: "CN" },
-  { id: "allegro", name: "Allegro", currency: "PLN", region: "Poland", countryCode: "PL" },
-  { id: "amazon", name: "Amazon", currency: "USD", region: "USA", countryCode: "US" },
-  { id: "bigcommerce", name: "BigCommerce", currency: "USD", region: "Global", countryCode: "GL" },
-  { id: "bolcom", name: "Bol.com", currency: "EUR", region: "Netherlands", countryCode: "NL" },
-  { id: "depop", name: "Depop", currency: "USD", region: "UK/USA", countryCode: "UK" },
-  { id: "ebay", name: "eBay", currency: "USD", region: "USA", countryCode: "US" },
-  { id: "etsy", name: "Etsy", currency: "USD", region: "USA", countryCode: "US" },
-  { id: "flipkart", name: "Flipkart", currency: "INR", region: "India", countryCode: "IN" },
-  { id: "fruugo", name: "Fruugo", currency: "GBP", region: "Europe", countryCode: "GB" },
-  { id: "lazada", name: "Lazada", currency: "SGD", region: "Southeast Asia", countryCode: "SG" },
-  { id: "magento", name: "Magento (Adobe Commerce)", currency: "USD", region: "Global", countryCode: "GL" },
-  { id: "mercadolibre", name: "MercadoLibre", currency: "ARS", region: "Latin America", countryCode: "AR" },
-  {
-    id: "mercadolibre_br",
-    name: "Mercado Livre (Brazil)",
-    currency: "BRL",
-    region: "Brazil",
-    countryCode: "BR",
-  },
-  { id: "newegg", name: "Newegg", currency: "USD", region: "USA", countryCode: "US" },
-  { id: "poshmark", name: "Poshmark", currency: "USD", region: "USA", countryCode: "US" },
-  { id: "rakuten", name: "Rakuten", currency: "JPY", region: "Japan", countryCode: "JP" },
-  { id: "shopee", name: "Shopee", currency: "SGD", region: "Southeast Asia", countryCode: "SG" },
-  { id: "shopify", name: "Shopify", currency: "USD", region: "Global", countryCode: "GL" },
-  { id: "stockx", name: "StockX", currency: "USD", region: "USA", countryCode: "US" },
-  { id: "taobao", name: "Taobao", currency: "CNY", region: "China", countryCode: "CN" },
-  { id: "tiktokshop", name: "TikTok Shop", currency: "USD", region: "Global", countryCode: "GL" },
-  { id: "vinted", name: "Vinted", currency: "EUR", region: "Europe", countryCode: "LV" },
-  { id: "wayfair", name: "Wayfair", currency: "USD", region: "USA", countryCode: "US" },
-  { id: "woocommerce", name: "WooCommerce", currency: "USD", region: "Global", countryCode: "GL" },
-  { id: "zalando", name: "Zalando", currency: "EUR", region: "Germany", countryCode: "DE" },
-] as const;
-
-type Marketplace = (typeof MARKETPLACES)[number]["id"];
 
 const US_MARKETS = MARKETPLACES.filter(
   (m) => m.region === "USA" || m.region.includes("USA")

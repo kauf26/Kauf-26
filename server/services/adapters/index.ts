@@ -43,13 +43,9 @@ import {
 
 export type { AdapterPublishResult, FetchFn, MarketplaceAdapter } from "./types";
 
-const PARTNERSHIP_IDS = MASTER_MARKETPLACES.filter(
+const partnershipAdapters = MASTER_MARKETPLACES.filter(
   (m) => m.apiMethod === "partnership"
-).map((m) => ({ id: m.id, name: m.name }));
-
-const partnershipAdapters = PARTNERSHIP_IDS.map((m) =>
-  createPartnershipAdapter(m.id, m.name)
-);
+).map((m) => createPartnershipAdapter(m.id, m.name, m.envKeys));
 
 const coreAdapters: MarketplaceAdapter[] = [
   {
