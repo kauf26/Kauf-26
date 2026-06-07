@@ -118,48 +118,58 @@ export const storage = new DatabaseStorage();
 * Marketplace Helpers for Global Expansion
 *
 */
-export const getMarketplaceCondition = (marketplaceId: string, isNew: boolean): string => {
- const conditionMap: Record<string, { new: string; used: string }> = {
-   ebay: { new: "1000", used: "3000" },
-   vinted: { new: "new_with_tags", used: "very_good" },
-   allegro: { new: "new", used: "used" },
-   depop: { new: "brand_new", used: "used" },
-   stockx: { new: "new", used: "used" },
-   default: { new: "new", used: "used" },
- };
+const DEFAULT_CONDITION = { new: "new", used: "used" } as const;
 
- const platform = conditionMap[marketplaceId] || conditionMap.default;
- return isNew ? platform.new : platform.used;
+export const getMarketplaceCondition = (
+  marketplaceId: string | null | undefined,
+  isNew: boolean
+): string => {
+  const id = String(marketplaceId ?? "").trim().toLowerCase();
+  const conditionMap: Record<string, { new: string; used: string }> = {
+    ebay: { new: "1000", used: "3000" },
+    vinted: { new: "new_with_tags", used: "very_good" },
+    allegro: { new: "new", used: "used" },
+    depop: { new: "brand_new", used: "used" },
+    stockx: { new: "new", used: "used" },
+  };
+
+  const platform = (id && conditionMap[id]) || DEFAULT_CONDITION;
+  return isNew ? platform.new : platform.used;
 };
 
-export const getMarketplaceCurrency = (marketplaceId: string): string => {
- const currencyByPlatform: Record<string, string> = {
-   aliexpress: "CNY",
-   allegro: "PLN",
-   amazon: "USD",
-   bigcommerce: "USD",
-   bolcom: "EUR",
-   depop: "USD",
-   ebay: "USD",
-   etsy: "USD",
-   flipkart: "INR",
-   fruugo: "GBP",
-   lazada: "SGD",
-   magento: "USD",
-   mercadolibre: "ARS",
-   mercadolibre_br: "BRL",
-   newegg: "USD",
-   poshmark: "USD",
-   rakuten: "JPY",
-   shopee: "SGD",
-   shopify: "USD",
-   stockx: "USD",
-   taobao: "CNY",
-   tiktokshop: "USD",
-   vinted: "EUR",
-   wayfair: "USD",
-   woocommerce: "USD",
-   zalando: "EUR",
- };
- return currencyByPlatform[marketplaceId] ?? "USD";
+export const getMarketplaceCurrency = (
+  marketplaceId: string | null | undefined
+): string => {
+  const id = String(marketplaceId ?? "").trim().toLowerCase();
+  if (!id) return "USD";
+
+  const currencyByPlatform: Record<string, string> = {
+    aliexpress: "CNY",
+    allegro: "PLN",
+    amazon: "USD",
+    bigcommerce: "USD",
+    bolcom: "EUR",
+    depop: "USD",
+    ebay: "USD",
+    etsy: "USD",
+    flipkart: "INR",
+    fruugo: "GBP",
+    lazada: "SGD",
+    magento: "USD",
+    mercadolibre: "ARS",
+    mercadolibre_br: "BRL",
+    newegg: "USD",
+    poshmark: "USD",
+    rakuten: "JPY",
+    shopee: "SGD",
+    shopify: "USD",
+    stockx: "USD",
+    taobao: "CNY",
+    tiktokshop: "USD",
+    vinted: "EUR",
+    wayfair: "USD",
+    woocommerce: "USD",
+    zalando: "EUR",
+  };
+  return currencyByPlatform[id] ?? "USD";
 };
