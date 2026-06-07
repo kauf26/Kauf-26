@@ -28,6 +28,8 @@ import { SUPPORTED_MARKETPLACE_IDS } from "./publishToMarketplaces";
 import { productRoutes } from "./productsRoutes";
 import marketplaceRoutes from "./marketplaceRoutes";
 import inventoryRoutes from "./inventoryRoutes";
+import { setupAuth, registerAuthRoutes } from "./auth";
+import onboardingRoutes from "./onboardingRoutes";
 import { startInventoryPoller } from "./inventoryPoller";
 import { startMarketplaceWorker } from "./marketplaceWorker";
 import {
@@ -863,7 +865,7 @@ function fillMarketAverages(input: {
 }
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT ?? 3000);
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: false, limit: "10mb" }));
@@ -1274,6 +1276,10 @@ app.get('/api/health', (req: Request, res: Response) => {
 const server = createServer(app);
 
 (async () => {
+ await setupAuth(app);
+ registerAuthRoutes(app);
+ app.use("/api/onboarding", onboardingRoutes);
+
  console.log("DEBUG: About to call registerRoutes");
  await registerRoutes(app);
 

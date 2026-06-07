@@ -16,6 +16,8 @@ import Tools from "./pages/tools";
 import Create from "./pages/create";
 import Submit from "./pages/submit";
 import LoginPage from "./pages/login";
+import OnboardingPage from "./pages/onboarding";
+import AuthSessionRestore from "./components/AuthSessionRestore";
 import PricingPage from "./pages/pricing";
 import Terms from "./pages/terms";
 import Privacy from "./pages/privacy";
@@ -27,6 +29,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <div className="min-h-screen flex flex-col">
+          <AuthSessionRestore />
           <main className="flex-grow">
             <Switch>
               <Route path="/product-draft" component={ProductDraftPage} />
@@ -40,6 +43,7 @@ function App() {
               <Route path="/create" component={Create} />
               <Route path="/submit" component={Submit} />
               <Route path="/login" component={LoginPage} />
+              <Route path="/onboarding" component={OnboardingPage} />
               <Route path="/pricing" component={PricingPage} />
               <Route path="/terms" component={Terms} />
               <Route path="/privacy" component={Privacy} />

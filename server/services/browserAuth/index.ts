@@ -5,6 +5,16 @@ export { LocaleKey, LOCALE_PATTERNS, type SupportedLocale } from "./localeKeys";
 export { DefaultOtpHandler } from "./otpHandler";
 export { SessionStore } from "./sessionStore";
 export {
+  SessionStorageService,
+  type BrowserSessionData,
+} from "./SessionStorageService";
+export { UserSessionStore, type IUserSessionStore } from "./userSessionStore";
+export {
+  createAuthenticationService,
+  registerMarketplaceStrategy,
+  registerVerifyOnlyStrategy,
+} from "./browserAuthFactory";
+export {
   EbayAuthStrategy,
   EbayAuthenticator,
 } from "./strategies/EbayAuthStrategy";

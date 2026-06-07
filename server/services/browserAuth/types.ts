@@ -13,8 +13,11 @@ export type BrowserAuthOptions = {
   headless?: boolean;
   slowMo?: number;
   defaultTimeoutMs?: number;
+  /** @deprecated Use userId + UserSessionStore instead of filesystem sessionsDir */
   sessionsDir?: string;
   locale?: string;
+  /** Required for user-scoped encrypted session persistence. */
+  userId?: number;
   /** When the marketplace prompts for 2FA after password entry. */
   otp?: OtpResolution;
 };
@@ -22,6 +25,7 @@ export type BrowserAuthOptions = {
 export type AuthResult = {
   marketplaceId: MarketplaceId;
   success: boolean;
+  /** Filesystem path (legacy) or `db:userId:marketplaceId` for user sessions */
   sessionPath: string;
   message: string;
   reusedSession?: boolean;

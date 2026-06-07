@@ -9,6 +9,11 @@ sub: text("sub").notNull().unique(),
 username: text("username").notNull().unique(),
 password: text("password").notNull(),
 email: text("email"),
+oauthProvider: text("oauth_provider"),
+firstName: text("first_name"),
+lastName: text("last_name"),
+profileImageUrl: text("profile_image_url"),
+onboardingCompleted: boolean("onboarding_completed").default(false).notNull(),
 // --- 14-DAY TRIAL FIELDS ---
 trialStartDate: timestamp("trial_start_date").defaultNow().notNull(),
 isTrialActive: boolean("is_trial_active").default(true).notNull(),
@@ -16,6 +21,28 @@ trialStartedAt: timestamp("trial_started_at").defaultNow().notNull(),
 dailyImageCount: integer("daily_image_count").default(0).notNull(),
 lastImageResetAt: timestamp("last_image_reset_at").defaultNow().notNull(),
 });
+
+/** Encrypted Playwright storageState per user + marketplace (browser auth sessions). */
+export const userMarketplaceSessions = pgTable(
+  "user_marketplace_sessions",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    marketplaceId: text("marketplace_id").notNull(),
+    encryptedPayload: text("encrypted_payload").notNull(),
+    iv: text("iv").notNull(),
+    authTag: text("auth_tag").notNull(),
+    updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  },
+  (table) => [
+    uniqueIndex("user_marketplace_sessions_user_marketplace_unique").on(
+      table.userId,
+      table.marketplaceId
+    ),
+  ]
+);
 
 export const products = pgTable("products", {
 id: serial("id").primaryKey(),
@@ -253,6 +280,7 @@ export const insertAuditLogSchema = createInsertSchema(auditLogs);
 export const insertProductDraftSchema = createInsertSchema(productDrafts);
 
 export type User = typeof users.$inferSelect;
+export type UserMarketplaceSession = typeof userMarketplaceSessions.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type Product = typeof products.$inferSelect;
 export type InsertProduct = z.infer<typeof insertProductSchema>;
