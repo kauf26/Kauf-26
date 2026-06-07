@@ -1,19 +1,23 @@
 export { AuthenticationService } from "./AuthenticationService";
-export { BaseAuthenticator, type LoginFlowConfig } from "./BaseAuthenticator";
+export { BaseAuthStrategy, type LoginFlowConfig } from "./BaseAuthStrategy";
 export { LocalizationWrapper } from "./localization";
 export { LocaleKey, LOCALE_PATTERNS, type SupportedLocale } from "./localeKeys";
 export { DefaultOtpHandler } from "./otpHandler";
 export { SessionStore } from "./sessionStore";
-export { EbayAuthenticator } from "./strategies/EbayAuthenticator";
 export {
+  EbayAuthStrategy,
+  EbayAuthenticator,
+} from "./strategies/EbayAuthStrategy";
+export {
+  StandardLoginAuthStrategy,
   StandardLoginAuthenticator,
   type StandardLoginSelectors,
-} from "./strategies/StandardLoginAuthenticator";
+} from "./strategies/StandardLoginAuthStrategy";
 export type {
   AuthCredentials,
   AuthResult,
   BrowserAuthOptions,
-  MarketplaceAuthenticator,
+  IAuthStrategy,
   MarketplaceId,
   OtpHandler,
   OtpResolution,

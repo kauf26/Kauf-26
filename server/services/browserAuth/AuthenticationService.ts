@@ -1,40 +1,43 @@
-import type { SessionStore } from "./sessionStore";
-import { SessionStore as DefaultSessionStore } from "./sessionStore";
+import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
+import { BaseAuthStrategy } from "./BaseAuthStrategy";
+import { SessionStore } from "./sessionStore";
 import type {
-  AuthCredentials,
   AuthResult,
   BrowserAuthOptions,
-  MarketplaceAuthenticator,
+  IAuthStrategy,
   MarketplaceId,
 } from "./types";
 
 /**
- * Strategy registry — one authenticator per marketplace.
+ * Strategy registry + page-level authenticate (your proposed API).
  *
  * ```ts
  * const auth = new AuthenticationService();
- * auth.register(new EbayAuthenticator());
- * auth.register(new StandardLoginAuthenticator("allegro", { ... }, {}, check));
+ * auth.registerStrategy("ebay", new EbayAuthStrategy({ email, password }));
  *
- * const result = await auth.authenticate("ebay", { email, password });
+ * // Caller owns the page (e.g. from an existing scraper browser):
+ * await auth.authenticate("ebay", page);
+ *
+ * // Or use full browser + session persistence:
+ * const result = await auth.authenticateWithSession("ebay");
  * ```
  */
 export class AuthenticationService {
-  private readonly strategies = new Map<MarketplaceId, MarketplaceAuthenticator>();
+  private readonly strategies = new Map<MarketplaceId, IAuthStrategy>();
 
-  constructor(private readonly sessionStore: SessionStore = new DefaultSessionStore()) {}
+  constructor(private readonly sessionStore: SessionStore = new SessionStore()) {}
 
-  register(authenticator: MarketplaceAuthenticator): this {
-    this.strategies.set(authenticator.marketplaceId, authenticator);
+  registerStrategy(marketplaceId: MarketplaceId, strategy: IAuthStrategy): this {
+    this.strategies.set(marketplaceId, strategy);
     return this;
   }
 
-  registerMany(authenticators: MarketplaceAuthenticator[]): this {
-    for (const a of authenticators) this.register(a);
-    return this;
+  /** @deprecated Use registerStrategy */
+  register(strategy: IAuthStrategy): this {
+    return this.registerStrategy(strategy.marketplaceId, strategy);
   }
 
-  get(marketplaceId: MarketplaceId): MarketplaceAuthenticator | undefined {
+  getStrategy(marketplaceId: MarketplaceId): IAuthStrategy | undefined {
     return this.strategies.get(marketplaceId);
   }
 
@@ -46,34 +49,84 @@ export class AuthenticationService {
     return [...this.strategies.keys()];
   }
 
-  async authenticate(
-    marketplaceId: MarketplaceId,
-    credentials: AuthCredentials,
-    options: BrowserAuthOptions = {}
-  ): Promise<AuthResult> {
+  /**
+   * Page-level auth — checks persistence via `isLoggedIn`, then runs `login`.
+   * Does not launch a browser or save cookies (caller handles that).
+   */
+  async authenticate(marketplaceId: MarketplaceId, page: Page): Promise<void> {
     const strategy = this.strategies.get(marketplaceId);
     if (!strategy) {
       throw new Error(
-        `No authenticator registered for "${marketplaceId}". ` +
+        `No strategy for ${marketplaceId}. ` +
           `Registered: ${this.listMarketplaces().join(", ") || "(none)"}`
       );
     }
 
-    const merged: BrowserAuthOptions = {
-      sessionsDir: options.sessionsDir ?? undefined,
-      ...options,
-    };
+    if (await strategy.isLoggedIn(page)) return;
 
-    return strategy.login(credentials, merged);
+    await strategy.login(page);
   }
 
-  async restore(
+  /**
+   * Full flow: launch browser, restore session if present, authenticate, persist.
+   */
+  async authenticateWithSession(
     marketplaceId: MarketplaceId,
     options: BrowserAuthOptions = {}
-  ): Promise<AuthResult | null> {
+  ): Promise<AuthResult> {
     const strategy = this.strategies.get(marketplaceId);
-    if (!strategy) return null;
-    return strategy.restoreSession(options);
+    if (!strategy) {
+      throw new Error(`No strategy for ${marketplaceId}`);
+    }
+
+    const store = options.sessionsDir
+      ? new SessionStore(options.sessionsDir)
+      : this.sessionStore;
+
+    const storageState = await store.storageStateFor(marketplaceId);
+    const browser = await chromium.launch({
+      headless: options.headless ?? true,
+      slowMo: options.slowMo,
+    });
+
+    let context: BrowserContext | undefined;
+    try {
+      context = await this.newContext(browser, options, storageState);
+      const page = await context.newPage();
+
+      const verifyUrl =
+        strategy instanceof BaseAuthStrategy
+          ? strategy.verifyUrl()
+          : "about:blank";
+
+      if (storageState) {
+        await page.goto(verifyUrl, { waitUntil: "domcontentloaded" });
+        if (await strategy.isLoggedIn(page)) {
+          const sessionPath = store.pathFor(marketplaceId);
+          return {
+            marketplaceId,
+            success: true,
+            sessionPath,
+            message: "Restored persisted session",
+            reusedSession: true,
+          };
+        }
+      }
+
+      await this.authenticate(marketplaceId, page);
+
+      const sessionPath = await store.save(context, marketplaceId);
+      return {
+        marketplaceId,
+        success: true,
+        sessionPath,
+        message: "Authenticated and session saved",
+        reusedSession: false,
+      };
+    } finally {
+      await context?.close();
+      await browser.close();
+    }
   }
 
   async sessionExists(marketplaceId: MarketplaceId): Promise<boolean> {
@@ -82,5 +135,18 @@ export class AuthenticationService {
 
   sessionPath(marketplaceId: MarketplaceId): string {
     return this.sessionStore.pathFor(marketplaceId);
+  }
+
+  private async newContext(
+    browser: Browser,
+    options: BrowserAuthOptions,
+    storageState?: string
+  ): Promise<BrowserContext> {
+    const context = await browser.newContext({
+      storageState,
+      locale: options.locale ?? "en-US",
+    });
+    context.setDefaultTimeout(options.defaultTimeoutMs ?? 30_000);
+    return context;
   }
 }

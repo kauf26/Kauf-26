@@ -1,4 +1,4 @@
-import type { Browser, BrowserContext, Page } from "playwright";
+import type { Page } from "playwright";
 
 /** Aligns with `server/config/marketplaces.ts` ids (ebay, amazon, shopify, …). */
 export type MarketplaceId = string;
@@ -17,14 +17,6 @@ export type BrowserAuthOptions = {
   locale?: string;
   /** When the marketplace prompts for 2FA after password entry. */
   otp?: OtpResolution;
-};
-
-export type AuthenticatorContext = {
-  browser: Browser;
-  context: BrowserContext;
-  page: Page;
-  marketplaceId: MarketplaceId;
-  locale: string;
 };
 
 export type AuthResult = {
@@ -50,12 +42,11 @@ export interface OtpHandler {
   resolve(request: OtpRequest, resolution: OtpResolution): Promise<void>;
 }
 
-export interface MarketplaceAuthenticator {
+/**
+ * Core strategy contract — page is owned by the caller or `authenticateWithSession`.
+ */
+export interface IAuthStrategy {
   readonly marketplaceId: MarketplaceId;
-  login(
-    credentials: AuthCredentials,
-    options?: BrowserAuthOptions
-  ): Promise<AuthResult>;
-  restoreSession(options?: BrowserAuthOptions): Promise<AuthResult | null>;
+  login(page: Page): Promise<void>;
   isLoggedIn(page: Page): Promise<boolean>;
 }
