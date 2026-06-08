@@ -8,8 +8,9 @@ import {
   env,
   hasEnv,
 } from "./adapterUtils";
+import { buildEtsyApiHeaders } from "../etsyApi";
 
-const ETSY_API = "https://openapi.etsy.com/v3";
+const ETSY_API = "https://api.etsy.com/v3";
 
 export function formatEtsyListing(draft: DraftPublishPayload): FormattedListing {
   const price = draftPrice(draft);
@@ -83,11 +84,10 @@ export async function publishToEtsy(
 
   const res = await fetchImpl(url, {
     method: "POST",
-    headers: {
+    headers: buildEtsyApiHeaders({
       Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
-      "x-api-key": env("ETSY_API_KEY"),
-    },
+    }),
     body: JSON.stringify(formatted.apiBody ?? formatted),
   });
 

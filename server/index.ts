@@ -47,6 +47,10 @@ import {
   type IdentifyImageInput,
 } from "./identifyImages";
 import {
+  isEtsyApiKeyConfigured,
+  verifyEtsyApiConnection,
+} from "./services/etsyApi";
+import {
   type VisionConfidence,
   type VisionPerImage,
   type VisionProduct,
@@ -1272,6 +1276,30 @@ app.get('/api/health', (req: Request, res: Response) => {
  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// -------------------- ETSY API VERIFY (x-api-key: keystring:shared_secret) --------------------
+app.get("/api/etsy/verify", async (_req: Request, res: Response) => {
+  try {
+    const result = await verifyEtsyApiConnection();
+    const statusCode = result.ok ? 200 : result.status > 0 ? result.status : 503;
+    return res.status(statusCode).json({
+      connected: result.ok,
+      configured: isEtsyApiKeyConfigured(),
+      status: result.status,
+      applicationId: result.applicationId,
+      message: result.message,
+      ...(result.ok ? {} : { detail: result.raw }),
+    });
+  } catch (error) {
+    console.error("[Etsy] verify connection error:", error);
+    return res.status(500).json({
+      connected: false,
+      configured: isEtsyApiKeyConfigured(),
+      message:
+        error instanceof Error ? error.message : "Etsy verification failed",
+    });
+  }
+});
+
 // -------------------- SERVER SETUP --------------------
 const server = createServer(app);
 
@@ -1295,6 +1323,7 @@ const server = createServer(app);
    console.log(`   - POST /api/identify (1–5 images → OpenAI vision merge → scrape → draft)`);
    console.log(`   - POST /api/catalog/scrape (JSON { query } → masterScraper)`);
    console.log(`   - GET  /api/health`);
+   console.log(`   - GET  /api/etsy/verify (Etsy x-api-key ping)`);
    console.log(`   - GET/POST /api/drafts (productsRoutes → PostgreSQL)`);
    console.log(`   - GET  /api/drafts/ready-for-posting`);
    console.log(`   - POST /api/drafts/:id/post-to-marketplaces`);
