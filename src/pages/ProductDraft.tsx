@@ -355,9 +355,9 @@ const applyScrapeResult = (data: Record<string, unknown>) => {
     });
   } else {
     toast({
-      title: "No exact match yet",
-      description: "Best similar listing applied — check server logs for top matches.",
-      variant: "destructive",
+      title: "Closest match applied",
+      description:
+        "Review the details before publishing, or refresh again with a more specific term.",
     });
   }
 };
@@ -450,7 +450,7 @@ return (
     {product.matchType !== "exact" && (
       <section className="rounded-lg border border-zinc-700 bg-zinc-950/80 p-4 space-y-3">
         <h2 className="text-sm font-semibold text-zinc-200">
-          Search again for exact match
+          Refresh Match
         </h2>
         <p className="text-xs text-zinc-500">
           Edit the search term (model number, spelling, fewer words) and re-run
@@ -470,7 +470,7 @@ return (
           disabled={isRescraping}
           className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
         >
-          {isRescraping ? "Searching…" : "Search again for exact match"}
+          {isRescraping ? "Refreshing…" : "Refresh Match"}
         </button>
       </section>
     )}
