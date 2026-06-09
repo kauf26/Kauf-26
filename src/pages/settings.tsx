@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Settings, ChevronDown, ChevronRight, CheckCircle2, Circle, ExternalLink, Save, Loader2, AlertCircle, Trash2 } from "lucide-react";
+import { MarketplaceStatusCard, type MarketplaceVerifyStatus } from "@/components/MarketplaceStatusCard";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -370,6 +371,78 @@ function MarketplaceCard({ def, savedCreds }: { def: MarketplaceDef; savedCreds:
   );
 }
 
+const VERIFIABLE_MARKETPLACES = ["shopify", "etsy", "ebay"] as const;
+
+function MarketplaceStatusSection() {
+  const [statuses, setStatuses] = useState<MarketplaceVerifyStatus[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const results = await Promise.all(
+        VERIFIABLE_MARKETPLACES.map(async (id): Promise<MarketplaceVerifyStatus> => {
+          try {
+            const res = await fetch(`/api/${id}/verify`);
+            const json = await res.json();
+            return {
+              marketplace: json.marketplace ?? id,
+              ok: json.ok === true,
+              configured: json.configured === true,
+              status: typeof json.status === "number" ? json.status : res.status,
+              message: json.message ?? "No response from verification endpoint.",
+              hint: json.hint,
+              // Shopify nests the OAuth re-authorize URL inside detail
+              authorizeUrl:
+                typeof json.detail?.authorizeUrl === "string"
+                  ? json.detail.authorizeUrl
+                  : undefined,
+            };
+          } catch {
+            return {
+              marketplace: id,
+              ok: false,
+              configured: false,
+              status: 0,
+              message: "Could not reach the server to verify this connection.",
+              hint: "Make sure the backend is running, then reload this page.",
+            };
+          }
+        })
+      );
+      if (!cancelled) {
+        setStatuses(results);
+        setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <div className="mb-8">
+      <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+        Live Connection Status
+      </h2>
+      {loading ? (
+        <div className="flex items-center gap-2 rounded-lg border border-muted bg-muted/10 px-4 py-6 justify-center text-sm text-muted-foreground">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Checking marketplace connections…
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {statuses.map((status) => (
+            <MarketplaceStatusCard key={status.marketplace} status={status} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DeleteAccountSection() {
   const [confirmText, setConfirmText] = useState("");
   const [open, setOpen] = useState(false);
@@ -506,6 +579,8 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+
+        <MarketplaceStatusSection />
 
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
