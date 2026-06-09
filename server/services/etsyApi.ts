@@ -1,12 +1,23 @@
 /**
- * Etsy Open API v3 service layer — shared x-api-key header, credential checks,
- * and connection verify (ping + OAuth refresh).
+ * Etsy Open API v3 service layer — OAuth-backed.
+ *
+ * Credentials model:
+ * - ETSY_CLIENT_ID (app keystring) is the only env credential; it is sent as
+ *   the x-api-key header on every request and doubles as the OAuth client_id.
+ * - User tokens (access + refresh) live in backend token storage, written by
+ *   the /api/etsy/oauth/* flow. No API keys or refresh tokens are read from
+ *   user input; ETSY_SHARED_SECRET is no longer used anywhere.
  * @see https://developers.etsy.com/documentation/essentials/requests
  */
-import { env, hasEnv } from "./adapters/adapterUtils";
+import { env } from "./adapters/adapterUtils";
+import {
+  fetchEtsyIdentity,
+  getEtsyAccessToken,
+  getEtsyClientId,
+} from "./etsyOAuth";
+import { hasStoredTokens } from "./tokenStorage";
 
 const ETSY_API_BASE = "https://api.etsy.com/v3";
-const ETSY_OAUTH_TOKEN_URL = "https://api.etsy.com/v3/public/oauth/token";
 
 export type MarketplaceConnectionResult = {
   ok: boolean;
@@ -16,14 +27,9 @@ export type MarketplaceConnectionResult = {
   detail?: unknown;
 };
 
-export function getEtsyKeystring(): string {
-  return env("ETSY_API_KEY");
-}
+export { getEtsyClientId };
 
-export function getEtsySharedSecret(): string {
-  return env("ETSY_SHARED_SECRET");
-}
-
+/** Env fallback for display; the publish path prefers the OAuth shop_id. */
 export function getEtsyShopId(): string {
   return env("ETSY_SHOP_ID");
 }
@@ -32,136 +38,110 @@ export function getEtsyTaxonomyId(): number {
   return Number(env("ETSY_TAXONOMY_ID") || 1);
 }
 
-/** True when both keystring and shared secret are set (ping-level access). */
-export function isEtsyApiKeyConfigured(): boolean {
-  return Boolean(getEtsyKeystring() && getEtsySharedSecret());
+/**
+ * Publish-ready: app keystring present AND merchant has completed the
+ * OAuth connect flow (tokens in backend storage).
+ */
+export function isEtsyConfigured(): boolean {
+  return Boolean(getEtsyClientId()) && hasStoredTokens("etsy");
 }
 
-/** Publish-ready credentials (matches `marketplaces.ts` envKeys for etsy). */
-export function isEtsyConfigured(): boolean {
-  return hasEnv(
-    "ETSY_API_KEY",
-    "ETSY_SHARED_SECRET",
-    "ETSY_CLIENT_ID",
-    "ETSY_REFRESH_TOKEN",
-    "ETSY_SHOP_ID"
-  );
+function baseHeaders(accessToken?: string): Record<string, string> {
+  const headers: Record<string, string> = {
+    "x-api-key": getEtsyClientId(),
+  };
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  return headers;
 }
 
 /**
- * Etsy requires `x-api-key: keystring:shared_secret` (colon-separated).
+ * Verify the stored OAuth connection:
+ * 1. Load tokens from backend storage (refreshing if expired)
+ * 2. GET /v3/application/users/me to confirm the credential works
+ * Returns shop name/ID so the dashboard can show which account is connected.
  */
-export function buildEtsyXApiKeyHeader(): string {
-  const keystring = getEtsyKeystring();
-  const sharedSecret = getEtsySharedSecret();
-  if (!keystring || !sharedSecret) {
-    throw new Error(
-      "ETSY_API_KEY and ETSY_SHARED_SECRET must both be set in the environment"
-    );
-  }
-  return `${keystring}:${sharedSecret}`;
-}
-
-export function buildEtsyApiHeaders(
-  extra?: Record<string, string>
-): Record<string, string> {
-  return {
-    "x-api-key": buildEtsyXApiKeyHeader(),
-    ...extra,
-  };
-}
-
-export type EtsyConnectionResult = {
-  ok: boolean;
-  status: number;
-  applicationId?: number;
-  message: string;
-  raw?: unknown;
-};
-
-function parseBody(text: string): unknown {
-  try {
-    return text ? JSON.parse(text) : null;
-  } catch {
-    return { raw: text.slice(0, 500) };
-  }
-}
-
-/** Step A: ping Etsy Open API (no OAuth scopes required). */
-async function pingEtsyApi(
-  fetchImpl: typeof fetch
-): Promise<{ ok: boolean; status: number; detail: unknown }> {
-  const res = await fetchImpl(`${ETSY_API_BASE}/application/openapi-ping`, {
-    method: "GET",
-    headers: buildEtsyApiHeaders(),
-  });
-  const detail = parseBody(await res.text());
-  return { ok: res.ok, status: res.status, detail };
-}
-
-/** Low-level refresh-token exchange; shared by verify and publish paths. */
-async function requestEtsyAccessToken(
-  fetchImpl: typeof fetch
-): Promise<{ ok: boolean; status: number; detail: unknown; accessToken?: string }> {
-  const res = await fetchImpl(ETSY_OAUTH_TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      client_id: env("ETSY_CLIENT_ID"),
-      refresh_token: env("ETSY_REFRESH_TOKEN"),
-    }),
-  });
-  const detail = parseBody(await res.text());
-  const accessToken =
-    typeof detail === "object" &&
-    detail !== null &&
-    typeof (detail as { access_token?: unknown }).access_token === "string"
-      ? (detail as { access_token: string }).access_token
-      : undefined;
-  return { ok: res.ok, status: res.status, detail, accessToken };
-}
-
-/** Exchange the refresh token for an access token; throws on failure. */
-export async function refreshEtsyAccessToken(
+export async function verifyEtsyConnection(
   fetchImpl: typeof fetch = fetch
-): Promise<string> {
-  const result = await requestEtsyAccessToken(fetchImpl);
-  if (!result.ok || !result.accessToken) {
-    throw new Error(
-      `Etsy OAuth failed (${result.status}): ${JSON.stringify(result.detail).slice(0, 200)}`
-    );
+): Promise<MarketplaceConnectionResult> {
+  if (!getEtsyClientId()) {
+    return {
+      ok: false,
+      configured: false,
+      status: 0,
+      message:
+        "Missing ETSY_CLIENT_ID (your Etsy app keystring) — add it to .env and restart the server",
+    };
   }
-  return result.accessToken;
+
+  if (!hasStoredTokens("etsy")) {
+    return {
+      ok: false,
+      configured: false,
+      status: 0,
+      message:
+        "Etsy is not connected yet — open /api/etsy/oauth/start to authorize the app with your Etsy account",
+    };
+  }
+
+  try {
+    const { accessToken } = await getEtsyAccessToken(fetchImpl);
+    const identity = await fetchEtsyIdentity(accessToken, fetchImpl);
+    return {
+      ok: true,
+      configured: true,
+      status: 200,
+      message: identity.shopName
+        ? `Connected to Etsy shop "${identity.shopName}"`
+        : `Connected to Etsy (user ${identity.userId})`,
+      detail: {
+        userId: identity.userId,
+        shopId: identity.shopId,
+        shopName: identity.shopName,
+      },
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const statusMatch = message.match(/\((\d{3})\)/);
+    return {
+      ok: false,
+      configured: true,
+      status: statusMatch ? Number(statusMatch[1]) : 0,
+      message: `Etsy verification failed: ${message}`,
+    };
+  }
 }
 
 export type EtsyListingResult = {
   listingId?: string;
+  shopId?: string;
   raw?: unknown;
 };
 
 /**
- * Create a draft listing via `POST /application/shops/{shopId}/listings`.
- * `listing` is the request body (title, description, price, taxonomy_id, ...).
+ * Create a draft listing via `POST /application/shops/{shopId}/listings`
+ * using the stored OAuth tokens (auto-refreshed). Shop ID comes from the
+ * OAuth identity, with ETSY_SHOP_ID as an env override/fallback.
  */
 export async function createEtsyListing(
   listing: Record<string, unknown>,
   fetchImpl: typeof fetch = fetch
 ): Promise<EtsyListingResult> {
-  const shopId = getEtsyShopId();
+  const { accessToken, shopId: oauthShopId } = await getEtsyAccessToken(fetchImpl);
+  const shopId = oauthShopId || getEtsyShopId();
   if (!shopId) {
-    throw new Error("ETSY_SHOP_ID must be set in the environment");
+    throw new Error(
+      "No Etsy shop ID available — re-connect via /api/etsy/oauth/start or set ETSY_SHOP_ID"
+    );
   }
 
-  const token = await refreshEtsyAccessToken(fetchImpl);
   const res = await fetchImpl(
     `${ETSY_API_BASE}/application/shops/${shopId}/listings`,
     {
       method: "POST",
-      headers: buildEtsyApiHeaders({
-        Authorization: `Bearer ${token}`,
+      headers: {
+        ...baseHeaders(accessToken),
         "Content-Type": "application/json",
-      }),
+      },
       body: JSON.stringify(listing),
     }
   );
@@ -173,98 +153,16 @@ export async function createEtsyListing(
     );
   }
 
-  const json = parseBody(text) as { listing_id?: number } | null;
-  return {
-    listingId:
-      json?.listing_id != null ? String(json.listing_id) : undefined,
-    raw: json,
-  };
-}
-
-/**
- * Standardized two-step verify:
- *   A. x-api-key ping (requires ETSY_API_KEY + ETSY_SHARED_SECRET)
- *   B. OAuth refresh-token exchange (only when fully configured)
- */
-export async function verifyEtsyConnection(
-  fetchImpl: typeof fetch = fetch
-): Promise<MarketplaceConnectionResult> {
-  const configured = isEtsyConfigured();
-
-  if (!isEtsyApiKeyConfigured()) {
-    return {
-      ok: false,
-      configured,
-      status: 0,
-      message:
-        "Missing ETSY_API_KEY or ETSY_SHARED_SECRET — add both to .env and restart the server",
-    };
-  }
-
-  const ping = await pingEtsyApi(fetchImpl);
-  if (!ping.ok) {
-    return {
-      ok: false,
-      configured,
-      status: ping.status,
-      message: `Etsy API rejected the x-api-key ping (${ping.status})`,
-      detail: ping.detail,
-    };
-  }
-
-  if (!configured) {
-    return {
-      ok: true,
-      configured: false,
-      status: ping.status,
-      message:
-        "Etsy x-api-key ping succeeded; set ETSY_CLIENT_ID, ETSY_REFRESH_TOKEN, and ETSY_SHOP_ID for publish access",
-      detail: ping.detail,
-    };
-  }
-
-  const oauth = await requestEtsyAccessToken(fetchImpl);
-  if (!oauth.ok) {
-    return {
-      ok: false,
-      configured: true,
-      status: oauth.status,
-      message: `Etsy OAuth refresh-token exchange failed (${oauth.status})`,
-      detail: oauth.detail,
-    };
+  let json: { listing_id?: number } | null = null;
+  try {
+    json = text ? (JSON.parse(text) as { listing_id?: number }) : null;
+  } catch {
+    /* keep raw */
   }
 
   return {
-    ok: true,
-    configured: true,
-    status: oauth.status,
-    message: "Etsy API + OAuth verified",
-  };
-}
-
-/**
- * Legacy alias — same shape as the original ping-only verify, now backed by
- * the standardized two-step check. Used by `GET /api/etsy/verify`.
- */
-export async function verifyEtsyApiConnection(
-  fetchImpl: typeof fetch = fetch
-): Promise<EtsyConnectionResult> {
-  const result = await verifyEtsyConnection(fetchImpl);
-
-  const appId =
-    typeof result.detail === "object" &&
-    result.detail !== null &&
-    "application_id" in result.detail &&
-    typeof (result.detail as { application_id: unknown }).application_id ===
-      "number"
-      ? (result.detail as { application_id: number }).application_id
-      : undefined;
-
-  return {
-    ok: result.ok,
-    status: result.status,
-    applicationId: appId,
-    message: result.message,
-    raw: result.detail,
+    listingId: json?.listing_id != null ? String(json.listing_id) : undefined,
+    shopId,
+    raw: json ?? text.slice(0, 500),
   };
 }

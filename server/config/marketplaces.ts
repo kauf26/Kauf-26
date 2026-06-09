@@ -118,14 +118,10 @@ export const MASTER_MARKETPLACES: MasterMarketplace[] = [
     country: "US",
     apiMethod: "open",
     enabledForPublishing: true,
-    credentialsRequired: ["apiKey", "oauthClientId", "refreshToken", "shopId"],
-    envKeys: [
-      "ETSY_API_KEY",
-      "ETSY_SHARED_SECRET",
-      "ETSY_CLIENT_ID",
-      "ETSY_REFRESH_TOKEN",
-      "ETSY_SHOP_ID",
-    ],
+    credentialsRequired: ["oauthClientId"],
+    // ETSY_CLIENT_ID is the app keystring (doubles as x-api-key). User tokens
+    // are stored backend-side by the /api/etsy/oauth flow, not in env.
+    envKeys: ["ETSY_CLIENT_ID"],
     implementationStatus: "dry-run",
   },
   {

@@ -56,7 +56,7 @@ export async function publishToEtsy(
   if (!isEtsyConfigured()) {
     return dryRunResult(
       "etsy",
-      "Etsy Open API credentials missing — dry run only",
+      "Etsy not connected — authorize via /api/etsy/oauth/start (dry run only)",
       formatted
     );
   }
@@ -70,7 +70,7 @@ export async function publishToEtsy(
     listingUrl: created.listingId
       ? `https://www.etsy.com/listing/${created.listingId}`
       : undefined,
-    account: getEtsyShopId() ? `Etsy shop ${getEtsyShopId()}` : undefined,
+    account: created.shopId ? `Etsy shop ${created.shopId}` : undefined,
     dryRun: false,
   };
 }

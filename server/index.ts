@@ -52,6 +52,8 @@ import {
   type MarketplaceConnectionResult,
 } from "./services/ebayApi";
 import { verifyEtsyConnection } from "./services/etsyApi";
+import etsyOAuthRoutes from "./etsyOAuthRoutes";
+import { primeTokenCache } from "./services/tokenStorage";
 import {
   buildShopifyOAuthAuthorizeUrl,
   getShopifyOAuthScopes,
@@ -1290,12 +1292,21 @@ app.get('/api/health', (req: Request, res: Response) => {
 // -------------------- MARKETPLACE VERIFY (standardized MarketplaceConnectionResult) --------------------
 
 /** Dashboard-friendly hint for common failure modes. */
-function verifyHint(result: MarketplaceConnectionResult): string | undefined {
+function verifyHint(
+  result: MarketplaceConnectionResult,
+  marketplace?: string
+): string | undefined {
   if (result.ok) return undefined;
   if (!result.configured) {
+    if (marketplace === "etsy") {
+      return "Connect your Etsy account via /api/etsy/oauth/start (only ETSY_CLIENT_ID is needed in .env).";
+    }
     return "Add the missing environment variables to .env and restart the server.";
   }
   if (result.status === 401) {
+    if (marketplace === "etsy") {
+      return "Authentication failed — re-connect Etsy via /api/etsy/oauth/start.";
+    }
     return "Authentication failed — the credentials are invalid or the token has expired. Update .env and restart.";
   }
   if (result.status === 403) {
@@ -1328,7 +1339,12 @@ function sendVerifyResult(
     configured: result.configured,
     status: result.status,
     message: result.message,
-    hint: verifyHint(result),
+    hint: verifyHint(result, marketplace),
+    // Surface the OAuth connect link so the settings card can render a button
+    authorizeUrl:
+      marketplace === "etsy" && !result.ok
+        ? "/api/etsy/oauth/start"
+        : undefined,
     detail: result.detail,
   });
 }
@@ -1448,6 +1464,10 @@ const server = createServer(app);
  await setupAuth(app);
  registerAuthRoutes(app);
  app.use("/api/onboarding", onboardingRoutes);
+ // Etsy OAuth (PKCE) — mounted after setupAuth so req.session is available
+ app.use("/api/etsy/oauth", etsyOAuthRoutes);
+ // Mirror DB-stored OAuth tokens into the sync presence cache for adapters
+ await primeTokenCache(["etsy"]);
 
  console.log("DEBUG: About to call registerRoutes");
  await registerRoutes(app);
@@ -1464,7 +1484,8 @@ const server = createServer(app);
    console.log(`   - POST /api/identify (1–5 images → OpenAI vision merge → scrape → draft)`);
    console.log(`   - POST /api/catalog/scrape (JSON { query } → masterScraper)`);
    console.log(`   - GET  /api/health`);
-   console.log(`   - GET  /api/etsy/verify (x-api-key ping + OAuth refresh)`);
+   console.log(`   - GET  /api/etsy/verify (OAuth token + shop check)`);
+   console.log(`   - GET  /api/etsy/oauth/start (connect Etsy account)`);
    console.log(`   - GET  /api/shopify/verify (Admin API + scope check)`);
    console.log(`   - GET  /api/ebay/verify (OAuth refresh-token check)`);
    console.log(`   - GET  /api/shopify/oauth/authorize (redirect to approve scopes)`);

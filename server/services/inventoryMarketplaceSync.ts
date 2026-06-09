@@ -2,6 +2,7 @@
  * Push central inventory quantity to each marketplace listing API.
  */
 import type { InventoryMarketplaceListing } from "../../shared/schema";
+import { isEtsyConfigured } from "./etsyApi";
 
 export type InventoryUpdateResult = {
   marketplaceId: string;
@@ -87,7 +88,7 @@ async function updateEtsyInventory(
   listingId: string | null,
   quantity: number
 ): Promise<InventoryUpdateResult> {
-  if (!process.env.ETSY_REFRESH_TOKEN?.trim()) {
+  if (!isEtsyConfigured()) {
     console.log(
       `[Inventory][Etsy] dry-run updateListing listing=${listingId} qty=${quantity}`
     );
