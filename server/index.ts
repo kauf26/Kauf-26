@@ -53,13 +53,11 @@ import {
 } from "./services/ebayApi";
 import { verifyEtsyConnection } from "./services/etsyApi";
 import etsyOAuthRoutes from "./etsyOAuthRoutes";
+import shopifyOAuthRoutes from "./shopifyOAuthRoutes";
+import ebayOAuthRoutes from "./ebayOAuthRoutes";
 import { primeTokenCache } from "./services/tokenStorage";
-import {
-  buildShopifyOAuthAuthorizeUrl,
-  getShopifyOAuthScopes,
-  loadShopifyConfigFromEnv,
-  verifyShopifyConnection,
-} from "./services/shopifyApi";
+import { startMarketplaceTokenRefreshLoop } from "./services/marketplaceTokenService";
+import { verifyShopifyConnection } from "./services/shopifyApi";
 import {
   type VisionConfidence,
   type VisionPerImage,
@@ -1299,15 +1297,27 @@ function verifyHint(
   if (result.ok) return undefined;
   if (!result.configured) {
     if (marketplace === "etsy") {
-      return "Connect your Etsy account via /api/etsy/oauth/start (only ETSY_CLIENT_ID is needed in .env).";
+      return "Click Connect with Etsy below (only ETSY_CLIENT_ID is needed in .env).";
+    }
+    if (marketplace === "shopify") {
+      return "Enter your store domain and click Connect with Shopify below.";
+    }
+    if (marketplace === "ebay") {
+      return "Click Connect with eBay below (EBAY_CLIENT_ID and EBAY_CLIENT_SECRET in .env).";
     }
     return "Add the missing environment variables to .env and restart the server.";
   }
   if (result.status === 401) {
     if (marketplace === "etsy") {
-      return "Authentication failed — re-connect Etsy via /api/etsy/oauth/start.";
+      return "Authentication failed — click Connect with Etsy to re-authorize.";
     }
-    return "Authentication failed — the credentials are invalid or the token has expired. Update .env and restart.";
+    if (marketplace === "shopify") {
+      return "Authentication failed — reconnect Shopify from Settings.";
+    }
+    if (marketplace === "ebay") {
+      return "Authentication failed — click Connect with eBay to re-authorize.";
+    }
+    return "Authentication failed — re-run the OAuth connect flow from Settings.";
   }
   if (result.status === 403) {
     return "Permission denied — the app likely needs re-authorization or additional API scopes.";
@@ -1340,13 +1350,23 @@ function sendVerifyResult(
     status: result.status,
     message: result.message,
     hint: verifyHint(result, marketplace),
-    // Surface the OAuth connect link so the settings card can render a button
-    authorizeUrl:
-      marketplace === "etsy" && !result.ok
-        ? "/api/etsy/oauth/start"
-        : undefined,
+    authorizeUrl: resolveVerifyAuthorizeUrl(marketplace, result),
     detail: result.detail,
   });
+}
+
+function resolveVerifyAuthorizeUrl(
+  marketplace: string,
+  result: MarketplaceConnectionResult
+): string | undefined {
+  if (result.ok) return undefined;
+  const detailUrl = (result.detail as { authorizeUrl?: string } | undefined)
+    ?.authorizeUrl;
+  if (typeof detailUrl === "string") return detailUrl;
+  if (marketplace === "etsy" || marketplace === "ebay") {
+    return `/api/${marketplace}/oauth/start`;
+  }
+  return undefined;
 }
 
 function makeVerifyRoute(
@@ -1377,86 +1397,6 @@ app.get("/api/shopify/verify", makeVerifyRoute("shopify", verifyShopifyConnectio
 app.get("/api/etsy/verify", makeVerifyRoute("etsy", verifyEtsyConnection));
 app.get("/api/ebay/verify", makeVerifyRoute("ebay", verifyEbayConnection));
 
-app.get("/api/shopify/oauth/authorize", (req: Request, res: Response) => {
-  try {
-    const config = loadShopifyConfigFromEnv();
-    const scopes =
-      typeof req.query.scopes === "string"
-        ? req.query.scopes
-        : getShopifyOAuthScopes();
-    const authorizeUrl = buildShopifyOAuthAuthorizeUrl(config, { scopes });
-    if (!authorizeUrl) {
-      return res.status(400).json({
-        message:
-          "Set SHOPIFY_OAUTH_REDIRECT_URI in .env (must match an allowed redirect URL in your Shopify app).",
-      });
-    }
-    return res.redirect(authorizeUrl);
-  } catch (error) {
-    console.error("[Shopify] oauth authorize error:", error);
-    return res.status(500).json({
-      message:
-        error instanceof Error
-          ? error.message
-          : "Failed to build Shopify OAuth URL",
-    });
-  }
-});
-
-app.get("/api/shopify/oauth/callback", async (req: Request, res: Response) => {
-  const code = typeof req.query.code === "string" ? req.query.code : "";
-  if (!code) {
-    return res.status(400).json({
-      message:
-        "Missing ?code= from Shopify. Start at GET /api/shopify/oauth/authorize",
-    });
-  }
-
-  try {
-    const config = loadShopifyConfigFromEnv();
-    const tokenRes = await fetch(
-      `https://${config.storeDomain}/admin/oauth/access_token`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify({
-          client_id: config.clientId,
-          client_secret: config.clientSecret,
-          code,
-        }),
-      }
-    );
-    const text = await tokenRes.text();
-    if (!tokenRes.ok) {
-      return res.status(tokenRes.status).json({
-        message: `Shopify token exchange failed (${tokenRes.status})`,
-        detail: text.slice(0, 500),
-      });
-    }
-
-    const json = JSON.parse(text) as {
-      access_token?: string;
-      scope?: string;
-    };
-    return res.json({
-      ok: true,
-      message:
-        "Authorization succeeded. Copy access_token into SHOPIFY_ACCESS_TOKEN in .env",
-      scope: json.scope,
-      access_token: json.access_token,
-    });
-  } catch (error) {
-    console.error("[Shopify] oauth callback error:", error);
-    return res.status(500).json({
-      message:
-        error instanceof Error ? error.message : "Shopify OAuth callback failed",
-    });
-  }
-});
-
 // -------------------- SERVER SETUP --------------------
 const server = createServer(app);
 
@@ -1466,8 +1406,9 @@ const server = createServer(app);
  app.use("/api/onboarding", onboardingRoutes);
  // Etsy OAuth (PKCE) — mounted after setupAuth so req.session is available
  app.use("/api/etsy/oauth", etsyOAuthRoutes);
- // Mirror DB-stored OAuth tokens into the sync presence cache for adapters
- await primeTokenCache(["etsy"]);
+ app.use("/api/shopify/oauth", shopifyOAuthRoutes);
+ app.use("/api/ebay/oauth", ebayOAuthRoutes);
+ await primeTokenCache(["etsy", "shopify", "ebay"]);
 
  console.log("DEBUG: About to call registerRoutes");
  await registerRoutes(app);
@@ -1488,7 +1429,8 @@ const server = createServer(app);
    console.log(`   - GET  /api/etsy/oauth/start (connect Etsy account)`);
    console.log(`   - GET  /api/shopify/verify (Admin API + scope check)`);
    console.log(`   - GET  /api/ebay/verify (OAuth refresh-token check)`);
-   console.log(`   - GET  /api/shopify/oauth/authorize (redirect to approve scopes)`);
+   console.log(`   - GET  /api/shopify/oauth/start?shop=… (connect Shopify store)`);
+   console.log(`   - GET  /api/ebay/oauth/start (connect eBay account)`);
    console.log(`   - GET/POST /api/drafts (productsRoutes → PostgreSQL)`);
    console.log(`   - GET  /api/drafts/ready-for-posting`);
    console.log(`   - POST /api/drafts/:id/post-to-marketplaces`);
@@ -1503,5 +1445,6 @@ const server = createServer(app);
    console.log(`   - POST /api/inventory/webhooks/:marketplace`);
    startMarketplaceWorker();
    startInventoryPoller();
+   startMarketplaceTokenRefreshLoop();
  });
 })();

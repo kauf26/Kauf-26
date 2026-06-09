@@ -8,6 +8,7 @@ export type MarketplaceVerifyStatus = {
   message: string;
   hint?: string;
   authorizeUrl?: string;
+  connectLabel?: string;
 };
 
 export const MarketplaceStatusCard = ({ status }: { status: MarketplaceVerifyStatus }) => {
@@ -23,7 +24,9 @@ export const MarketplaceStatusCard = ({ status }: { status: MarketplaceVerifySta
       <p className="text-sm mt-2 text-gray-700 whitespace-pre-line break-words">{status.message}</p>
       {status.hint && <p className="text-xs mt-1 text-gray-500 italic">Hint: {status.hint}</p>}
       {!isHealthy && status.authorizeUrl && (
-        <a href={status.authorizeUrl} className="mt-3 inline-block bg-blue-600 text-white text-xs px-4 py-2 rounded hover:bg-blue-700">Re-authorize Connection</a>
+        <a href={status.authorizeUrl} className="mt-3 inline-block bg-blue-600 text-white text-xs px-4 py-2 rounded hover:bg-blue-700">
+          {status.connectLabel ?? "Connect"}
+        </a>
       )}
     </div>
   );

@@ -9,6 +9,9 @@ import {
   type MasterMarketplace,
 } from "../config/marketplaces";
 import { env } from "./adapters/adapterUtils";
+import { hasStoredTokens } from "./tokenStorage";
+
+const OAUTH_MARKETPLACES = new Set(["etsy", "shopify", "ebay"]);
 
 export function marketplaceEnvConfigured(marketplaceId: string): boolean {
   const cfg = getMarketplaceConfig(marketplaceId);
@@ -49,6 +52,9 @@ export async function loadDbCredentials(
 export async function isMarketplaceConnected(
   marketplaceId: string
 ): Promise<boolean> {
+  if (OAUTH_MARKETPLACES.has(marketplaceId)) {
+    return hasStoredTokens(marketplaceId);
+  }
   if (marketplaceEnvConfigured(marketplaceId)) return true;
   try {
     const [row] = await db

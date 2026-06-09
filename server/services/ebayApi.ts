@@ -4,7 +4,8 @@
  * @see https://developer.ebay.com/api-docs/static/oauth-refresh-token-request.html
  * @see https://developer.ebay.com/api-docs/sell/inventory/overview.html
  */
-import { env, hasEnv } from "./adapters/adapterUtils";
+import { env } from "./adapters/adapterUtils";
+import { hasStoredTokens } from "./tokenStorage";
 
 export type MarketplaceConnectionResult = {
   ok: boolean;
@@ -13,8 +14,6 @@ export type MarketplaceConnectionResult = {
   message: string;
   detail?: unknown;
 };
-
-const EBAY_OAUTH_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.inventory";
 
 export function isEbaySandbox(): boolean {
   return env("EBAY_SANDBOX") === "true";
@@ -26,9 +25,21 @@ export function resolveEbayBaseUrl(): string {
     : "https://api.ebay.com";
 }
 
-/** Publish-ready credentials (matches `marketplaces.ts` envKeys for ebay). */
+/** OAuth-connected: app credentials in env + user tokens in backend storage. */
 export function isEbayConfigured(): boolean {
-  return hasEnv("EBAY_CLIENT_ID", "EBAY_CLIENT_SECRET", "EBAY_REFRESH_TOKEN");
+  return (
+    Boolean(env("EBAY_CLIENT_ID") || env("EBAY_APP_ID")) &&
+    Boolean(env("EBAY_CLIENT_SECRET") || env("EBAY_CERT_ID")) &&
+    hasStoredTokens("ebay")
+  );
+}
+
+export async function refreshEbayAccessToken(
+  fetchImpl: typeof fetch = fetch
+): Promise<string> {
+  const { getValidAccessToken } = await import("./marketplaceTokenService");
+  const tok = await getValidAccessToken("ebay", undefined, fetchImpl);
+  return tok.accessToken;
 }
 
 export function getEbayMarketplaceId(): string {
@@ -39,116 +50,54 @@ export function getEbayCategoryId(): string {
   return env("EBAY_CATEGORY_ID") || "93427";
 }
 
-let cachedToken: { token: string; expiresAt: number } | null = null;
-
 /**
- * Exchange the refresh token for an access token (cached until near expiry).
- * Independent copy from ebayAdapter; adapters migrate here in Phase 2.
- */
-export async function refreshEbayAccessToken(
-  fetchImpl: typeof fetch = fetch
-): Promise<string> {
-  if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) {
-    return cachedToken.token;
-  }
-
-  const clientId = env("EBAY_CLIENT_ID");
-  const clientSecret = env("EBAY_CLIENT_SECRET");
-  const refreshToken = env("EBAY_REFRESH_TOKEN");
-  const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
-
-  const res = await fetchImpl(`${resolveEbayBaseUrl()}/identity/v1/oauth2/token`, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${basic}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: refreshToken,
-      scope: EBAY_OAUTH_SCOPE,
-    }),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`eBay OAuth failed (${res.status}): ${text.slice(0, 200)}`);
-  }
-
-  const data = (await res.json()) as {
-    access_token: string;
-    expires_in: number;
-  };
-  cachedToken = {
-    token: data.access_token,
-    expiresAt: Date.now() + data.expires_in * 1000,
-  };
-  return data.access_token;
-}
-
-/**
- * Verify eBay credentials by performing an OAuth refresh-token exchange.
- * Does not create or modify any listings.
+ * Verify eBay OAuth connection by refreshing the stored token.
  */
 export async function verifyEbayConnection(
   fetchImpl: typeof fetch = fetch
 ): Promise<MarketplaceConnectionResult> {
-  if (!isEbayConfigured()) {
+  const hasAppCreds =
+    Boolean(env("EBAY_CLIENT_ID") || env("EBAY_APP_ID")) &&
+    Boolean(env("EBAY_CLIENT_SECRET") || env("EBAY_CERT_ID"));
+
+  if (!hasAppCreds) {
     return {
       ok: false,
       configured: false,
       status: 0,
       message:
-        "Missing EBAY_CLIENT_ID, EBAY_CLIENT_SECRET, or EBAY_REFRESH_TOKEN — add them to .env and restart the server",
+        "Missing EBAY_CLIENT_ID and EBAY_CLIENT_SECRET — add your eBay app credentials to .env",
     };
   }
 
-  const clientId = env("EBAY_CLIENT_ID");
-  const clientSecret = env("EBAY_CLIENT_SECRET");
-  const refreshToken = env("EBAY_REFRESH_TOKEN");
-  const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
-
-  const res = await fetchImpl(`${resolveEbayBaseUrl()}/identity/v1/oauth2/token`, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${basic}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: refreshToken,
-      scope: EBAY_OAUTH_SCOPE,
-    }),
-  });
-
-  const text = await res.text();
-  let detail: unknown;
-  try {
-    detail = text ? JSON.parse(text) : null;
-  } catch {
-    detail = { raw: text.slice(0, 500) };
+  if (!hasStoredTokens("ebay")) {
+    return {
+      ok: false,
+      configured: false,
+      status: 0,
+      message:
+        "eBay is not connected yet — open /api/ebay/oauth/start to authorize the app",
+    };
   }
 
-  if (!res.ok) {
+  try {
+    await refreshEbayAccessToken(fetchImpl);
+    return {
+      ok: true,
+      configured: true,
+      status: 200,
+      message: `eBay OAuth connected${isEbaySandbox() ? " [sandbox]" : ""}`,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const statusMatch = message.match(/\((\d{3})\)/);
     return {
       ok: false,
       configured: true,
-      status: res.status,
-      message: `eBay OAuth token refresh failed (${res.status})${
-        isEbaySandbox() ? " [sandbox]" : ""
-      }`,
-      detail,
+      status: statusMatch ? Number(statusMatch[1]) : 0,
+      message: `eBay verification failed: ${message}`,
     };
   }
-
-  return {
-    ok: true,
-    configured: true,
-    status: res.status,
-    message: `eBay OAuth token refresh successful${
-      isEbaySandbox() ? " [sandbox]" : ""
-    }`,
-  };
 }
 
 export type EbayInventoryListing = {

@@ -55,7 +55,7 @@ export async function publishToEbay(
   if (!isEbayConfigured()) {
     console.log("[Publish][eBay] dry-run payload:", JSON.stringify(formatted));
     return {
-      message: "eBay OAuth credentials missing — dry run only",
+      message: "eBay not connected — authorize via Settings (dry run only)",
       dryRun: true,
       listingId: `ebay-dry-${Date.now()}`,
     };

@@ -38,6 +38,14 @@ interface MarketplaceDef {
   fields: MarketplaceField[];
 }
 
+const OAUTH_PLATFORM_IDS = new Set(["etsy", "shopify", "ebay"]);
+
+const OAUTH_PLATFORM_LABELS: Record<string, string> = {
+  etsy: "Etsy",
+  shopify: "Shopify",
+  ebay: "eBay",
+};
+
 function mp(
   id: string,
   name: string,
@@ -78,11 +86,7 @@ const MARKETPLACES: MarketplaceDef[] = [
     country: "🇺🇸 United States",
     signupUrl: "https://www.ebay.com/join",
     devUrl: "https://developer.ebay.com",
-    fields: [
-      { key: "appId", label: "App ID (Client ID)", placeholder: "YourApp-XXXX-XXXX-XXXX-XXXX", helpUrl: "https://developer.ebay.com/my/keys" },
-      { key: "certId", label: "Cert ID (Client Secret)", placeholder: "YourCert-XXXX-XXXX-XXXX-XXXX", secret: true },
-      { key: "userToken", label: "User OAuth Token", placeholder: "v^1.1#i^1#f^0#...", secret: true },
-    ],
+    fields: [],
   },
   {
     id: "amazon",
@@ -105,11 +109,7 @@ const MARKETPLACES: MarketplaceDef[] = [
     country: "🇺🇸 United States",
     signupUrl: "https://www.etsy.com/join",
     devUrl: "https://www.etsy.com/developers",
-    fields: [
-      { key: "apiKey", label: "API Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", helpUrl: "https://www.etsy.com/developers/your-apps" },
-      { key: "sharedSecret", label: "Shared Secret", placeholder: "xxxxxxxxxxxxxxxx", secret: true },
-      { key: "accessToken", label: "OAuth Access Token", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", secret: true },
-    ],
+    fields: [],
   },
   {
     id: "shopify",
@@ -118,11 +118,7 @@ const MARKETPLACES: MarketplaceDef[] = [
     country: "🇨🇦 Canada",
     signupUrl: "https://www.shopify.com",
     devUrl: "https://partners.shopify.com",
-    fields: [
-      { key: "storeUrl", label: "Store URL", placeholder: "your-store.myshopify.com" },
-      { key: "apiKey", label: "API Key", placeholder: "xxxxxxxxxxxxxxxxxxxxxxxx", helpUrl: "https://help.shopify.com/en/manual/apps/private-apps" },
-      { key: "apiSecret", label: "API Secret", placeholder: "shpss_xxxxxxxxxxxxxxxx", secret: true },
-    ],
+    fields: [],
   },
   {
     id: "woocommerce",
@@ -376,6 +372,29 @@ const VERIFIABLE_MARKETPLACES = ["shopify", "etsy", "ebay"] as const;
 function MarketplaceStatusSection() {
   const [statuses, setStatuses] = useState<MarketplaceVerifyStatus[]>([]);
   const [loading, setLoading] = useState(true);
+  const [shopifyShop, setShopifyShop] = useState("");
+  const { toast } = useToast();
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get("connected");
+    const marketplace = params.get("marketplace");
+    if (connected === "true" && marketplace) {
+      toast({
+        title: "Connected",
+        description: `${OAUTH_PLATFORM_LABELS[marketplace] ?? marketplace} account linked successfully.`,
+      });
+      window.history.replaceState({}, "", "/settings");
+    } else if (connected === "false" && marketplace) {
+      const reason = params.get("reason");
+      toast({
+        title: "Connection failed",
+        description: reason ?? `Could not connect ${marketplace}.`,
+        variant: "destructive",
+      });
+      window.history.replaceState({}, "", "/settings");
+    }
+  }, [toast]);
 
   useEffect(() => {
     let cancelled = false;
@@ -386,6 +405,12 @@ function MarketplaceStatusSection() {
           try {
             const res = await fetch(`/api/${id}/verify`);
             const json = await res.json();
+            const authorizeUrl =
+              typeof json.authorizeUrl === "string"
+                ? json.authorizeUrl
+                : typeof json.detail?.authorizeUrl === "string"
+                  ? json.detail.authorizeUrl
+                  : `/api/${id}/oauth/start`;
             return {
               marketplace: json.marketplace ?? id,
               ok: json.ok === true,
@@ -393,11 +418,8 @@ function MarketplaceStatusSection() {
               status: typeof json.status === "number" ? json.status : res.status,
               message: json.message ?? "No response from verification endpoint.",
               hint: json.hint,
-              // Shopify nests the OAuth re-authorize URL inside detail
-              authorizeUrl:
-                typeof json.detail?.authorizeUrl === "string"
-                  ? json.detail.authorizeUrl
-                  : undefined,
+              authorizeUrl: json.ok ? undefined : authorizeUrl,
+              connectLabel: `Connect with ${OAUTH_PLATFORM_LABELS[id] ?? id}`,
             };
           } catch {
             return {
@@ -407,6 +429,8 @@ function MarketplaceStatusSection() {
               status: 0,
               message: "Could not reach the server to verify this connection.",
               hint: "Make sure the backend is running, then reload this page.",
+              authorizeUrl: `/api/${id}/oauth/start`,
+              connectLabel: `Connect with ${OAUTH_PLATFORM_LABELS[id] ?? id}`,
             };
           }
         })
@@ -425,7 +449,7 @@ function MarketplaceStatusSection() {
   return (
     <div className="mb-8">
       <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-        Live Connection Status
+        Connect Marketplaces (OAuth)
       </h2>
       {loading ? (
         <div className="flex items-center gap-2 rounded-lg border border-muted bg-muted/10 px-4 py-6 justify-center text-sm text-muted-foreground">
@@ -434,9 +458,42 @@ function MarketplaceStatusSection() {
         </div>
       ) : (
         <div className="space-y-3">
-          {statuses.map((status) => (
-            <MarketplaceStatusCard key={status.marketplace} status={status} />
-          ))}
+          {statuses.map((status) => {
+            const shopifyConnectUrl =
+              shopifyShop.trim().length > 0
+                ? `/api/shopify/oauth/start?shop=${encodeURIComponent(shopifyShop.trim())}`
+                : undefined;
+            const cardStatus: MarketplaceVerifyStatus =
+              status.marketplace === "shopify" && !status.ok
+                ? {
+                    ...status,
+                    authorizeUrl: shopifyConnectUrl,
+                    connectLabel: shopifyConnectUrl
+                      ? status.connectLabel
+                      : undefined,
+                  }
+                : status;
+
+            return (
+              <div key={status.marketplace}>
+                <MarketplaceStatusCard status={cardStatus} />
+                {status.marketplace === "shopify" && !status.ok && (
+                  <div className="mt-2 px-1">
+                    <Label htmlFor="shopify-shop-domain" className="text-xs text-muted-foreground">
+                      Shopify store domain
+                    </Label>
+                    <Input
+                      id="shopify-shop-domain"
+                      className="mt-1"
+                      placeholder="your-store.myshopify.com"
+                      value={shopifyShop}
+                      onChange={(e) => setShopifyShop(e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
@@ -573,8 +630,8 @@ export default function SettingsPage() {
             <div className="flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
               <div className="text-sm text-muted-foreground space-y-1">
-                <p><strong className="text-foreground">You must create your own account on each marketplace first.</strong> The app cannot create accounts for you — each platform requires identity verification, tax info, and a bank account.</p>
-                <p>Once you have an account, get your API credentials from their developer portal and enter them below. Your credentials are stored securely and used only to submit your listings.</p>
+                <p><strong className="text-foreground">Etsy, Shopify, and eBay use secure OAuth.</strong> Click the connect button for each platform — you will be redirected to sign in and approve access. Tokens are stored encrypted on the server and never shown here.</p>
+                <p>For other marketplaces, enter API credentials from their developer portal once you have a seller account.</p>
               </div>
             </div>
           </CardContent>
@@ -597,7 +654,7 @@ export default function SettingsPage() {
         </div>
 
         <div className="space-y-3">
-          {MARKETPLACES.map((def) => (
+          {MARKETPLACES.filter((def) => !OAUTH_PLATFORM_IDS.has(def.id)).map((def) => (
             <MarketplaceCard
               key={def.id}
               def={def}

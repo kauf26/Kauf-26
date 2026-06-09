@@ -7,6 +7,13 @@
 import { randomUUID } from "node:crypto";
 
 import { env, hasEnv } from "./adapters/adapterUtils";
+import { hasStoredTokens } from "./tokenStorage";
+import {
+  getShopifyClientId,
+  getShopifyClientSecret,
+  getShopifyAccessToken,
+  resolveShopifyRedirectUri,
+} from "./shopifyOAuth";
 
 const API_VERSION = "2024-10";
 
@@ -15,8 +22,7 @@ const DEFAULT_OAUTH_SCOPES = ["read_products", "write_products"] as const;
 /** Local dev app origin — override with APP_BASE_URL or SHOPIFY_APP_BASE_URL in .env. */
 const DEFAULT_APP_BASE_URL = "http://localhost:2626";
 
-const SHOPIFY_OAUTH_CALLBACK_PATH = "/api/shopify/oauth/callback";
-const SHOPIFY_OAUTH_AUTHORIZE_PATH = "/api/shopify/oauth/authorize";
+const SHOPIFY_OAUTH_START_PATH = "/api/shopify/oauth/start";
 
 const SCOPE_APPROVAL_RE =
   /merchant approval for ([a-z0-9_]+) scope/gi;
@@ -66,15 +72,14 @@ export class ShopifyScopeApprovalRequiredError extends ShopifyApiError {
           "Re-authorize the app by opening this URL in a browser (store owner must approve):",
           params.authorizeUrl,
           "",
-          "After approval, update SHOPIFY_ACCESS_TOKEN in .env with the new token from your OAuth callback.",
+          "After approval, reconnect via Settings → Connect with Shopify.",
         ].join("\n")
       : [
           `Merchant approval is required for: ${scopeList}.`,
           "Set SHOPIFY_OAUTH_REDIRECT_URI in .env (must match a URL allowed in your Shopify app settings),",
-          `then re-run this command or visit ${resolveShopifyOAuthAuthorizeUrl()} in a browser.`,
+          `then visit ${resolveShopifyOAuthStartUrl()}?shop=your-store.myshopify.com in a browser.`,
           "",
-          "Alternatively, add the missing scopes in Shopify Partners → your app → API access, reinstall on the store,",
-          "and refresh SHOPIFY_ACCESS_TOKEN via client_credentials or OAuth.",
+          "Alternatively, add the missing scopes in Shopify Partners → your app → API access, then reconnect from Settings.",
         ].join("\n");
 
     super(reauthorizeMessage, params.status, params.body);
@@ -96,14 +101,12 @@ export function resolveShopifyAppBaseUrl(): string {
 
 /** OAuth callback URL — explicit env wins, else derived from app base URL. */
 export function resolveShopifyOAuthRedirectUri(): string {
-  const explicit = trimEnv("SHOPIFY_OAUTH_REDIRECT_URI");
-  if (explicit) return explicit;
-  return `${resolveShopifyAppBaseUrl()}${SHOPIFY_OAUTH_CALLBACK_PATH}`;
+  return resolveShopifyRedirectUri();
 }
 
-/** Full URL merchants open to approve missing scopes. */
-export function resolveShopifyOAuthAuthorizeUrl(): string {
-  return `${resolveShopifyAppBaseUrl()}${SHOPIFY_OAUTH_AUTHORIZE_PATH}`;
+/** Full URL merchants open to start OAuth (requires ?shop=). */
+export function resolveShopifyOAuthStartUrl(): string {
+  return `${resolveShopifyAppBaseUrl()}${SHOPIFY_OAUTH_START_PATH}`;
 }
 
 /** Normalize store to `your-store.myshopify.com`. */
@@ -127,35 +130,30 @@ export function resolveShopifyStoreDomain(): string {
   return `${cleaned}.myshopify.com`;
 }
 
-export function loadShopifyConfigFromEnv(): ShopifyConfig {
-  const storeDomain = resolveShopifyStoreDomain();
-  const clientId = trimEnv("SHOPIFY_CLIENT_ID");
-  const clientSecret = trimEnv("SHOPIFY_CLIENT_SECRET");
-  const accessToken = trimEnv("SHOPIFY_ACCESS_TOKEN");
-
+export async function resolveShopifyConfig(
+  fetchImpl: typeof fetch = fetch
+): Promise<ShopifyConfig> {
+  const clientId = getShopifyClientId();
+  const clientSecret = getShopifyClientSecret();
   if (!clientId || !clientSecret) {
     throw new ShopifyApiError(
       "Missing SHOPIFY_CLIENT_ID or SHOPIFY_CLIENT_SECRET in environment",
       0
     );
   }
-  if (!accessToken) {
-    throw new ShopifyApiError(
-      "Missing SHOPIFY_ACCESS_TOKEN in environment (or refresh via client_credentials first)",
-      0
-    );
-  }
+  const { accessToken, shopDomain } = await getShopifyAccessToken(fetchImpl);
+  return { storeDomain: shopDomain, clientId, clientSecret, accessToken };
+}
 
-  return { storeDomain, clientId, clientSecret, accessToken };
+/** Loads OAuth-backed Shopify config from backend token storage. */
+export async function resolveShopifyConfigFromEnv(
+  fetchImpl: typeof fetch = fetch
+): Promise<ShopifyConfig> {
+  return resolveShopifyConfig(fetchImpl);
 }
 
 export function isShopifyEnvConfigured(): boolean {
-  try {
-    loadShopifyConfigFromEnv();
-    return true;
-  } catch {
-    return false;
-  }
+  return isShopifyConfigured();
 }
 
 /** Extract scope names from Shopify 403 bodies (JSON or plain text). */
@@ -240,9 +238,7 @@ function throwShopifyAdminResponseError(
 ): never {
   if (isShopifyScopeApprovalError(res.status, text)) {
     const missing = parseShopifyScopeApprovalError(text);
-    const authorizeUrl = buildShopifyOAuthAuthorizeUrl(config, {
-      scopes: getShopifyOAuthScopes(missing),
-    });
+    const authorizeUrl = `${resolveShopifyOAuthStartUrl()}?shop=${encodeURIComponent(config.storeDomain)}`;
     throw new ShopifyScopeApprovalRequiredError({
       status: res.status,
       body: text,
@@ -340,9 +336,9 @@ async function shopifyAdminRequest(
   const res = await fetchImpl(url, { ...init, headers });
 
   if (res.status === 401 && allowRetry) {
-    const refreshed = await refreshShopifyAccessToken(config, fetchImpl);
+    const { refreshToken } = await import("./marketplaceTokenService");
+    const refreshed = await refreshToken("shopify", undefined, fetchImpl);
     config.accessToken = refreshed.accessToken;
-    process.env.SHOPIFY_ACCESS_TOKEN = refreshed.accessToken;
     return shopifyAdminRequest(config, path, init, fetchImpl, false);
   }
 
@@ -453,52 +449,46 @@ export type MarketplaceConnectionResult = {
  */
 export function isShopifyConfigured(): boolean {
   return (
-    hasEnv("SHOPIFY_ACCESS_TOKEN") &&
-    (hasEnv("SHOPIFY_SHOP_DOMAIN") || hasEnv("SHOPIFY_STORE_NAME"))
+    hasEnv("SHOPIFY_CLIENT_ID", "SHOPIFY_CLIENT_SECRET") &&
+    hasStoredTokens("shopify")
   );
 }
 
-/**
- * Token-only config for Admin API calls. Unlike `loadShopifyConfigFromEnv()`,
- * client ID/secret may be empty (the 401 token-refresh retry just won't apply).
- * Callers should gate on `isShopifyConfigured()` first.
- */
-export function resolveShopifyConfigFromEnv(): ShopifyConfig {
-  return {
-    storeDomain: resolveShopifyStoreDomain(),
-    clientId: env("SHOPIFY_CLIENT_ID"),
-    clientSecret: env("SHOPIFY_CLIENT_SECRET"),
-    accessToken: env("SHOPIFY_ACCESS_TOKEN"),
-  };
-}
-
-/**
- * Verify Shopify credentials with a 1-product Admin API read.
- * Maps scope-approval 403s to an actionable message with the OAuth URL.
- */
 export async function verifyShopifyConnection(
   fetchImpl: typeof fetch = fetch
 ): Promise<MarketplaceConnectionResult> {
-  if (!isShopifyConfigured()) {
+  if (!hasEnv("SHOPIFY_CLIENT_ID", "SHOPIFY_CLIENT_SECRET")) {
     return {
       ok: false,
       configured: false,
       status: 0,
       message:
-        "Missing SHOPIFY_ACCESS_TOKEN or store domain (SHOPIFY_SHOP_DOMAIN / SHOPIFY_STORE_NAME) — add them to .env and restart the server",
+        "Missing SHOPIFY_CLIENT_ID or SHOPIFY_CLIENT_SECRET — add your Shopify app credentials to .env",
     };
   }
 
-  const config = resolveShopifyConfigFromEnv();
+  if (!hasStoredTokens("shopify")) {
+    return {
+      ok: false,
+      configured: false,
+      status: 0,
+      message:
+        "Shopify is not connected yet — use Connect with Shopify on this page (enter your store domain first)",
+    };
+  }
 
   try {
+    const config = await resolveShopifyConfig(fetchImpl);
     const products = await fetchShopifyProducts(config, 1, fetchImpl);
     return {
       ok: true,
       configured: true,
       status: 200,
-      message: `Shopify Admin API verified for ${config.storeDomain}`,
-      detail: { sampleProduct: products[0] ?? null },
+      message: `Connected to Shopify store "${config.storeDomain}"`,
+      detail: {
+        storeDomain: config.storeDomain,
+        sampleProduct: products[0] ?? null,
+      },
     };
   } catch (error) {
     if (error instanceof ShopifyScopeApprovalRequiredError) {

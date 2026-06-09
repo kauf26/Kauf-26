@@ -107,8 +107,8 @@ export const MASTER_MARKETPLACES: MasterMarketplace[] = [
     country: "US",
     apiMethod: "open",
     enabledForPublishing: true,
-    credentialsRequired: ["clientId", "clientSecret", "refreshToken"],
-    envKeys: ["EBAY_CLIENT_ID", "EBAY_CLIENT_SECRET", "EBAY_REFRESH_TOKEN"],
+    credentialsRequired: ["oauthClientId", "oauthClientSecret"],
+    envKeys: ["EBAY_CLIENT_ID", "EBAY_CLIENT_SECRET"],
     implementationStatus: "live",
   },
   {
@@ -119,10 +119,8 @@ export const MASTER_MARKETPLACES: MasterMarketplace[] = [
     apiMethod: "open",
     enabledForPublishing: true,
     credentialsRequired: ["oauthClientId"],
-    // ETSY_CLIENT_ID is the app keystring (doubles as x-api-key). User tokens
-    // are stored backend-side by the /api/etsy/oauth flow, not in env.
     envKeys: ["ETSY_CLIENT_ID"],
-    implementationStatus: "dry-run",
+    implementationStatus: "live",
   },
   {
     id: "flipkart",
@@ -250,11 +248,9 @@ export const MASTER_MARKETPLACES: MasterMarketplace[] = [
     country: "Global",
     apiMethod: "open",
     enabledForPublishing: true,
-    credentialsRequired: ["shopDomain", "accessToken"],
-    // SHOPIFY_STORE_NAME is accepted as an alias for SHOPIFY_SHOP_DOMAIN
-    // (see isShopifyConfigured() in server/services/shopifyApi.ts).
-    envKeys: ["SHOPIFY_SHOP_DOMAIN", "SHOPIFY_ACCESS_TOKEN"],
-    implementationStatus: "dry-run",
+    credentialsRequired: ["oauthClientId", "oauthClientSecret"],
+    envKeys: ["SHOPIFY_CLIENT_ID", "SHOPIFY_CLIENT_SECRET"],
+    implementationStatus: "live",
   },
   {
     id: "stockx",

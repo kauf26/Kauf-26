@@ -3,6 +3,8 @@
  */
 import type { InventoryMarketplaceListing } from "../../shared/schema";
 import { isEtsyConfigured } from "./etsyApi";
+import { isEbayConfigured } from "./ebayApi";
+import { isShopifyConfigured } from "./shopifyApi";
 
 export type InventoryUpdateResult = {
   marketplaceId: string;
@@ -43,7 +45,7 @@ async function updateEbayInventory(
   quantity: number,
   listingId: string | null
 ): Promise<InventoryUpdateResult> {
-  if (!process.env.EBAY_REFRESH_TOKEN?.trim()) {
+  if (!isEbayConfigured()) {
     console.log(
       `[Inventory][eBay] dry-run reviseInventoryItem sku=${sku} qty=${quantity}`
     );
@@ -66,7 +68,7 @@ async function updateShopifyInventory(
   variantId: string | null,
   quantity: number
 ): Promise<InventoryUpdateResult> {
-  if (!process.env.SHOPIFY_ACCESS_TOKEN?.trim()) {
+  if (!isShopifyConfigured()) {
     console.log(
       `[Inventory][Shopify] dry-run inventoryLevelsSet variant=${variantId} qty=${quantity}`
     );
@@ -144,6 +146,19 @@ async function updateAllegroInventory(
   };
 }
 
+function isMarketplaceLive(marketplaceId: string): boolean {
+  switch (marketplaceId) {
+    case "ebay":
+      return isEbayConfigured();
+    case "shopify":
+      return isShopifyConfigured();
+    case "etsy":
+      return isEtsyConfigured();
+    default:
+      return false;
+  }
+}
+
 async function markOutOfStock(
   marketplaceId: string,
   listing: InventoryMarketplaceListing,
@@ -155,7 +170,7 @@ async function markOutOfStock(
   return {
     marketplaceId,
     success: true,
-    dryRun: !process.env.EBAY_REFRESH_TOKEN?.trim(),
+    dryRun: !isMarketplaceLive(marketplaceId),
     message: `${marketplaceId}: quantity 0 / out of stock`,
   };
 }

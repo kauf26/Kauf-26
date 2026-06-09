@@ -11,11 +11,7 @@
  */
 import { createHash, randomBytes } from "node:crypto";
 import { env } from "./adapters/adapterUtils";
-import {
-  loadMarketplaceTokens,
-  saveMarketplaceTokens,
-  type StoredOAuthTokens,
-} from "./tokenStorage";
+import type { StoredOAuthTokens } from "./tokenStorage";
 
 const ETSY_CONNECT_URL = "https://www.etsy.com/oauth/connect";
 const ETSY_TOKEN_URL = "https://api.etsy.com/v3/public/oauth/token";
@@ -214,34 +210,16 @@ export async function fetchEtsyIdentity(
 }
 
 /**
- * Returns a valid access token from backend storage, refreshing (and
- * persisting the rotated refresh token) when expired. Throws when the
- * merchant has not connected Etsy via OAuth yet.
+ * Returns a valid access token from backend storage, refreshing when expired.
  */
 export async function getEtsyAccessToken(
   fetchImpl: typeof fetch = fetch
 ): Promise<{ accessToken: string; shopId?: string; userId?: string }> {
-  const stored = await loadMarketplaceTokens("etsy");
-  if (!stored) {
-    throw new Error(
-      "Etsy is not connected — visit /api/etsy/oauth/start to authorize the app"
-    );
-  }
-
-  if (stored.expiresAt > Date.now() + 60_000) {
-    return {
-      accessToken: stored.accessToken,
-      shopId: stored.shopId,
-      userId: stored.userId,
-    };
-  }
-
-  const refreshed = await refreshEtsyTokens(stored.refreshToken, fetchImpl);
-  const merged: StoredOAuthTokens = { ...refreshed, shopId: stored.shopId };
-  await saveMarketplaceTokens("etsy", merged);
+  const { getValidAccessToken } = await import("./marketplaceTokenService");
+  const tok = await getValidAccessToken("etsy", undefined, fetchImpl);
   return {
-    accessToken: merged.accessToken,
-    shopId: merged.shopId,
-    userId: merged.userId,
+    accessToken: tok.accessToken,
+    shopId: tok.shopId,
+    userId: tok.userId,
   };
 }

@@ -57,7 +57,7 @@ export async function publishToShopify(
   if (!isShopifyConfigured()) {
     return dryRunResult(
       "shopify",
-      "Shopify Admin API credentials missing — dry run only",
+      "Shopify not connected — authorize via Settings (dry run only)",
       formatted
     );
   }
@@ -66,7 +66,7 @@ export async function publishToShopify(
     product: Record<string, unknown>;
   };
 
-  const config = resolveShopifyConfigFromEnv();
+  const config = await resolveShopifyConfigFromEnv(fetchImpl);
   const created = await createShopifyProduct(config, product, fetchImpl);
 
   return {

@@ -12,7 +12,6 @@
 import { env } from "./adapters/adapterUtils";
 import {
   fetchEtsyIdentity,
-  getEtsyAccessToken,
   getEtsyClientId,
 } from "./etsyOAuth";
 import { hasStoredTokens } from "./tokenStorage";
@@ -84,7 +83,8 @@ export async function verifyEtsyConnection(
   }
 
   try {
-    const { accessToken } = await getEtsyAccessToken(fetchImpl);
+    const { getValidAccessToken } = await import("./marketplaceTokenService");
+    const { accessToken } = await getValidAccessToken("etsy", undefined, fetchImpl);
     const identity = await fetchEtsyIdentity(accessToken, fetchImpl);
     return {
       ok: true,
@@ -126,7 +126,12 @@ export async function createEtsyListing(
   listing: Record<string, unknown>,
   fetchImpl: typeof fetch = fetch
 ): Promise<EtsyListingResult> {
-  const { accessToken, shopId: oauthShopId } = await getEtsyAccessToken(fetchImpl);
+  const { getValidAccessToken } = await import("./marketplaceTokenService");
+  const { accessToken, shopId: oauthShopId } = await getValidAccessToken(
+    "etsy",
+    undefined,
+    fetchImpl
+  );
   const shopId = oauthShopId || getEtsyShopId();
   if (!shopId) {
     throw new Error(
