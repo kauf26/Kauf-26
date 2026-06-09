@@ -210,7 +210,7 @@ export default function SelectMarketplaces() {
       )}
       {draft.matchType === "generic" && (
         <p className="text-sm text-amber-300">
-          No exact match found — generic description generated.
+          Here's our match, please review before publishing.
         </p>
       )}
 

@@ -434,7 +434,7 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
         ...result,
         verificationWarning:
           result.message ??
-          'No exact match found – using best guess. You can edit before posting.',
+          "Here's our match, please review before publishing.",
       });
     } catch (err) {
       setError(

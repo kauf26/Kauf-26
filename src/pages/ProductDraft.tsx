@@ -429,7 +429,7 @@ return (
         role="alert"
       >
         <p className="text-sm font-medium text-amber-200">
-          No exact match found — generic description generated.
+          Here's our match, please review before publishing.
         </p>
         <p className="text-xs text-amber-200/70 mt-1">
           Confirm title, brand, price, category, and condition before posting.
