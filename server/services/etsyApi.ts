@@ -24,6 +24,14 @@ export function getEtsySharedSecret(): string {
   return env("ETSY_SHARED_SECRET");
 }
 
+export function getEtsyShopId(): string {
+  return env("ETSY_SHOP_ID");
+}
+
+export function getEtsyTaxonomyId(): number {
+  return Number(env("ETSY_TAXONOMY_ID") || 1);
+}
+
 /** True when both keystring and shared secret are set (ping-level access). */
 export function isEtsyApiKeyConfigured(): boolean {
   return Boolean(getEtsyKeystring() && getEtsySharedSecret());
@@ -91,10 +99,10 @@ async function pingEtsyApi(
   return { ok: res.ok, status: res.status, detail };
 }
 
-/** Step B: exchange the refresh token for an access token (no listing calls). */
-async function refreshEtsyAccessTokenCheck(
+/** Low-level refresh-token exchange; shared by verify and publish paths. */
+async function requestEtsyAccessToken(
   fetchImpl: typeof fetch
-): Promise<{ ok: boolean; status: number; detail: unknown }> {
+): Promise<{ ok: boolean; status: number; detail: unknown; accessToken?: string }> {
   const res = await fetchImpl(ETSY_OAUTH_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -105,7 +113,72 @@ async function refreshEtsyAccessTokenCheck(
     }),
   });
   const detail = parseBody(await res.text());
-  return { ok: res.ok, status: res.status, detail };
+  const accessToken =
+    typeof detail === "object" &&
+    detail !== null &&
+    typeof (detail as { access_token?: unknown }).access_token === "string"
+      ? (detail as { access_token: string }).access_token
+      : undefined;
+  return { ok: res.ok, status: res.status, detail, accessToken };
+}
+
+/** Exchange the refresh token for an access token; throws on failure. */
+export async function refreshEtsyAccessToken(
+  fetchImpl: typeof fetch = fetch
+): Promise<string> {
+  const result = await requestEtsyAccessToken(fetchImpl);
+  if (!result.ok || !result.accessToken) {
+    throw new Error(
+      `Etsy OAuth failed (${result.status}): ${JSON.stringify(result.detail).slice(0, 200)}`
+    );
+  }
+  return result.accessToken;
+}
+
+export type EtsyListingResult = {
+  listingId?: string;
+  raw?: unknown;
+};
+
+/**
+ * Create a draft listing via `POST /application/shops/{shopId}/listings`.
+ * `listing` is the request body (title, description, price, taxonomy_id, ...).
+ */
+export async function createEtsyListing(
+  listing: Record<string, unknown>,
+  fetchImpl: typeof fetch = fetch
+): Promise<EtsyListingResult> {
+  const shopId = getEtsyShopId();
+  if (!shopId) {
+    throw new Error("ETSY_SHOP_ID must be set in the environment");
+  }
+
+  const token = await refreshEtsyAccessToken(fetchImpl);
+  const res = await fetchImpl(
+    `${ETSY_API_BASE}/application/shops/${shopId}/listings`,
+    {
+      method: "POST",
+      headers: buildEtsyApiHeaders({
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      }),
+      body: JSON.stringify(listing),
+    }
+  );
+
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(
+      `Etsy listing create failed (${res.status}): ${text.slice(0, 200)}`
+    );
+  }
+
+  const json = parseBody(text) as { listing_id?: number } | null;
+  return {
+    listingId:
+      json?.listing_id != null ? String(json.listing_id) : undefined,
+    raw: json,
+  };
 }
 
 /**
@@ -150,7 +223,7 @@ export async function verifyEtsyConnection(
     };
   }
 
-  const oauth = await refreshEtsyAccessTokenCheck(fetchImpl);
+  const oauth = await requestEtsyAccessToken(fetchImpl);
   if (!oauth.ok) {
     return {
       ok: false,
