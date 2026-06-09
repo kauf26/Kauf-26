@@ -1,6 +1,5 @@
 /**
- * Shopify adapter — thin layer over `services/shopifyApi.ts`.
- * Owns listing formatting only; credential checks and HTTP live in the service.
+ * Shopify adapter — listing formatting only; publish runs on mobile.
  */
 import type { DraftPublishPayload } from "../../publishToMarketplaces";
 import type { AdapterPublishResult, FetchFn, FormattedListing } from "./types";
@@ -9,13 +8,8 @@ import {
   draftPrice,
   draftSku,
   dryRunResult,
-  env,
 } from "./adapterUtils";
-import {
-  createShopifyProduct,
-  isShopifyConfigured as isShopifyServiceConfigured,
-  resolveShopifyConfigFromEnv,
-} from "../shopifyApi";
+import { isShopifyConfigured as isShopifyServiceConfigured } from "../shopifyApi";
 
 export function formatShopifyListing(
   draft: DraftPublishPayload
@@ -23,7 +17,7 @@ export function formatShopifyListing(
   const price = draftPrice(draft).toFixed(2);
   return {
     marketplace: "shopify",
-    shopDomain: env("SHOPIFY_SHOP_DOMAIN") || env("SHOPIFY_STORE_NAME"),
+    shopDomain: "",
     sku: draftSku(draft),
     imageCount: draft.images?.length ?? 0,
     apiBody: {
@@ -52,28 +46,11 @@ export function isShopifyConfigured(): boolean {
 
 export async function publishToShopify(
   formatted: FormattedListing,
-  fetchImpl: FetchFn = fetch
+  _fetchImpl: FetchFn = fetch
 ): Promise<AdapterPublishResult> {
-  if (!isShopifyConfigured()) {
-    return dryRunResult(
-      "shopify",
-      "Shopify not connected — authorize via Settings (dry run only)",
-      formatted
-    );
-  }
-
-  const { product } = formatted.apiBody as {
-    product: Record<string, unknown>;
-  };
-
-  const config = await resolveShopifyConfigFromEnv(fetchImpl);
-  const created = await createShopifyProduct(config, product, fetchImpl);
-
-  return {
-    message: "Shopify draft product created",
-    listingId: String(created.id),
-    listingUrl: `https://${config.storeDomain}/admin/products/${created.id}`,
-    account: config.storeDomain,
-    dryRun: false,
-  };
+  return dryRunResult(
+    "shopify",
+    "Shopify publish is mobile-only — connect in the app and publish from your device",
+    formatted
+  );
 }

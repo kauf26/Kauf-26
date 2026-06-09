@@ -36,6 +36,7 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "scheme": "kauf26",
     "plugins": [
       "expo-camera",
       "expo-image-picker",

@@ -372,7 +372,6 @@ const VERIFIABLE_MARKETPLACES = ["shopify", "etsy", "ebay"] as const;
 function MarketplaceStatusSection() {
   const [statuses, setStatuses] = useState<MarketplaceVerifyStatus[]>([]);
   const [loading, setLoading] = useState(true);
-  const [shopifyShop, setShopifyShop] = useState("");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -405,21 +404,16 @@ function MarketplaceStatusSection() {
           try {
             const res = await fetch(`/api/${id}/verify`);
             const json = await res.json();
-            const authorizeUrl =
-              typeof json.authorizeUrl === "string"
-                ? json.authorizeUrl
-                : typeof json.detail?.authorizeUrl === "string"
-                  ? json.detail.authorizeUrl
-                  : `/api/${id}/oauth/start`;
+            const authorizeUrl = undefined;
             return {
               marketplace: json.marketplace ?? id,
               ok: json.ok === true,
               configured: json.configured === true,
               status: typeof json.status === "number" ? json.status : res.status,
               message: json.message ?? "No response from verification endpoint.",
-              hint: json.hint,
-              authorizeUrl: json.ok ? undefined : authorizeUrl,
-              connectLabel: `Connect with ${OAUTH_PLATFORM_LABELS[id] ?? id}`,
+              hint: json.hint ?? "Use the mobile app Connections tab to connect and verify.",
+              authorizeUrl,
+              connectLabel: undefined,
             };
           } catch {
             return {
@@ -428,9 +422,9 @@ function MarketplaceStatusSection() {
               configured: false,
               status: 0,
               message: "Could not reach the server to verify this connection.",
-              hint: "Make sure the backend is running, then reload this page.",
-              authorizeUrl: `/api/${id}/oauth/start`,
-              connectLabel: `Connect with ${OAUTH_PLATFORM_LABELS[id] ?? id}`,
+              hint: "Use the mobile app Connections tab to connect and verify.",
+              authorizeUrl: undefined,
+              connectLabel: undefined,
             };
           }
         })
@@ -449,8 +443,11 @@ function MarketplaceStatusSection() {
   return (
     <div className="mb-8">
       <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-        Connect Marketplaces (OAuth)
+        Marketplace Status (mobile app)
       </h2>
+      <p className="text-sm text-muted-foreground mb-4">
+        Etsy, Shopify, and eBay connect in the mobile app only. Tokens are stored in SecureStore on your device — not on this server.
+      </p>
       {loading ? (
         <div className="flex items-center gap-2 rounded-lg border border-muted bg-muted/10 px-4 py-6 justify-center text-sm text-muted-foreground">
           <Loader2 className="w-4 h-4 animate-spin" />
@@ -458,42 +455,9 @@ function MarketplaceStatusSection() {
         </div>
       ) : (
         <div className="space-y-3">
-          {statuses.map((status) => {
-            const shopifyConnectUrl =
-              shopifyShop.trim().length > 0
-                ? `/api/shopify/oauth/start?shop=${encodeURIComponent(shopifyShop.trim())}`
-                : undefined;
-            const cardStatus: MarketplaceVerifyStatus =
-              status.marketplace === "shopify" && !status.ok
-                ? {
-                    ...status,
-                    authorizeUrl: shopifyConnectUrl,
-                    connectLabel: shopifyConnectUrl
-                      ? status.connectLabel
-                      : undefined,
-                  }
-                : status;
-
-            return (
-              <div key={status.marketplace}>
-                <MarketplaceStatusCard status={cardStatus} />
-                {status.marketplace === "shopify" && !status.ok && (
-                  <div className="mt-2 px-1">
-                    <Label htmlFor="shopify-shop-domain" className="text-xs text-muted-foreground">
-                      Shopify store domain
-                    </Label>
-                    <Input
-                      id="shopify-shop-domain"
-                      className="mt-1"
-                      placeholder="your-store.myshopify.com"
-                      value={shopifyShop}
-                      onChange={(e) => setShopifyShop(e.target.value)}
-                    />
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {statuses.map((status) => (
+            <MarketplaceStatusCard key={status.marketplace} status={status} />
+          ))}
         </div>
       )}
     </div>

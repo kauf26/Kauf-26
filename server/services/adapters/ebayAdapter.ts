@@ -11,7 +11,6 @@ import {
   getEbayMarketplaceId,
   isEbayConfigured as isEbayServiceConfigured,
   isEbaySandbox,
-  publishEbayInventoryListing,
   type EbayInventoryListing,
 } from "../ebayApi";
 
@@ -50,34 +49,11 @@ export function isEbayConfigured(): boolean {
 
 export async function publishToEbay(
   formatted: FormattedListing,
-  fetchImpl: FetchFn = fetch
+  _fetchImpl: FetchFn = fetch
 ): Promise<AdapterPublishResult> {
-  if (!isEbayConfigured()) {
-    console.log("[Publish][eBay] dry-run payload:", JSON.stringify(formatted));
-    return {
-      message: "eBay not connected — authorize via Settings (dry run only)",
-      dryRun: true,
-      listingId: `ebay-dry-${Date.now()}`,
-    };
-  }
-
-  const result = await publishEbayInventoryListing(
-    formatted as unknown as EbayInventoryListing,
-    fetchImpl
-  );
-
-  // Only published offers (not bare offer IDs) have a public item page.
-  const itemHost = isEbaySandbox() ? "sandbox.ebay.com" : "www.ebay.com";
-  const listingUrl =
-    result.message === "eBay listing published"
-      ? `https://${itemHost}/itm/${result.listingId}`
-      : undefined;
-
   return {
-    listingId: result.listingId,
-    listingUrl,
-    account: getEbayMarketplaceId(),
-    message: result.message,
-    dryRun: false,
+    message: "eBay publish is mobile-only — connect in the app and publish from your device",
+    dryRun: true,
+    listingId: `ebay-mobile-${Date.now()}`,
   };
 }

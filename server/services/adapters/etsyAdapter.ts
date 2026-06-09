@@ -11,7 +11,6 @@ import {
   dryRunResult,
 } from "./adapterUtils";
 import {
-  createEtsyListing,
   getEtsyShopId,
   getEtsyTaxonomyId,
   isEtsyConfigured as isEtsyServiceConfigured,
@@ -51,26 +50,11 @@ export function isEtsyConfigured(): boolean {
 
 export async function publishToEtsy(
   formatted: FormattedListing,
-  fetchImpl: FetchFn = fetch
+  _fetchImpl: FetchFn = fetch
 ): Promise<AdapterPublishResult> {
-  if (!isEtsyConfigured()) {
-    return dryRunResult(
-      "etsy",
-      "Etsy not connected — authorize via /api/etsy/oauth/start (dry run only)",
-      formatted
-    );
-  }
-
-  const listing = (formatted.apiBody ?? formatted) as Record<string, unknown>;
-  const created = await createEtsyListing(listing, fetchImpl);
-
-  return {
-    message: "Etsy draft listing created",
-    listingId: created.listingId,
-    listingUrl: created.listingId
-      ? `https://www.etsy.com/listing/${created.listingId}`
-      : undefined,
-    account: created.shopId ? `Etsy shop ${created.shopId}` : undefined,
-    dryRun: false,
-  };
+  return dryRunResult(
+    "etsy",
+    "Etsy publish is mobile-only — connect in the app and publish from your device",
+    formatted
+  );
 }

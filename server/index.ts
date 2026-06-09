@@ -52,12 +52,8 @@ import {
   type MarketplaceConnectionResult,
 } from "./services/ebayApi";
 import { verifyEtsyConnection } from "./services/etsyApi";
-import etsyOAuthRoutes from "./etsyOAuthRoutes";
-import shopifyOAuthRoutes from "./shopifyOAuthRoutes";
-import ebayOAuthRoutes from "./ebayOAuthRoutes";
-import { primeTokenCache } from "./services/tokenStorage";
-import { startMarketplaceTokenRefreshLoop } from "./services/marketplaceTokenService";
 import { verifyShopifyConnection } from "./services/shopifyApi";
+import { getMarketplaceOAuthConfigs } from "./config/oauthConfig";
 import {
   type VisionConfidence,
   type VisionPerImage,
@@ -1129,26 +1125,9 @@ async function runIdentifyPipeline(
      }
    };
 
-   console.log("💾 [5/5] Saving draft to database...");
+   console.log("📦 [5/5] Building stateless identify response (no DB persist)...");
 
-   // Save to database using your existing productRoutes logic
-   const saveResponse = await fetch(`http://localhost:${PORT}/api/drafts`, {
-     method: 'POST',
-     headers: { 'Content-Type': 'application/json' },
-     body: JSON.stringify(draftData)
-   });
-
-   if (!saveResponse.ok) {
-     throw new Error(`Failed to save draft: ${saveResponse.statusText}`);
-   }
-
-   const savedDraft = await saveResponse.json();
-   const draftId = savedDraft.id ?? savedDraft;
-   console.log("✅ Draft saved successfully with ID:", draftId);
-
-   const publishJobId = requiresManualReview
-     ? null
-     : await prepareDraftPublishing(Number(draftId));
+   const publishJobId = null;
 
    // Normalized response for ProductDraft / sessionStorage (Task A)
    const capturedImage = draftImages[0] ?? allImageDataUrls[0];
@@ -1169,7 +1148,8 @@ async function runIdentifyPipeline(
 
    res.json({
      success: true,
-     draftId,
+     draftId: null,
+     draftPreview: draftData,
      imagesProcessed: imageInputs.length,
      sources: visionSources,
      publishJobId,
@@ -1296,28 +1276,13 @@ function verifyHint(
 ): string | undefined {
   if (result.ok) return undefined;
   if (!result.configured) {
-    if (marketplace === "etsy") {
-      return "Click Connect with Etsy below (only ETSY_CLIENT_ID is needed in .env).";
-    }
-    if (marketplace === "shopify") {
-      return "Enter your store domain and click Connect with Shopify below.";
-    }
-    if (marketplace === "ebay") {
-      return "Click Connect with eBay below (EBAY_CLIENT_ID and EBAY_CLIENT_SECRET in .env).";
+    if (marketplace === "etsy" || marketplace === "shopify" || marketplace === "ebay") {
+      return "Connect this marketplace in the mobile app (OAuth tokens stay on your device).";
     }
     return "Add the missing environment variables to .env and restart the server.";
   }
   if (result.status === 401) {
-    if (marketplace === "etsy") {
-      return "Authentication failed — click Connect with Etsy to re-authorize.";
-    }
-    if (marketplace === "shopify") {
-      return "Authentication failed — reconnect Shopify from Settings.";
-    }
-    if (marketplace === "ebay") {
-      return "Authentication failed — click Connect with eBay to re-authorize.";
-    }
-    return "Authentication failed — re-run the OAuth connect flow from Settings.";
+    return "Re-connect in the mobile app — tokens are stored on your device only.";
   }
   if (result.status === 403) {
     return "Permission denied — the app likely needs re-authorization or additional API scopes.";
@@ -1356,16 +1321,10 @@ function sendVerifyResult(
 }
 
 function resolveVerifyAuthorizeUrl(
-  marketplace: string,
+  _marketplace: string,
   result: MarketplaceConnectionResult
 ): string | undefined {
   if (result.ok) return undefined;
-  const detailUrl = (result.detail as { authorizeUrl?: string } | undefined)
-    ?.authorizeUrl;
-  if (typeof detailUrl === "string") return detailUrl;
-  if (marketplace === "etsy" || marketplace === "ebay") {
-    return `/api/${marketplace}/oauth/start`;
-  }
   return undefined;
 }
 
@@ -1397,6 +1356,10 @@ app.get("/api/shopify/verify", makeVerifyRoute("shopify", verifyShopifyConnectio
 app.get("/api/etsy/verify", makeVerifyRoute("etsy", verifyEtsyConnection));
 app.get("/api/ebay/verify", makeVerifyRoute("ebay", verifyEbayConnection));
 
+app.get("/api/marketplaces/oauth-config", (_req, res) => {
+  res.json({ marketplaces: getMarketplaceOAuthConfigs() });
+});
+
 // -------------------- SERVER SETUP --------------------
 const server = createServer(app);
 
@@ -1404,11 +1367,6 @@ const server = createServer(app);
  await setupAuth(app);
  registerAuthRoutes(app);
  app.use("/api/onboarding", onboardingRoutes);
- // Etsy OAuth (PKCE) — mounted after setupAuth so req.session is available
- app.use("/api/etsy/oauth", etsyOAuthRoutes);
- app.use("/api/shopify/oauth", shopifyOAuthRoutes);
- app.use("/api/ebay/oauth", ebayOAuthRoutes);
- await primeTokenCache(["etsy", "shopify", "ebay"]);
 
  console.log("DEBUG: About to call registerRoutes");
  await registerRoutes(app);
@@ -1425,12 +1383,10 @@ const server = createServer(app);
    console.log(`   - POST /api/identify (1–5 images → OpenAI vision merge → scrape → draft)`);
    console.log(`   - POST /api/catalog/scrape (JSON { query } → masterScraper)`);
    console.log(`   - GET  /api/health`);
-   console.log(`   - GET  /api/etsy/verify (OAuth token + shop check)`);
-   console.log(`   - GET  /api/etsy/oauth/start (connect Etsy account)`);
-   console.log(`   - GET  /api/shopify/verify (Admin API + scope check)`);
-   console.log(`   - GET  /api/ebay/verify (OAuth refresh-token check)`);
-   console.log(`   - GET  /api/shopify/oauth/start?shop=… (connect Shopify store)`);
-   console.log(`   - GET  /api/ebay/oauth/start (connect eBay account)`);
+   console.log(`   - GET  /api/marketplaces/oauth-config (mobile OAuth metadata)`);
+   console.log(`   - GET  /api/etsy/verify (mobile-only — config check)`);
+   console.log(`   - GET  /api/shopify/verify (mobile-only — config check)`);
+   console.log(`   - GET  /api/ebay/verify (mobile-only — config check)`);
    console.log(`   - GET/POST /api/drafts (productsRoutes → PostgreSQL)`);
    console.log(`   - GET  /api/drafts/ready-for-posting`);
    console.log(`   - POST /api/drafts/:id/post-to-marketplaces`);
@@ -1445,6 +1401,5 @@ const server = createServer(app);
    console.log(`   - POST /api/inventory/webhooks/:marketplace`);
    startMarketplaceWorker();
    startInventoryPoller();
-   startMarketplaceTokenRefreshLoop();
  });
 })();

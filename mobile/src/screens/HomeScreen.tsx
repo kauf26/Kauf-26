@@ -14,6 +14,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { API_BASE_URL } from '../services/api';
+import { publishListing } from '../services/marketplaceClients';
+import { hasPlatformTokens } from '../services/secureTokenStore';
+
+const MOBILE_PUBLISH_PLATFORMS = new Set(['etsy', 'shopify', 'ebay']);
 
 const MARKETPLACES = [
   { id: 'aliexpress', name: 'AliExpress', icon: 'pricetag' as const, color: '#e62e04' },
@@ -145,31 +149,50 @@ export default function HomeScreen() {
     }
 
     setIsListing(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/listings`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title,
-          description,
-          price: parseFloat(price),
-          marketplaces: selectedMarketplaces,
-          imageUrl: image,
-        }),
-      });
+    const results: string[] = [];
+    const errors: string[] = [];
 
-      if (response.ok) {
-        Alert.alert('Success', `Listing created on ${selectedMarketplaces.length} marketplace(s)!`);
-        setImage(null);
-        setTitle('');
-        setDescription('');
-        setPrice('');
-        setSelectedMarketplaces([]);
+    try {
+      for (const marketplace of selectedMarketplaces) {
+        if (MOBILE_PUBLISH_PLATFORMS.has(marketplace)) {
+          const connected = await hasPlatformTokens(marketplace);
+          if (!connected) {
+            errors.push(`${marketplace}: not connected — open Connections tab`);
+            continue;
+          }
+          const result = await publishListing(marketplace, {
+            title,
+            description,
+            price: parseFloat(price),
+            sku: `kauf-${Date.now()}`,
+          });
+          if (result.success) {
+            results.push(`${marketplace}: ${result.message}${result.listingUrl ? ` (${result.listingUrl})` : ''}`);
+          } else {
+            errors.push(`${marketplace}: ${result.message}`);
+          }
+        } else {
+          errors.push(`${marketplace}: publish from web app or connect via mobile-supported platforms only`);
+        }
+      }
+
+      if (results.length > 0) {
+        Alert.alert(
+          errors.length ? 'Partial success' : 'Success',
+          [...results, ...errors].join('\n\n')
+        );
+        if (errors.length === 0) {
+          setImage(null);
+          setTitle('');
+          setDescription('');
+          setPrice('');
+          setSelectedMarketplaces([]);
+        }
       } else {
-        throw new Error('Failed to create listing');
+        Alert.alert('Publish failed', errors.join('\n\n'));
       }
     } catch (error) {
-      Alert.alert('Error', 'Failed to create listing. Please try again.');
+      Alert.alert('Error', error instanceof Error ? error.message : 'Failed to publish');
     } finally {
       setIsListing(false);
     }

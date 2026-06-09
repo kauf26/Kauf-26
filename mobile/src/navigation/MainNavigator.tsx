@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from '../screens/HomeScreen';
 import ListingsScreen from '../screens/ListingsScreen';
 import SalesScreen from '../screens/SalesScreen';
+import ConnectionsScreen from '../screens/ConnectionsScreen';
 import ToolsScreen from '../screens/ToolsScreen';
 
 const Tab = createBottomTabNavigator();
@@ -21,6 +22,8 @@ export default function MainNavigator() {
             iconName = focused ? 'list' : 'list-outline';
           } else if (route.name === 'Sales') {
             iconName = focused ? 'cash' : 'cash-outline';
+          } else if (route.name === 'Connections') {
+            iconName = focused ? 'link' : 'link-outline';
           } else if (route.name === 'Tools') {
             iconName = focused ? 'construct' : 'construct-outline';
           } else {
@@ -62,6 +65,11 @@ export default function MainNavigator() {
         name="Sales" 
         component={SalesScreen}
         options={{ title: 'Sales & Fees' }}
+      />
+      <Tab.Screen
+        name="Connections"
+        component={ConnectionsScreen}
+        options={{ title: 'Connections' }}
       />
       <Tab.Screen 
         name="Tools" 

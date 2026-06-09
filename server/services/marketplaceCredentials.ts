@@ -1,5 +1,6 @@
 /**
- * Credential resolution: env vars first, then marketplace_credentials table.
+ * Credential resolution: env vars for app OAuth config only.
+ * Platform user tokens are stored on mobile devices (SecureStore), not in the DB.
  */
 import { db } from "../db";
 import { marketplaceCredentials } from "../../shared/schema";
@@ -9,9 +10,8 @@ import {
   type MasterMarketplace,
 } from "../config/marketplaces";
 import { env } from "./adapters/adapterUtils";
-import { hasStoredTokens } from "./tokenStorage";
 
-const OAUTH_MARKETPLACES = new Set(["etsy", "shopify", "ebay"]);
+const MOBILE_OAUTH_PLATFORMS = new Set(["etsy", "shopify", "ebay"]);
 
 export function marketplaceEnvConfigured(marketplaceId: string): boolean {
   const cfg = getMarketplaceConfig(marketplaceId);
@@ -37,6 +37,7 @@ export function getMarketplaceEnvSnapshot(
 export async function loadDbCredentials(
   marketplaceId: string
 ): Promise<Record<string, string> | null> {
+  if (MOBILE_OAUTH_PLATFORMS.has(marketplaceId)) return null;
   try {
     const [row] = await db
       .select()
@@ -52,8 +53,8 @@ export async function loadDbCredentials(
 export async function isMarketplaceConnected(
   marketplaceId: string
 ): Promise<boolean> {
-  if (OAUTH_MARKETPLACES.has(marketplaceId)) {
-    return hasStoredTokens(marketplaceId);
+  if (MOBILE_OAUTH_PLATFORMS.has(marketplaceId)) {
+    return false;
   }
   if (marketplaceEnvConfigured(marketplaceId)) return true;
   try {
