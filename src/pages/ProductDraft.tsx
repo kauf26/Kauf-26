@@ -111,6 +111,16 @@ function formatMarketAvg(value: string): string {
   return `$${formatPrice(value)}`;
 }
 
+/** Mean of the usable scraped valuations (eBay / Allegro), or "" if none. */
+function scrapedMarketAverage(product: ProductDraftState): string {
+  const values = [product.ebayAverage, product.allegroAverage]
+    .map((v) => parseFloat(v))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (values.length === 0) return "";
+  const avg = values.reduce((sum, n) => sum + n, 0) / values.length;
+  return avg.toFixed(2);
+}
+
 function normalizeConditionForSelect(condition: string): string {
   const c = condition.trim().toLowerCase();
   if (!c || c === "n/a") return "Used";
@@ -554,7 +564,15 @@ return (
             <input className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-700" value={product.brand} onChange={e => update("brand", e.target.value)} />
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-medium text-zinc-400">Target Listing Price ($)</label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-xs font-medium text-zinc-400">Your Price ($)</label>
+              <span className="text-xs text-zinc-500 whitespace-nowrap">
+                Market Average:{" "}
+                <span className="font-semibold text-emerald-400">
+                  {formatMarketAvg(scrapedMarketAverage(product))}
+                </span>
+              </span>
+            </div>
             <input
               className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-700"
               value={isPriceUnset(product.price) ? "" : product.price}
@@ -567,6 +585,9 @@ return (
                     : "0.00"
               }
             />
+            <p className="text-[11px] text-zinc-500">
+              Adjust your price based on market trends.
+            </p>
             {priceHint(product) && (
               <p className="text-xs text-amber-400/90">{priceHint(product)}</p>
             )}
