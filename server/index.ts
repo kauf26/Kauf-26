@@ -48,17 +48,15 @@ import {
   type IdentifyImageInput,
 } from "./identifyImages";
 import {
-  isEtsyApiKeyConfigured,
-  verifyEtsyApiConnection,
-} from "./services/etsyApi";
+  verifyEbayConnection,
+  type MarketplaceConnectionResult,
+} from "./services/ebayApi";
+import { verifyEtsyConnection } from "./services/etsyApi";
 import {
   buildShopifyOAuthAuthorizeUrl,
-  fetchShopifyProducts,
   getShopifyOAuthScopes,
-  isShopifyEnvConfigured,
   loadShopifyConfigFromEnv,
-  resolveShopifyOAuthAuthorizeUrl,
-  ShopifyScopeApprovalRequiredError,
+  verifyShopifyConnection,
 } from "./services/shopifyApi";
 import {
   type VisionConfidence,
@@ -1289,56 +1287,79 @@ app.get('/api/health', (req: Request, res: Response) => {
  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// -------------------- SHOPIFY API VERIFY + OAUTH RE-AUTHORIZE --------------------
-app.get("/api/shopify/verify", async (_req: Request, res: Response) => {
-  try {
-    if (!isShopifyEnvConfigured()) {
-      return res.status(503).json({
-        connected: false,
-        configured: false,
-        message:
-          "Set SHOPIFY_STORE_NAME, SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET, and SHOPIFY_ACCESS_TOKEN in .env",
-      });
-    }
+// -------------------- MARKETPLACE VERIFY (standardized MarketplaceConnectionResult) --------------------
 
-    const config = loadShopifyConfigFromEnv();
-    const products = await fetchShopifyProducts(config, 1);
-    return res.json({
-      connected: true,
-      configured: true,
-      store: config.storeDomain,
-      productCountSample: products.length,
-      message:
-        products.length > 0
-          ? `Connected — sample product: ${products[0]!.title}`
-          : "Connected — store has no products yet",
-    });
-  } catch (error) {
-    if (error instanceof ShopifyScopeApprovalRequiredError) {
-      return res.status(403).json({
-        connected: false,
-        configured: isShopifyEnvConfigured(),
-        scopeApprovalRequired: true,
-        missingScopes: error.missingScopes,
-        message: error.reauthorizeMessage,
-        authorizeUrl: error.authorizeUrl,
-        reauthorizeUrl: resolveShopifyOAuthAuthorizeUrl(),
-      });
-    }
-
-    console.error("[Shopify] verify connection error:", error);
-    const status =
-      error instanceof Error && "status" in error
-        ? Number((error as { status: number }).status) || 500
-        : 500;
-    return res.status(status > 0 ? status : 500).json({
-      connected: false,
-      configured: isShopifyEnvConfigured(),
-      message:
-        error instanceof Error ? error.message : "Shopify verification failed",
-    });
+/** Dashboard-friendly hint for common failure modes. */
+function verifyHint(result: MarketplaceConnectionResult): string | undefined {
+  if (result.ok) return undefined;
+  if (!result.configured) {
+    return "Add the missing environment variables to .env and restart the server.";
   }
-});
+  if (result.status === 401) {
+    return "Authentication failed — the credentials are invalid or the token has expired. Update .env and restart.";
+  }
+  if (result.status === 403) {
+    return "Permission denied — the app likely needs re-authorization or additional API scopes.";
+  }
+  if (result.status === 400) {
+    return "The marketplace rejected the request — the refresh token may be expired or revoked. Re-run the OAuth flow.";
+  }
+  return undefined;
+}
+
+function sendVerifyResult(
+  res: Response,
+  marketplace: string,
+  result: MarketplaceConnectionResult
+): Response {
+  const httpStatus = result.ok
+    ? 200
+    : !result.configured
+      ? 503
+      : result.status >= 400 && result.status < 600
+        ? result.status
+        : 502;
+
+  return res.status(httpStatus).json({
+    marketplace,
+    ok: result.ok,
+    // `connected` kept as an alias of `ok` for older consumers
+    connected: result.ok,
+    configured: result.configured,
+    status: result.status,
+    message: result.message,
+    hint: verifyHint(result),
+    detail: result.detail,
+  });
+}
+
+function makeVerifyRoute(
+  marketplace: string,
+  verify: () => Promise<MarketplaceConnectionResult>
+) {
+  return async (_req: Request, res: Response) => {
+    try {
+      return sendVerifyResult(res, marketplace, await verify());
+    } catch (error) {
+      console.error(`[${marketplace}] verify connection error:`, error);
+      return res.status(500).json({
+        marketplace,
+        ok: false,
+        connected: false,
+        configured: true,
+        status: 500,
+        message:
+          error instanceof Error
+            ? error.message
+            : `${marketplace} verification failed`,
+      });
+    }
+  };
+}
+
+app.get("/api/shopify/verify", makeVerifyRoute("shopify", verifyShopifyConnection));
+app.get("/api/etsy/verify", makeVerifyRoute("etsy", verifyEtsyConnection));
+app.get("/api/ebay/verify", makeVerifyRoute("ebay", verifyEbayConnection));
 
 app.get("/api/shopify/oauth/authorize", (req: Request, res: Response) => {
   try {
@@ -1420,30 +1441,6 @@ app.get("/api/shopify/oauth/callback", async (req: Request, res: Response) => {
   }
 });
 
-// -------------------- ETSY API VERIFY (x-api-key: keystring:shared_secret) --------------------
-app.get("/api/etsy/verify", async (_req: Request, res: Response) => {
-  try {
-    const result = await verifyEtsyApiConnection();
-    const statusCode = result.ok ? 200 : result.status > 0 ? result.status : 503;
-    return res.status(statusCode).json({
-      connected: result.ok,
-      configured: isEtsyApiKeyConfigured(),
-      status: result.status,
-      applicationId: result.applicationId,
-      message: result.message,
-      ...(result.ok ? {} : { detail: result.raw }),
-    });
-  } catch (error) {
-    console.error("[Etsy] verify connection error:", error);
-    return res.status(500).json({
-      connected: false,
-      configured: isEtsyApiKeyConfigured(),
-      message:
-        error instanceof Error ? error.message : "Etsy verification failed",
-    });
-  }
-});
-
 // -------------------- SERVER SETUP --------------------
 const server = createServer(app);
 
@@ -1467,8 +1464,9 @@ const server = createServer(app);
    console.log(`   - POST /api/identify (1–5 images → OpenAI vision merge → scrape → draft)`);
    console.log(`   - POST /api/catalog/scrape (JSON { query } → masterScraper)`);
    console.log(`   - GET  /api/health`);
-   console.log(`   - GET  /api/etsy/verify (Etsy x-api-key ping)`);
+   console.log(`   - GET  /api/etsy/verify (x-api-key ping + OAuth refresh)`);
    console.log(`   - GET  /api/shopify/verify (Admin API + scope check)`);
+   console.log(`   - GET  /api/ebay/verify (OAuth refresh-token check)`);
    console.log(`   - GET  /api/shopify/oauth/authorize (redirect to approve scopes)`);
    console.log(`   - GET/POST /api/drafts (productsRoutes → PostgreSQL)`);
    console.log(`   - GET  /api/drafts/ready-for-posting`);
