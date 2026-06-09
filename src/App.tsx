@@ -22,6 +22,7 @@ import PricingPage from "./pages/pricing";
 import Terms from "./pages/terms";
 import Privacy from "./pages/privacy";
 import SettingsPage from "./pages/settings";
+import DepopAnalyticsPage from "./pages/analytics-depop";
 import { IdentificationResultsPage } from "./pages/IdentificationResults";
 
 function App() {
@@ -36,6 +37,7 @@ function App() {
               <Route path="/select-marketplaces" component={SelectMarketPlaces} />
               <Route path="/identification-results" component={IdentificationResultsPage} />
               <Route path="/dashboard" component={Dashboard} />
+              <Route path="/analytics/depop" component={DepopAnalyticsPage} />
               <Route path="/inventory" component={Inventory} />
               <Route path="/listings" component={Listings} />
               <Route path="/sales" component={Sales} />

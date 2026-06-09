@@ -1,0 +1,26 @@
+# Kauf26 Shopify app — local development (switch to kaufai.com before production deploy)
+# https://shopify.dev/docs/apps/build/cli-for-apps/app-configuration
+
+name = "Kauf26"
+client_id = "0be52ab2e03e1153cf127dcdcc91c5ff"
+application_url = "http://localhost:2626"
+embedded = false
+
+[access_scopes]
+scopes = "read_products,write_products"
+
+[auth]
+redirect_urls = [
+  "http://localhost:2626/api/shopify/oauth/callback",
+]
+
+[webhooks]
+api_version = "2024-10"
+
+[pos]
+embedded = false
+
+[build]
+automatically_update_urls_on_dev = false
+dev_store_url = "kaufai.myshopify.com"
+include_config_on_deploy = true

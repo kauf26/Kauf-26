@@ -1,25 +1,43 @@
 /**
- * Etsy Open API v3 — shared x-api-key header (keystring:shared_secret).
+ * Etsy Open API v3 service layer — shared x-api-key header, credential checks,
+ * and connection verify (ping + OAuth refresh).
  * @see https://developers.etsy.com/documentation/essentials/requests
  */
+import { env, hasEnv } from "./adapters/adapterUtils";
 
 const ETSY_API_BASE = "https://api.etsy.com/v3";
+const ETSY_OAUTH_TOKEN_URL = "https://api.etsy.com/v3/public/oauth/token";
 
-function trimEnv(key: string): string {
-  return String(process.env[key] ?? "").trim();
-}
+export type MarketplaceConnectionResult = {
+  ok: boolean;
+  configured: boolean;
+  status: number;
+  message: string;
+  detail?: unknown;
+};
 
 export function getEtsyKeystring(): string {
-  return trimEnv("ETSY_API_KEY");
+  return env("ETSY_API_KEY");
 }
 
 export function getEtsySharedSecret(): string {
-  return trimEnv("ETSY_SHARED_SECRET");
+  return env("ETSY_SHARED_SECRET");
 }
 
-/** True when both keystring and shared secret are set in the environment. */
+/** True when both keystring and shared secret are set (ping-level access). */
 export function isEtsyApiKeyConfigured(): boolean {
   return Boolean(getEtsyKeystring() && getEtsySharedSecret());
+}
+
+/** Publish-ready credentials (matches `marketplaces.ts` envKeys for etsy). */
+export function isEtsyConfigured(): boolean {
+  return hasEnv(
+    "ETSY_API_KEY",
+    "ETSY_SHARED_SECRET",
+    "ETSY_CLIENT_ID",
+    "ETSY_REFRESH_TOKEN",
+    "ETSY_SHOP_ID"
+  );
 }
 
 /**
@@ -53,54 +71,127 @@ export type EtsyConnectionResult = {
   raw?: unknown;
 };
 
-/** Ping Etsy Open API (no OAuth scopes required). */
-export async function verifyEtsyApiConnection(
+function parseBody(text: string): unknown {
+  try {
+    return text ? JSON.parse(text) : null;
+  } catch {
+    return { raw: text.slice(0, 500) };
+  }
+}
+
+/** Step A: ping Etsy Open API (no OAuth scopes required). */
+async function pingEtsyApi(
+  fetchImpl: typeof fetch
+): Promise<{ ok: boolean; status: number; detail: unknown }> {
+  const res = await fetchImpl(`${ETSY_API_BASE}/application/openapi-ping`, {
+    method: "GET",
+    headers: buildEtsyApiHeaders(),
+  });
+  const detail = parseBody(await res.text());
+  return { ok: res.ok, status: res.status, detail };
+}
+
+/** Step B: exchange the refresh token for an access token (no listing calls). */
+async function refreshEtsyAccessTokenCheck(
+  fetchImpl: typeof fetch
+): Promise<{ ok: boolean; status: number; detail: unknown }> {
+  const res = await fetchImpl(ETSY_OAUTH_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      client_id: env("ETSY_CLIENT_ID"),
+      refresh_token: env("ETSY_REFRESH_TOKEN"),
+    }),
+  });
+  const detail = parseBody(await res.text());
+  return { ok: res.ok, status: res.status, detail };
+}
+
+/**
+ * Standardized two-step verify:
+ *   A. x-api-key ping (requires ETSY_API_KEY + ETSY_SHARED_SECRET)
+ *   B. OAuth refresh-token exchange (only when fully configured)
+ */
+export async function verifyEtsyConnection(
   fetchImpl: typeof fetch = fetch
-): Promise<EtsyConnectionResult> {
+): Promise<MarketplaceConnectionResult> {
+  const configured = isEtsyConfigured();
+
   if (!isEtsyApiKeyConfigured()) {
     return {
       ok: false,
+      configured,
       status: 0,
       message:
         "Missing ETSY_API_KEY or ETSY_SHARED_SECRET — add both to .env and restart the server",
     };
   }
 
-  const res = await fetchImpl(`${ETSY_API_BASE}/application/openapi-ping`, {
-    method: "GET",
-    headers: buildEtsyApiHeaders(),
-  });
-
-  const text = await res.text();
-  let json: unknown;
-  try {
-    json = text ? JSON.parse(text) : null;
-  } catch {
-    json = { raw: text.slice(0, 500) };
-  }
-
-  if (!res.ok) {
+  const ping = await pingEtsyApi(fetchImpl);
+  if (!ping.ok) {
     return {
       ok: false,
-      status: res.status,
-      message: `Etsy API rejected the request (${res.status})`,
-      raw: json,
+      configured,
+      status: ping.status,
+      message: `Etsy API rejected the x-api-key ping (${ping.status})`,
+      detail: ping.detail,
     };
   }
 
-  const appId =
-    typeof json === "object" &&
-    json !== null &&
-    "application_id" in json &&
-    typeof (json as { application_id: unknown }).application_id === "number"
-      ? (json as { application_id: number }).application_id
-      : undefined;
+  if (!configured) {
+    return {
+      ok: true,
+      configured: false,
+      status: ping.status,
+      message:
+        "Etsy x-api-key ping succeeded; set ETSY_CLIENT_ID, ETSY_REFRESH_TOKEN, and ETSY_SHOP_ID for publish access",
+      detail: ping.detail,
+    };
+  }
+
+  const oauth = await refreshEtsyAccessTokenCheck(fetchImpl);
+  if (!oauth.ok) {
+    return {
+      ok: false,
+      configured: true,
+      status: oauth.status,
+      message: `Etsy OAuth refresh-token exchange failed (${oauth.status})`,
+      detail: oauth.detail,
+    };
+  }
 
   return {
     ok: true,
-    status: res.status,
+    configured: true,
+    status: oauth.status,
+    message: "Etsy API + OAuth verified",
+  };
+}
+
+/**
+ * Legacy alias — same shape as the original ping-only verify, now backed by
+ * the standardized two-step check. Used by `GET /api/etsy/verify`.
+ */
+export async function verifyEtsyApiConnection(
+  fetchImpl: typeof fetch = fetch
+): Promise<EtsyConnectionResult> {
+  const result = await verifyEtsyConnection(fetchImpl);
+
+  const appId =
+    typeof result.detail === "object" &&
+    result.detail !== null &&
+    "application_id" in result.detail &&
+    typeof (result.detail as { application_id: unknown }).application_id ===
+      "number"
+      ? (result.detail as { application_id: number }).application_id
+      : undefined;
+
+  return {
+    ok: result.ok,
+    status: result.status,
     applicationId: appId,
-    message: "Etsy API connection successful",
-    raw: json,
+    message: result.message,
+    raw: result.detail,
   };
 }

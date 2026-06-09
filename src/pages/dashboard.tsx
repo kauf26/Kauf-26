@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import GridLayout from "react-grid-layout/legacy";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -224,7 +225,13 @@ export default function Dashboard() {
             ) : (
               Object.entries(marketplaceStats).map(([marketplace, count]) => (
                 <div key={marketplace} className="flex justify-between items-center">
-                  <span className="capitalize text-sm">{marketplace}</span>
+                  {marketplace === "depop" ? (
+                    <Link href="/analytics/depop" className="capitalize text-sm text-primary hover:underline">
+                      {marketplace}
+                    </Link>
+                  ) : (
+                    <span className="capitalize text-sm">{marketplace}</span>
+                  )}
                   <span className="font-semibold">{count}</span>
                 </div>
               ))

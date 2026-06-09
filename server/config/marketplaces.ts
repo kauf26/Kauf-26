@@ -121,6 +121,7 @@ export const MASTER_MARKETPLACES: MasterMarketplace[] = [
     credentialsRequired: ["apiKey", "oauthClientId", "refreshToken", "shopId"],
     envKeys: [
       "ETSY_API_KEY",
+      "ETSY_SHARED_SECRET",
       "ETSY_CLIENT_ID",
       "ETSY_REFRESH_TOKEN",
       "ETSY_SHOP_ID",
@@ -254,6 +255,8 @@ export const MASTER_MARKETPLACES: MasterMarketplace[] = [
     apiMethod: "open",
     enabledForPublishing: true,
     credentialsRequired: ["shopDomain", "accessToken"],
+    // SHOPIFY_STORE_NAME is accepted as an alias for SHOPIFY_SHOP_DOMAIN
+    // (see isShopifyConfigured() in server/services/shopifyApi.ts).
     envKeys: ["SHOPIFY_SHOP_DOMAIN", "SHOPIFY_ACCESS_TOKEN"],
     implementationStatus: "dry-run",
   },

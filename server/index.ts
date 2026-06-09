@@ -28,6 +28,7 @@ import { SUPPORTED_MARKETPLACE_IDS } from "./publishToMarketplaces";
 import { productRoutes } from "./productsRoutes";
 import marketplaceRoutes from "./marketplaceRoutes";
 import inventoryRoutes from "./inventoryRoutes";
+import analyticsRoutes from "./analyticsRoutes";
 import { setupAuth, registerAuthRoutes } from "./auth";
 import onboardingRoutes from "./onboardingRoutes";
 import { startInventoryPoller } from "./inventoryPoller";
@@ -50,6 +51,15 @@ import {
   isEtsyApiKeyConfigured,
   verifyEtsyApiConnection,
 } from "./services/etsyApi";
+import {
+  buildShopifyOAuthAuthorizeUrl,
+  fetchShopifyProducts,
+  getShopifyOAuthScopes,
+  isShopifyEnvConfigured,
+  loadShopifyConfigFromEnv,
+  resolveShopifyOAuthAuthorizeUrl,
+  ShopifyScopeApprovalRequiredError,
+} from "./services/shopifyApi";
 import {
   type VisionConfidence,
   type VisionPerImage,
@@ -883,6 +893,9 @@ app.use("/api/marketplaces", marketplaceRoutes);
 // Central inventory pool (shared quantity across marketplace listings)
 app.use("/api/inventory", inventoryRoutes);
 
+// Marketplace analytics dashboards
+app.use("/api/analytics", analyticsRoutes);
+
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -1276,6 +1289,137 @@ app.get('/api/health', (req: Request, res: Response) => {
  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// -------------------- SHOPIFY API VERIFY + OAUTH RE-AUTHORIZE --------------------
+app.get("/api/shopify/verify", async (_req: Request, res: Response) => {
+  try {
+    if (!isShopifyEnvConfigured()) {
+      return res.status(503).json({
+        connected: false,
+        configured: false,
+        message:
+          "Set SHOPIFY_STORE_NAME, SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET, and SHOPIFY_ACCESS_TOKEN in .env",
+      });
+    }
+
+    const config = loadShopifyConfigFromEnv();
+    const products = await fetchShopifyProducts(config, 1);
+    return res.json({
+      connected: true,
+      configured: true,
+      store: config.storeDomain,
+      productCountSample: products.length,
+      message:
+        products.length > 0
+          ? `Connected — sample product: ${products[0]!.title}`
+          : "Connected — store has no products yet",
+    });
+  } catch (error) {
+    if (error instanceof ShopifyScopeApprovalRequiredError) {
+      return res.status(403).json({
+        connected: false,
+        configured: isShopifyEnvConfigured(),
+        scopeApprovalRequired: true,
+        missingScopes: error.missingScopes,
+        message: error.reauthorizeMessage,
+        authorizeUrl: error.authorizeUrl,
+        reauthorizeUrl: resolveShopifyOAuthAuthorizeUrl(),
+      });
+    }
+
+    console.error("[Shopify] verify connection error:", error);
+    const status =
+      error instanceof Error && "status" in error
+        ? Number((error as { status: number }).status) || 500
+        : 500;
+    return res.status(status > 0 ? status : 500).json({
+      connected: false,
+      configured: isShopifyEnvConfigured(),
+      message:
+        error instanceof Error ? error.message : "Shopify verification failed",
+    });
+  }
+});
+
+app.get("/api/shopify/oauth/authorize", (req: Request, res: Response) => {
+  try {
+    const config = loadShopifyConfigFromEnv();
+    const scopes =
+      typeof req.query.scopes === "string"
+        ? req.query.scopes
+        : getShopifyOAuthScopes();
+    const authorizeUrl = buildShopifyOAuthAuthorizeUrl(config, { scopes });
+    if (!authorizeUrl) {
+      return res.status(400).json({
+        message:
+          "Set SHOPIFY_OAUTH_REDIRECT_URI in .env (must match an allowed redirect URL in your Shopify app).",
+      });
+    }
+    return res.redirect(authorizeUrl);
+  } catch (error) {
+    console.error("[Shopify] oauth authorize error:", error);
+    return res.status(500).json({
+      message:
+        error instanceof Error
+          ? error.message
+          : "Failed to build Shopify OAuth URL",
+    });
+  }
+});
+
+app.get("/api/shopify/oauth/callback", async (req: Request, res: Response) => {
+  const code = typeof req.query.code === "string" ? req.query.code : "";
+  if (!code) {
+    return res.status(400).json({
+      message:
+        "Missing ?code= from Shopify. Start at GET /api/shopify/oauth/authorize",
+    });
+  }
+
+  try {
+    const config = loadShopifyConfigFromEnv();
+    const tokenRes = await fetch(
+      `https://${config.storeDomain}/admin/oauth/access_token`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          client_id: config.clientId,
+          client_secret: config.clientSecret,
+          code,
+        }),
+      }
+    );
+    const text = await tokenRes.text();
+    if (!tokenRes.ok) {
+      return res.status(tokenRes.status).json({
+        message: `Shopify token exchange failed (${tokenRes.status})`,
+        detail: text.slice(0, 500),
+      });
+    }
+
+    const json = JSON.parse(text) as {
+      access_token?: string;
+      scope?: string;
+    };
+    return res.json({
+      ok: true,
+      message:
+        "Authorization succeeded. Copy access_token into SHOPIFY_ACCESS_TOKEN in .env",
+      scope: json.scope,
+      access_token: json.access_token,
+    });
+  } catch (error) {
+    console.error("[Shopify] oauth callback error:", error);
+    return res.status(500).json({
+      message:
+        error instanceof Error ? error.message : "Shopify OAuth callback failed",
+    });
+  }
+});
+
 // -------------------- ETSY API VERIFY (x-api-key: keystring:shared_secret) --------------------
 app.get("/api/etsy/verify", async (_req: Request, res: Response) => {
   try {
@@ -1324,6 +1468,8 @@ const server = createServer(app);
    console.log(`   - POST /api/catalog/scrape (JSON { query } → masterScraper)`);
    console.log(`   - GET  /api/health`);
    console.log(`   - GET  /api/etsy/verify (Etsy x-api-key ping)`);
+   console.log(`   - GET  /api/shopify/verify (Admin API + scope check)`);
+   console.log(`   - GET  /api/shopify/oauth/authorize (redirect to approve scopes)`);
    console.log(`   - GET/POST /api/drafts (productsRoutes → PostgreSQL)`);
    console.log(`   - GET  /api/drafts/ready-for-posting`);
    console.log(`   - POST /api/drafts/:id/post-to-marketplaces`);

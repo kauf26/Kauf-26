@@ -17,7 +17,8 @@
   "scrape:debug": "tsx scripts/scrape-debug.ts",
   "kauft": "tsx scripts/kauft.ts",
   "test:publish": "vitest run server/services/publishEngine.test.ts",
-  "test:adapters": "tsx scripts/test-adapters.ts"
+  "test:adapters": "tsx scripts/test-adapters.ts",
+  "test:shopify": "tsx scripts/shopify-test-products.ts"
 },
   "bin": {
     "kauft": "./scripts/kauft.ts"

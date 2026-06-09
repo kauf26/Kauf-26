@@ -1,8 +1,18 @@
 import type { DraftPublishPayload } from "../../publishToMarketplaces";
 import type { AdapterPublishResult, FormattedListing } from "./types";
 
+function isUsableCredential(value: string): boolean {
+  const v = value.trim();
+  if (!v) return false;
+  if (v.startsWith("#")) return false;
+  if (/^TODO\b/i.test(v)) return false;
+  if (/your[-_]?store|your-site|placeholder|xxxxxxxx/i.test(v)) return false;
+  return true;
+}
+
 export function env(key: string): string {
-  return String(process.env[key] ?? "").trim();
+  const raw = String(process.env[key] ?? "").trim();
+  return isUsableCredential(raw) ? raw : "";
 }
 
 export function hasEnv(...keys: string[]): boolean {
