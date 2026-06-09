@@ -565,7 +565,7 @@ return (
           </div>
           <div className="space-y-1">
             <div className="flex items-center justify-between gap-2">
-              <label className="text-xs font-medium text-zinc-400">Your Price ($)</label>
+              <label className="text-xs font-medium text-zinc-400">Your Price (USD)</label>
               <span className="text-xs text-zinc-500 whitespace-nowrap">
                 Market Average:{" "}
                 <span className="font-semibold text-emerald-400">

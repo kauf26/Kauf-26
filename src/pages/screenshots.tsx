@@ -113,7 +113,7 @@ function AnalyzeSlide() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-gray-500 uppercase tracking-wide">Price (USD)</label>
+                <label className="text-xs text-gray-500 uppercase tracking-wide">Your Price (USD)</label>
                 <div className="mt-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white text-sm font-bold">$89.99</div>
               </div>
               <div>

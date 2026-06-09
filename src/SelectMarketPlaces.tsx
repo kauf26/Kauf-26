@@ -264,7 +264,7 @@ export default function SelectMarketplaces() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs text-zinc-500">Price (USD)</label>
+            <label className="text-xs text-zinc-500">Your Price (USD)</label>
             <input
               type="text"
               value={

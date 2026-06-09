@@ -233,7 +233,7 @@ export default function HomeScreen() {
             numberOfLines={4}
           />
 
-          <Text style={styles.label}>Price (USD)</Text>
+          <Text style={styles.label}>Your Price (USD)</Text>
           <TextInput
             style={styles.input}
             value={price}
