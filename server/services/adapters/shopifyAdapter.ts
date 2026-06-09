@@ -1,3 +1,7 @@
+/**
+ * Shopify adapter — thin layer over `services/shopifyApi.ts`.
+ * Owns listing formatting only; credential checks and HTTP live in the service.
+ */
 import type { DraftPublishPayload } from "../../publishToMarketplaces";
 import type { AdapterPublishResult, FetchFn, FormattedListing } from "./types";
 import {
@@ -6,8 +10,12 @@ import {
   draftSku,
   dryRunResult,
   env,
-  hasEnv,
 } from "./adapterUtils";
+import {
+  createShopifyProduct,
+  isShopifyConfigured as isShopifyServiceConfigured,
+  resolveShopifyConfigFromEnv,
+} from "../shopifyApi";
 
 export function formatShopifyListing(
   draft: DraftPublishPayload
@@ -15,7 +23,7 @@ export function formatShopifyListing(
   const price = draftPrice(draft).toFixed(2);
   return {
     marketplace: "shopify",
-    shopDomain: env("SHOPIFY_SHOP_DOMAIN"),
+    shopDomain: env("SHOPIFY_SHOP_DOMAIN") || env("SHOPIFY_STORE_NAME"),
     sku: draftSku(draft),
     imageCount: draft.images?.length ?? 0,
     apiBody: {
@@ -39,7 +47,7 @@ export function formatShopifyListing(
 }
 
 export function isShopifyConfigured(): boolean {
-  return hasEnv("SHOPIFY_SHOP_DOMAIN", "SHOPIFY_ACCESS_TOKEN");
+  return isShopifyServiceConfigured();
 }
 
 export async function publishToShopify(
@@ -54,29 +62,19 @@ export async function publishToShopify(
     );
   }
 
-  const domain = env("SHOPIFY_SHOP_DOMAIN").replace(/^https?:\/\//, "");
-  const url = `https://${domain}/admin/api/2024-01/products.json`;
+  const { product } = formatted.apiBody as {
+    product: Record<string, unknown>;
+  };
 
-  const res = await fetchImpl(url, {
-    method: "POST",
-    headers: {
-      "X-Shopify-Access-Token": env("SHOPIFY_ACCESS_TOKEN"),
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(formatted.apiBody),
-  });
+  const created = await createShopifyProduct(
+    resolveShopifyConfigFromEnv(),
+    product,
+    fetchImpl
+  );
 
-  if (!res.ok) {
-    throw new Error(
-      `Shopify API failed (${res.status}): ${(await res.text()).slice(0, 200)}`
-    );
-  }
-
-  const json = (await res.json()) as { product?: { id?: number } };
   return {
     message: "Shopify draft product created",
-    listingId:
-      json.product?.id != null ? String(json.product.id) : undefined,
+    listingId: String(created.id),
     dryRun: false,
   };
 }

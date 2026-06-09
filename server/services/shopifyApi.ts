@@ -395,6 +395,46 @@ export async function fetchFirstShopifyProductTitle(
   return products[0]?.title ?? null;
 }
 
+/**
+ * Create a product via Admin REST API. `product` is the inner payload of
+ * `POST /products.json` (title, body_html, variants, ...).
+ */
+export async function createShopifyProduct(
+  config: ShopifyConfig,
+  product: Record<string, unknown>,
+  fetchImpl: typeof fetch = fetch
+): Promise<ShopifyProductSummary> {
+  const res = await shopifyAdminRequest(
+    config,
+    "/products.json",
+    { method: "POST", body: JSON.stringify({ product }) },
+    fetchImpl
+  );
+
+  const text = await res.text();
+  if (!res.ok) {
+    throwShopifyAdminResponseError(res, text, config, "product create");
+  }
+
+  const json = JSON.parse(text) as {
+    product?: { id?: number; title?: string; status?: string };
+  };
+
+  if (json.product?.id == null) {
+    throw new ShopifyApiError(
+      "Shopify product create response missing product id",
+      res.status,
+      text
+    );
+  }
+
+  return {
+    id: json.product.id,
+    title: json.product.title ?? "",
+    status: json.product.status,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Standardized service-layer interface (matches ebayApi.ts / etsyApi.ts)
 // ---------------------------------------------------------------------------
@@ -419,6 +459,20 @@ export function isShopifyConfigured(): boolean {
 }
 
 /**
+ * Token-only config for Admin API calls. Unlike `loadShopifyConfigFromEnv()`,
+ * client ID/secret may be empty (the 401 token-refresh retry just won't apply).
+ * Callers should gate on `isShopifyConfigured()` first.
+ */
+export function resolveShopifyConfigFromEnv(): ShopifyConfig {
+  return {
+    storeDomain: resolveShopifyStoreDomain(),
+    clientId: env("SHOPIFY_CLIENT_ID"),
+    clientSecret: env("SHOPIFY_CLIENT_SECRET"),
+    accessToken: env("SHOPIFY_ACCESS_TOKEN"),
+  };
+}
+
+/**
  * Verify Shopify credentials with a 1-product Admin API read.
  * Maps scope-approval 403s to an actionable message with the OAuth URL.
  */
@@ -435,12 +489,7 @@ export async function verifyShopifyConnection(
     };
   }
 
-  const config: ShopifyConfig = {
-    storeDomain: resolveShopifyStoreDomain(),
-    clientId: env("SHOPIFY_CLIENT_ID"),
-    clientSecret: env("SHOPIFY_CLIENT_SECRET"),
-    accessToken: env("SHOPIFY_ACCESS_TOKEN"),
-  };
+  const config = resolveShopifyConfigFromEnv();
 
   try {
     const products = await fetchShopifyProducts(config, 1, fetchImpl);
