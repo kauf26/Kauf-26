@@ -22,6 +22,10 @@ export type MarketplaceOutcome = {
   marketplace: string;
   success: boolean;
   listingId?: string;
+  /** Direct link to the live/admin listing when the marketplace API provides one. */
+  listingUrl?: string;
+  /** Account/shop the listing was published under (store domain, shop ID, ...). */
+  account?: string;
   message: string;
   dryRun?: boolean;
   error?: string;
@@ -65,6 +69,8 @@ export async function publishToMarketplacesParallel(
         marketplace,
         success: result.success,
         listingId: result.listingId,
+        listingUrl: result.listingUrl,
+        account: result.account,
         message: result.message,
         dryRun: result.dryRun,
         error: result.success ? undefined : result.message,

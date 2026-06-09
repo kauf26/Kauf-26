@@ -67,6 +67,10 @@ export async function publishToEtsy(
   return {
     message: "Etsy draft listing created",
     listingId: created.listingId,
+    listingUrl: created.listingId
+      ? `https://www.etsy.com/listing/${created.listingId}`
+      : undefined,
+    account: getEtsyShopId() ? `Etsy shop ${getEtsyShopId()}` : undefined,
     dryRun: false,
   };
 }

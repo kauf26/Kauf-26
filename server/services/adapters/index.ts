@@ -121,6 +121,8 @@ export async function publishOne(
   success: boolean;
   marketplaceId: string;
   listingId?: string;
+  listingUrl?: string;
+  account?: string;
   message: string;
   dryRun: boolean;
 }> {
@@ -134,6 +136,8 @@ export async function publishOne(
         success: true,
         marketplaceId,
         listingId: result.listingId,
+        listingUrl: result.listingUrl,
+        account: result.account,
         message: result.message,
         dryRun: true,
       };
@@ -160,6 +164,8 @@ export async function publishOne(
       success: true,
       marketplaceId,
       listingId: result.listingId,
+      listingUrl: result.listingUrl,
+      account: result.account,
       message: result.message,
       dryRun: result.dryRun ?? !adapter.isConfigured(),
     };

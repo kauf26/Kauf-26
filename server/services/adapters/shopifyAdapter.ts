@@ -66,15 +66,14 @@ export async function publishToShopify(
     product: Record<string, unknown>;
   };
 
-  const created = await createShopifyProduct(
-    resolveShopifyConfigFromEnv(),
-    product,
-    fetchImpl
-  );
+  const config = resolveShopifyConfigFromEnv();
+  const created = await createShopifyProduct(config, product, fetchImpl);
 
   return {
     message: "Shopify draft product created",
     listingId: String(created.id),
+    listingUrl: `https://${config.storeDomain}/admin/products/${created.id}`,
+    account: config.storeDomain,
     dryRun: false,
   };
 }

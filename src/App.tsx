@@ -23,6 +23,7 @@ import Terms from "./pages/terms";
 import Privacy from "./pages/privacy";
 import SettingsPage from "./pages/settings";
 import DepopAnalyticsPage from "./pages/analytics-depop";
+import PublishConfirmation from "./pages/PublishConfirmation";
 import { IdentificationResultsPage } from "./pages/IdentificationResults";
 
 function App() {
@@ -35,6 +36,7 @@ function App() {
             <Switch>
               <Route path="/product-draft" component={ProductDraftPage} />
               <Route path="/select-marketplaces" component={SelectMarketPlaces} />
+              <Route path="/publish-confirmation" component={PublishConfirmation} />
               <Route path="/identification-results" component={IdentificationResultsPage} />
               <Route path="/dashboard" component={Dashboard} />
               <Route path="/analytics/depop" component={DepopAnalyticsPage} />

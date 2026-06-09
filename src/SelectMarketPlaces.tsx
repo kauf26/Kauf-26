@@ -335,6 +335,9 @@ export default function SelectMarketplaces() {
                   body: JSON.stringify({
                     draftId,
                     marketplaceIds: selected,
+                    // Publish synchronously so we get listing IDs/URLs back
+                    // for the confirmation page.
+                    sync: true,
                   }),
                 });
                 const body = await res.json().catch(() => ({}));
@@ -349,7 +352,14 @@ export default function SelectMarketplaces() {
                   setPublishJobId(jobId);
                   sessionStorage.setItem("publishJobId", String(jobId));
                 }
-                setLocation("/create");
+                sessionStorage.setItem(
+                  "publishReport",
+                  JSON.stringify({
+                    ...(body as Record<string, unknown>),
+                    title: draft.title,
+                  })
+                );
+                setLocation("/publish-confirmation");
               } catch (err) {
                 setPublishError(
                   err instanceof Error ? err.message : "Publish request failed"
@@ -361,7 +371,7 @@ export default function SelectMarketplaces() {
             disabled={selected.length === 0 || isPublishing}
             className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white font-semibold py-3 rounded transition-colors"
           >
-            {isPublishing ? "Queuing…" : "Publish to Channels"}
+            {isPublishing ? "Publishing…" : "Publish to Channels"}
           </button>
         </div>
       </div>

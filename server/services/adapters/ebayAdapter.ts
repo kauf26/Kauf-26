@@ -10,6 +10,7 @@ import {
   getEbayCategoryId,
   getEbayMarketplaceId,
   isEbayConfigured as isEbayServiceConfigured,
+  isEbaySandbox,
   publishEbayInventoryListing,
   type EbayInventoryListing,
 } from "../ebayApi";
@@ -65,8 +66,17 @@ export async function publishToEbay(
     fetchImpl
   );
 
+  // Only published offers (not bare offer IDs) have a public item page.
+  const itemHost = isEbaySandbox() ? "sandbox.ebay.com" : "www.ebay.com";
+  const listingUrl =
+    result.message === "eBay listing published"
+      ? `https://${itemHost}/itm/${result.listingId}`
+      : undefined;
+
   return {
     listingId: result.listingId,
+    listingUrl,
+    account: getEbayMarketplaceId(),
     message: result.message,
     dryRun: false,
   };
