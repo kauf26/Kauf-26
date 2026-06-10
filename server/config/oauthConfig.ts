@@ -2,6 +2,7 @@
  * Public OAuth metadata for mobile clients.
  * No secrets, no tokens — mobile performs OAuth and stores tokens in Keychain.
  */
+import { getOAuthRedirectUri } from "../../shared/oauthRedirect";
 import { env } from "../services/adapters/adapterUtils";
 
 export type MarketplaceOAuthConfig = {
@@ -25,7 +26,7 @@ export function getMarketplaceOAuthConfigs(): MarketplaceOAuthConfig[] {
 
   const etsyClientId = env("ETSY_CLIENT_ID");
   if (etsyClientId) {
-    const redirectUri = env("ETSY_REDIRECT_URI") || "kauf26://oauth/etsy";
+    const redirectUri = env("ETSY_REDIRECT_URI") || getOAuthRedirectUri("etsy");
     configs.push({
       marketplace: "etsy",
       clientId: etsyClientId,
@@ -44,7 +45,7 @@ export function getMarketplaceOAuthConfigs(): MarketplaceOAuthConfig[] {
       marketplace: "shopify",
       clientId: shopifyClientId,
       scopes: env("SHOPIFY_OAUTH_SCOPES") || "read_products,write_products",
-      redirectUri: env("SHOPIFY_OAUTH_REDIRECT_URI") || "kauf26://oauth/shopify",
+      redirectUri: env("SHOPIFY_OAUTH_REDIRECT_URI") || getOAuthRedirectUri("shopify"),
       authorizeUrl: "https://{shop}/admin/oauth/authorize",
       tokenUrl: "https://{shop}/admin/oauth/access_token",
       requiresShopDomain: true,
@@ -59,8 +60,8 @@ export function getMarketplaceOAuthConfigs(): MarketplaceOAuthConfig[] {
       clientId: ebayClientId,
       scopes:
         env("EBAY_OAUTH_SCOPES") ||
-        "https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.account",
-      redirectUri: env("EBAY_REDIRECT_URI") || "kauf26://oauth/ebay",
+        "https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.account https://api.ebay.com/oauth/api_scope/commerce.identity.readonly",
+      redirectUri: env("EBAY_REDIRECT_URI") || getOAuthRedirectUri("ebay"),
       authorizeUrl: sandbox
         ? "https://auth.sandbox.ebay.com/oauth2/authorize"
         : "https://auth.ebay.com/oauth2/authorize",

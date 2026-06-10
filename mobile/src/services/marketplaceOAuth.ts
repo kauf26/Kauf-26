@@ -1,18 +1,32 @@
+/**
+ * One-tap OAuth for Etsy, Shopify, and eBay.
+ *
+ * iOS: AuthSession.promptAsync → ASWebAuthenticationSession (shared Safari / iCloud Keychain cookies).
+ * Android: Chrome Custom Tabs via expo-web-browser (saved passwords & active Chrome sessions).
+ *
+ * preferEphemeralSession: false keeps the non-ephemeral session so existing logins can authorize
+ * without re-entering credentials. If the user has no saved session, they see the normal OAuth login.
+ */
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
+import { Platform } from 'react-native';
+import { assertRedirectUriMatches } from '../../../shared/oauthRedirect';
+import { openSystemBrowserOAuth } from './systemBrowserOAuth';
 import {
   getMobileClientSecret,
   getOAuthConfig,
   type MarketplaceOAuthConfig,
 } from './oauthConfig';
+import { fetchMarketplaceUserProfile } from './marketplaceUserInfo';
 import {
   loadShopDomain,
   savePlatformTokens,
   saveShopDomain,
   type StoredPlatformTokens,
 } from './secureTokenStore';
+import type { ConnectResult, MarketplaceUserProfile, OAuthPlatform } from '../types/marketplaceConnect';
 
-WebBrowser.maybeCompleteAuthSession();
+export { getOAuthRedirectUri, OAUTH_REDIRECT_URIS } from './oauthRedirect';
 
 function normalizeShop(domain: string): string {
   const cleaned = domain.replace(/^https?:\/\//, '').replace(/\/$/, '').trim();
@@ -20,8 +34,13 @@ function normalizeShop(domain: string): string {
   return cleaned.includes('.') ? cleaned : `${cleaned}.myshopify.com`;
 }
 
+function resolveRedirectUri(config: MarketplaceOAuthConfig, marketplace: OAuthPlatform): string {
+  return assertRedirectUriMatches(marketplace, config.redirectUri);
+}
+
 async function exchangeEtsyCode(
   config: MarketplaceOAuthConfig,
+  redirectUri: string,
   code: string,
   codeVerifier: string
 ): Promise<StoredPlatformTokens> {
@@ -31,7 +50,7 @@ async function exchangeEtsyCode(
     body: JSON.stringify({
       grant_type: 'authorization_code',
       client_id: config.clientId,
-      redirect_uri: config.redirectUri,
+      redirect_uri: redirectUri,
       code,
       code_verifier: codeVerifier,
     }),
@@ -47,7 +66,7 @@ async function exchangeEtsyCode(
     expiresAt: Date.now() + (json.expires_in ?? 3600) * 1000,
     userId,
     scope: json.scope,
-  } as StoredPlatformTokens & { userId?: string };
+  };
 }
 
 async function exchangeShopifyCode(
@@ -85,6 +104,7 @@ async function exchangeShopifyCode(
 
 async function exchangeEbayCode(
   config: MarketplaceOAuthConfig,
+  redirectUri: string,
   code: string
 ): Promise<StoredPlatformTokens> {
   const secret = getMobileClientSecret('ebay');
@@ -101,7 +121,7 @@ async function exchangeEbayCode(
     body: new URLSearchParams({
       grant_type: 'authorization_code',
       code,
-      redirect_uri: config.redirectUri,
+      redirect_uri: redirectUri,
     }),
   });
   const json = await res.json();
@@ -117,19 +137,34 @@ async function exchangeEbayCode(
   };
 }
 
-export async function connectMarketplace(
-  marketplace: 'etsy' | 'shopify' | 'ebay',
+function mergeProfileIntoTokens(
+  tokens: StoredPlatformTokens,
+  profile: MarketplaceUserProfile
+): StoredPlatformTokens {
+  return {
+    ...tokens,
+    shopId: profile.shopId ?? tokens.shopId,
+    userId: profile.userId ?? tokens.userId,
+    accountName: profile.accountLabel ?? tokens.accountName,
+    userName: profile.name,
+    userEmail: profile.email,
+  };
+}
+
+/**
+ * Opens the system browser OAuth sheet (one-tap when Safari/Chrome already has a session).
+ * Tokens + profile stay on-device only.
+ */
+export async function connectMarketplaceOneTap(
+  marketplace: OAuthPlatform,
   shopDomain?: string
-): Promise<void> {
+): Promise<ConnectResult> {
   const config = await getOAuthConfig(marketplace);
   if (!config) {
     throw new Error(`${marketplace} OAuth is not configured on the server`);
   }
 
-  const redirectUri = AuthSession.makeRedirectUri({
-    scheme: 'kauf26',
-    path: `oauth/${marketplace}`,
-  });
+  const redirectUri = resolveRedirectUri(config, marketplace);
 
   if (marketplace === 'shopify') {
     if (!shopDomain?.trim()) throw new Error('Enter your Shopify store domain first');
@@ -137,7 +172,6 @@ export async function connectMarketplace(
   }
 
   const usePkce = marketplace === 'etsy';
-
   const request = new AuthSession.AuthRequest({
     clientId: config.clientId,
     scopes: config.scopes.split(/[\s,]+/).filter(Boolean),
@@ -148,8 +182,7 @@ export async function connectMarketplace(
 
   let authorizeUrl = config.authorizeUrl;
   if (marketplace === 'shopify') {
-    const shop = normalizeShop(shopDomain!);
-    authorizeUrl = `https://${shop}/admin/oauth/authorize`;
+    authorizeUrl = `https://${normalizeShop(shopDomain!)}/admin/oauth/authorize`;
   }
 
   const discovery = {
@@ -157,34 +190,48 @@ export async function connectMarketplace(
     tokenEndpoint: config.tokenUrl,
   };
 
-  const result = await request.promptAsync(discovery);
-
-  if (result.type !== 'success' || !result.params.code) {
-    throw new Error(result.type === 'cancel' ? 'OAuth cancelled' : 'OAuth failed');
-  }
+  const { code, elapsedMs: oauthElapsedMs } = await openSystemBrowserOAuth(request, discovery);
 
   let tokens: StoredPlatformTokens;
   if (marketplace === 'etsy') {
-    tokens = await exchangeEtsyCode(config, result.params.code, request.codeVerifier ?? '');
-    try {
-      const meRes = await fetch('https://api.etsy.com/v3/application/users/me', {
-        headers: {
-          'x-api-key': config.clientId,
-          Authorization: `Bearer ${tokens.accessToken}`,
-        },
-      });
-      if (meRes.ok) {
-        const me = await meRes.json();
-        if (me.shop_id) tokens.shopId = String(me.shop_id);
-      }
-    } catch {
-      /* shop id optional at connect time */
-    }
+    tokens = await exchangeEtsyCode(
+      config,
+      redirectUri,
+      code,
+      request.codeVerifier ?? ''
+    );
   } else if (marketplace === 'shopify') {
-    tokens = await exchangeShopifyCode(config, shopDomain!, result.params.code);
+    tokens = await exchangeShopifyCode(config, shopDomain!, code);
   } else {
-    tokens = await exchangeEbayCode(config, result.params.code);
+    tokens = await exchangeEbayCode(config, redirectUri, code);
   }
 
+  const profile = await fetchMarketplaceUserProfile(marketplace, config, tokens);
+  tokens = mergeProfileIntoTokens(tokens, profile);
   await savePlatformTokens(marketplace, tokens);
+
+  return {
+    marketplace,
+    // Short OAuth round-trip usually means Safari/Chrome reused an existing session (one-tap).
+    oneTapLikely: oauthElapsedMs < 8000,
+    profile,
+  };
+}
+
+/** @deprecated Use connectMarketplaceOneTap */
+export async function connectMarketplace(
+  marketplace: OAuthPlatform,
+  shopDomain?: string
+): Promise<void> {
+  await connectMarketplaceOneTap(marketplace, shopDomain);
+}
+
+export function oneTapHelpText(): string {
+  if (Platform.OS === 'ios') {
+    return 'Uses Sign in with Safari — if you’re already logged into Etsy/eBay/Shopify in Safari or saved in iCloud Keychain, one tap connects you. Otherwise you’ll sign in once in the browser (we never store your password).';
+  }
+  if (Platform.OS === 'android') {
+    return 'Opens Chrome — if you’re already logged in or your password is saved, one tap connects you. Otherwise you’ll sign in once in the browser (we never store your password).';
+  }
+  return 'Opens your system browser for OAuth. Tokens stay on this device only.';
 }

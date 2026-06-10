@@ -20,7 +20,13 @@
       "buildNumber": "1.0.0",
       "infoPlist": {
         "NSCameraUsageDescription": "Take photos of products to create marketplace listings with AI-powered descriptions.",
-        "NSPhotoLibraryUsageDescription": "Select product photos from your library to list on multiple marketplaces."
+        "NSPhotoLibraryUsageDescription": "Select product photos from your library to list on multiple marketplaces.",
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLName": "kauf26.oauth",
+            "CFBundleURLSchemes": ["kauf26"]
+          }
+        ]
       },
       "config": {
         "usesNonExemptEncryption": false
@@ -31,7 +37,20 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0a0a0f"
       },
-      "package": "com.globalmarketplacelister.app"
+      "package": "com.globalmarketplacelister.app",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": false,
+          "data": [
+            {
+              "scheme": "kauf26",
+              "host": "oauth"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -40,7 +59,8 @@
     "plugins": [
       "expo-camera",
       "expo-image-picker",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-web-browser"
     ]
   }
 }

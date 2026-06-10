@@ -10,15 +10,12 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
-import { CheckCircle2, Loader2, Store } from "lucide-react";
+import { CheckCircle2, Loader2, Smartphone, Store } from "lucide-react";
 import type { OnboardingStatus } from "@shared/models/auth";
 
 type Props = {
   onComplete: () => void;
 };
-
-type ConnectState = "idle" | "connecting" | "connected" | "error";
 
 async function fetchOnboardingStatus(): Promise<OnboardingStatus> {
   const res = await fetch("/api/onboarding/status", { credentials: "include" });
@@ -26,41 +23,21 @@ async function fetchOnboardingStatus(): Promise<OnboardingStatus> {
   return res.json();
 }
 
+const OAUTH_MARKETPLACES = [
+  { id: "etsy", name: "Etsy", color: "text-orange-500" },
+  { id: "shopify", name: "Shopify", color: "text-green-500" },
+  { id: "ebay", name: "eBay", color: "text-red-500" },
+] as const;
+
 export default function FirstTimeSetupWizard({ onComplete }: Props) {
-  const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [step, setStep] = useState<"pick" | "credentials" | "done">("pick");
-  const [selected, setSelected] = useState<string[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const [step, setStep] = useState<"profile" | "mobile" | "done">("profile");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [connectStates, setConnectStates] = useState<Record<string, ConnectState>>({});
 
   const { data: status, isLoading } = useQuery({
     queryKey: ["onboardingStatus"],
     queryFn: fetchOnboardingStatus,
-  });
-
-  const connectMutation = useMutation({
-    mutationFn: async (marketplaceId: string) => {
-      const res = await fetch("/api/onboarding/connect", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ marketplaceId, email, password }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Connection failed");
-      return data;
-    },
-    onSuccess: (_data, marketplaceId) => {
-      setConnectStates((s) => ({ ...s, [marketplaceId]: "connected" }));
-      toast({ title: "Connected", description: `${marketplaceId} session saved securely.` });
-    },
-    onError: (err: Error, marketplaceId) => {
-      setConnectStates((s) => ({ ...s, [marketplaceId]: "error" }));
-      toast({ title: "Login failed", description: err.message, variant: "destructive" });
-    },
   });
 
   const completeMutation = useMutation({
@@ -88,89 +65,58 @@ export default function FirstTimeSetupWizard({ onComplete }: Props) {
     );
   }
 
-  const marketplaces = status.availableMarketplaces;
-  const currentId = selected[currentIndex];
-  const currentName =
-    marketplaces.find((m) => m.id === currentId)?.name ?? currentId;
-
-  const toggleMarketplace = (id: string) => {
-    setSelected((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  };
-
-  const handleConnectCurrent = async () => {
-    if (!currentId || !email || !password) return;
-    setConnectStates((s) => ({ ...s, [currentId]: "connecting" }));
-    await connectMutation.mutateAsync(currentId);
-    if (currentIndex < selected.length - 1) {
-      setCurrentIndex((i) => i + 1);
-      setPassword("");
-    }
-  };
-
-  const skipCurrent = () => {
-    if (currentIndex < selected.length - 1) {
-      setCurrentIndex((i) => i + 1);
-      setPassword("");
-    }
-  };
-
   return (
     <div className="mx-auto max-w-lg space-y-6 p-6">
       <div className="text-center space-y-2">
         <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
           <Store className="h-7 w-7 text-primary" />
         </div>
-        <h1 className="text-2xl font-bold">Connect your marketplaces</h1>
+        <h1 className="text-2xl font-bold">Set up your seller profile</h1>
         <p className="text-sm text-muted-foreground">
-          Sign in to each seller account once. Sessions are encrypted and stored for
-          automatic login next time.
+          Connect marketplaces in the mobile app with one tap. We never ask for your marketplace
+          password on the web.
         </p>
       </div>
 
-      {step === "pick" && (
+      {step === "profile" && (
         <Card>
           <CardHeader>
-            <CardTitle>Choose marketplaces</CardTitle>
+            <CardTitle>Your profile</CardTitle>
             <CardDescription>
-              Select where you sell. You can add more later in Settings.
+              After you connect in the mobile app, name and email auto-fill from Etsy, Shopify, or
+              eBay. You can enter or edit them here too.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-2 max-h-64 overflow-y-auto">
-              {marketplaces.map((m) => (
-                <label
-                  key={m.id}
-                  className="flex cursor-pointer items-center gap-3 rounded-lg border p-3 hover:bg-muted/50"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selected.includes(m.id)}
-                    onChange={() => toggleMarketplace(m.id)}
-                    className="h-4 w-4"
-                  />
-                  <span className="font-medium">{m.name}</span>
-                  {status.connectedMarketplaces.includes(m.id) && (
-                    <CheckCircle2 className="ml-auto h-4 w-4 text-green-500" />
-                  )}
-                </label>
-              ))}
+            <div className="space-y-2">
+              <Label htmlFor="name">Name</Label>
+              <Input
+                id="name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Your name"
+                autoComplete="name"
+              />
             </div>
-            <Button
-              className="w-full"
-              disabled={selected.length === 0}
-              onClick={() => {
-                setCurrentIndex(0);
-                setStep("credentials");
-              }}
-            >
-              Continue ({selected.length} selected)
+            <div className="space-y-2">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                autoComplete="email"
+              />
+            </div>
+            <Button className="w-full" onClick={() => setStep("mobile")}>
+              Continue
             </Button>
             <Button
               variant="ghost"
               className="w-full"
               onClick={() => completeMutation.mutate()}
+              disabled={completeMutation.isPending}
             >
               Skip for now
             </Button>
@@ -178,64 +124,55 @@ export default function FirstTimeSetupWizard({ onComplete }: Props) {
         </Card>
       )}
 
-      {step === "credentials" && currentId && (
+      {step === "mobile" && (
         <Card>
           <CardHeader>
-            <CardTitle>
-              {currentName} ({currentIndex + 1} of {selected.length})
+            <CardTitle className="flex items-center gap-2">
+              <Smartphone className="h-5 w-5" />
+              One-tap connect (mobile app)
             </CardTitle>
             <CardDescription>
-              Enter your seller login. We use a headless browser to sign in and save
-              your session securely.
+              Open the <strong>Connections</strong> tab in the Kauf26 mobile app. If you&apos;re
+              already logged into a marketplace in Safari (iOS) or Chrome (Android), tap once to
+              connect — no password entry. OAuth tokens stay on your phone only.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email or username</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                autoComplete="username"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-              />
-            </div>
+            <ul className="space-y-2">
+              {OAUTH_MARKETPLACES.map((m) => (
+                <li
+                  key={m.id}
+                  className="flex items-center gap-3 rounded-lg border p-3 text-sm"
+                >
+                  <span className={`font-semibold ${m.color}`}>{m.name}</span>
+                  <span className="text-muted-foreground ml-auto text-xs">
+                    Mobile app → Connections
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              iOS uses ASWebAuthenticationSession (Safari + Keychain). Android uses Chrome Custom
+              Tabs. If you&apos;re not logged in on your phone, you&apos;ll sign in once in the
+              system browser — we still never store your password.
+            </p>
             <Button
               className="w-full"
-              disabled={connectMutation.isPending || !email || !password}
-              onClick={handleConnectCurrent}
+              onClick={() => completeMutation.mutate()}
+              disabled={completeMutation.isPending}
             >
-              {connectMutation.isPending ? (
+              {completeMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Signing in…
+                  Finishing…
                 </>
               ) : (
-                "Connect & save session"
+                "Finish setup"
               )}
             </Button>
-            <Button variant="ghost" className="w-full" onClick={skipCurrent}>
-              Skip this marketplace
+            <Button variant="ghost" className="w-full" onClick={() => setStep("profile")}>
+              Back to profile
             </Button>
-            {currentIndex === selected.length - 1 &&
-              connectStates[currentId] === "connected" && (
-                <Button
-                  className="w-full"
-                  onClick={() => completeMutation.mutate()}
-                >
-                  Finish setup
-                </Button>
-              )}
           </CardContent>
         </Card>
       )}
@@ -246,7 +183,7 @@ export default function FirstTimeSetupWizard({ onComplete }: Props) {
             <CheckCircle2 className="mx-auto h-12 w-12 text-green-500" />
             <p className="font-medium">You&apos;re all set!</p>
             <p className="text-sm text-muted-foreground">
-              Marketplace sessions will restore automatically on your next visit.
+              Connect Etsy, Shopify, and eBay anytime from the mobile app Connections tab.
             </p>
           </CardContent>
         </Card>

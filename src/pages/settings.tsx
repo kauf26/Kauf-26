@@ -446,7 +446,8 @@ function MarketplaceStatusSection() {
         Marketplace Status (mobile app)
       </h2>
       <p className="text-sm text-muted-foreground mb-4">
-        Etsy, Shopify, and eBay connect in the mobile app only. Tokens are stored in SecureStore on your device — not on this server.
+        Etsy, Shopify, and eBay use one-tap OAuth in the mobile app (Safari / Chrome session + Keychain).
+        Tokens and profile data stay on the device — not on this server.
       </p>
       {loading ? (
         <div className="flex items-center gap-2 rounded-lg border border-muted bg-muted/10 px-4 py-6 justify-center text-sm text-muted-foreground">

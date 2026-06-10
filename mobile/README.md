@@ -19,6 +19,16 @@ This app works on **both iOS and Android**. Follow the instructions below for yo
 
 ---
 
+## Marketplace OAuth (one-tap connect)
+
+Etsy, Shopify, and eBay connect via one-tap OAuth in the **Connections** tab. Tokens stay on-device only.
+
+**Redirect URI setup:** see [docs/mobile-oauth-redirect-setup.md](../docs/mobile-oauth-redirect-setup.md) for developer-console checklists and iOS/Android deep-link configuration.
+
+**Important:** OAuth requires a development or production build with the `kauf26` URL scheme. Expo Go uses `exp://` and cannot receive `kauf26://oauth/...` callbacks.
+
+---
+
 # APPLE iOS - App Store Submission Guide
 
 ## Step 1: Prerequisites (One-Time Setup)

@@ -3,8 +3,12 @@ import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
+import * as WebBrowser from 'expo-web-browser';
 import MainNavigator from './src/navigation/MainNavigator';
 import PinAuthScreen from './src/screens/PinAuthScreen';
+import { wireOAuthSessionLifecycle } from './src/services/oauthSessionLifecycle';
+
+WebBrowser.maybeCompleteAuthSession();
 
 const DarkTheme = {
   ...DefaultTheme,
@@ -26,6 +30,10 @@ export default function App() {
 
   useEffect(() => {
     checkPin();
+  }, []);
+
+  useEffect(() => {
+    return wireOAuthSessionLifecycle();
   }, []);
 
   const checkPin = async () => {

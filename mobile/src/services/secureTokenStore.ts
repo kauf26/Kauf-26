@@ -6,7 +6,10 @@ export type StoredPlatformTokens = {
   expiresAt: number;
   shopId?: string;
   shopDomain?: string;
+  userId?: string;
   accountName?: string;
+  userName?: string;
+  userEmail?: string;
   scope?: string;
 };
 

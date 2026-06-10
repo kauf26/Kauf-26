@@ -123,11 +123,10 @@ export async function verifyMarketplace(marketplace: string): Promise<VerifyResu
         },
       });
       if (!res.ok) return { ok: false, message: `Etsy verify failed (${res.status})` };
-      const json = await res.json();
       return {
         ok: true,
         message: 'Etsy connected',
-        accountName: json.shop_id ? `Shop ${json.shop_id}` : `User ${json.user_id}`,
+        accountName: tokens.userName ?? tokens.accountName,
       };
     }
 
@@ -146,7 +145,7 @@ export async function verifyMarketplace(marketplace: string): Promise<VerifyResu
       return {
         ok: true,
         message: 'Shopify connected',
-        accountName: json.shop?.name ?? tokens.shopDomain,
+        accountName: tokens.userName ?? json.shop?.name ?? tokens.shopDomain,
       };
     }
 
@@ -154,7 +153,7 @@ export async function verifyMarketplace(marketplace: string): Promise<VerifyResu
       return {
         ok: true,
         message: 'eBay token valid',
-        accountName: tokens.accountName,
+        accountName: tokens.userName ?? tokens.accountName,
       };
     }
 

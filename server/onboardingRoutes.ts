@@ -18,8 +18,14 @@ router.get("/status", async (req, res) => {
   res.json({
     needsWizard: dbUser ? !dbUser.onboardingCompleted : sessionUser.needsOnboarding,
     onboardingCompleted: dbUser?.onboardingCompleted ?? false,
+    connectedMarketplaces: [],
+    availableMarketplaces: [
+      { id: "etsy", name: "Etsy" },
+      { id: "shopify", name: "Shopify" },
+      { id: "ebay", name: "eBay" },
+    ],
     message:
-      "Connect Etsy, Shopify, and eBay in the mobile app — tokens stay on your device.",
+      "Connect Etsy, Shopify, and eBay in the mobile app with one-tap OAuth — tokens stay on your device.",
   });
 });
 
