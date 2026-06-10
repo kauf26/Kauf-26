@@ -11,6 +11,7 @@ import {
 } from "./luxuryPricing";
 import { hasProductListingStructure } from "./productPageFilter";
 import { brandsConflict } from "./listingUtils";
+import type { VisionConfidence } from "../visionMerge";
 import { normalizeText } from "./visionMatch";
 
 const GENERIC_MIN_PRICE = 5;
@@ -99,6 +100,7 @@ export function priceInResaleBand(
 export type ScraperOverrideInput = {
   visionTitle: string;
   visionBrand?: string;
+  visionBrandConfidence?: VisionConfidence;
   visionMaterial?: string;
   visionColor?: string;
   visionStyle?: string;
@@ -145,7 +147,9 @@ export function canScraperOverrideVision(input: ScraperOverrideInput): {
     );
   }
 
+  const visionBrandConfidence = input.visionBrandConfidence ?? "medium";
   if (
+    visionBrandConfidence === "high" &&
     brandsConflict(
       input.visionBrand,
       input.scraperBrand,

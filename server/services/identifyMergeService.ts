@@ -145,14 +145,14 @@ export function resolveScraperUsage(
   if (brandConfidence === "medium") {
     if (conflict) {
       warnings.push(
-        "Vision brand may differ from marketplace results — confirm brand manually."
+        "Vision brand uncertain — marketplace data used instead; confirm brand manually."
       );
       return {
         useScraper: true,
-        useScraperPricing: false,
-        scraperRejected: true,
+        useScraperPricing: true,
+        scraperRejected: false,
         manualReviewRequired: true,
-        reasons: ["medium_confidence_brand_conflict"],
+        reasons: ["medium_confidence_scraper_override"],
         warnings,
       };
     }
@@ -169,15 +169,23 @@ export function resolveScraperUsage(
     };
   }
 
-  warnings.push(
-    "Brand uncertain from photo — using marketplace data where available; manual review required."
-  );
+  if (conflict) {
+    warnings.push(
+      "Brand uncertain from photo — marketplace brand used instead; manual review required."
+    );
+  } else {
+    warnings.push(
+      "Brand uncertain from photo — using marketplace data where available; manual review required."
+    );
+  }
   return {
     useScraper: true,
     useScraperPricing: true,
     scraperRejected: false,
     manualReviewRequired: true,
-    reasons: ["low_brand_confidence"],
+    reasons: conflict
+      ? ["low_brand_confidence_scraper_override"]
+      : ["low_brand_confidence"],
     warnings,
   };
 }
@@ -235,6 +243,16 @@ export function resolveFinalBrand(
     return visionBrand || currentBrand;
   }
 
+  const brandConfidence = effectiveBrandConfidence(vision);
+  const scraperBrand = String(scraper.brand ?? "").trim();
+  if (
+    brandConfidence !== "high" &&
+    scraperBrand &&
+    visionScraperBrandConflict(visionBrand, scraperBrand, scraper.title)
+  ) {
+    return scraperBrand || currentBrand || visionBrand;
+  }
+
   return currentBrand || visionBrand;
 }
 
@@ -248,6 +266,20 @@ export function resolveFinalTitle(
 
   if (shouldRejectScraperProduct(vision, scraper)) {
     return visionTitle || currentTitle;
+  }
+
+  const brandConfidence = effectiveBrandConfidence(vision);
+  const scraperTitle = String(scraper.title ?? "").trim();
+  if (
+    brandConfidence !== "high" &&
+    scraperTitle &&
+    visionScraperBrandConflict(
+      vision.brand,
+      scraper.brand,
+      scraper.title
+    )
+  ) {
+    return scraperTitle || currentTitle || visionTitle;
   }
 
   return currentTitle || visionTitle;

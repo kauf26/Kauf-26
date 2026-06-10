@@ -30,7 +30,8 @@ type SharpModule = typeof import("sharp");
 
 async function loadSharp(): Promise<SharpModule | null> {
   try {
-    return (await import("sharp")).default as unknown as SharpModule;
+    const mod = await import("sharp");
+    return mod.default as unknown as SharpModule;
   } catch {
     return null;
   }

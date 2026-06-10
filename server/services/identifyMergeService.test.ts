@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   computeIdentificationWarnings,
   normalizeIdentificationCondition,
+  resolveFinalBrand,
+  resolveScraperUsage,
   shouldRejectScraperProduct,
   shouldUseScraperPricing,
   visionScraperBrandConflict,
@@ -11,6 +13,7 @@ import type { VisionProduct } from "../visionMerge";
 const rolexVision: VisionProduct = {
   title: "Rolex Submariner",
   brand: "Rolex",
+  brandConfidence: "high",
   model: "Submariner",
   category: "Watches",
   condition: "Used",
@@ -58,6 +61,31 @@ describe("identifyMergeService", () => {
     ).toBe(false);
   });
 
+  it("allows scraper override on medium brand_confidence conflict", () => {
+    const resolution = resolveScraperUsage(
+      { ...rolexVision, brandConfidence: "medium" },
+      {
+        title: "Invicta Pro Diver Watch",
+        brand: "Invicta",
+        price: 180,
+      }
+    );
+    expect(resolution.useScraper).toBe(true);
+    expect(resolution.scraperRejected).toBe(false);
+    expect(resolution.useScraperPricing).toBe(true);
+    expect(resolution.manualReviewRequired).toBe(true);
+  });
+
+  it("blocks scraper entirely on high brand_confidence conflict", () => {
+    const resolution = resolveScraperUsage(rolexVision, {
+      title: "Invicta Pro Diver Watch",
+      brand: "Invicta",
+      price: 180,
+    });
+    expect(resolution.useScraper).toBe(false);
+    expect(resolution.scraperRejected).toBe(true);
+  });
+
   it("computes warnings for brand/title mismatch", () => {
     const warnings = computeIdentificationWarnings({
       vision: rolexVision,
@@ -72,5 +100,23 @@ describe("identifyMergeService", () => {
     expect(warnings.titleBrandMismatch).toBe(true);
     expect(warnings.scraperBrandRejected).toBe(true);
     expect(warnings.messages.length).toBeGreaterThan(0);
+  });
+
+  it("prefers scraper brand when vision brand confidence is low", () => {
+    const vision: VisionProduct = {
+      title: "Diver Watch",
+      brand: "Invicta",
+      brandConfidence: "low",
+      confidence: "medium",
+    };
+    const brand = resolveFinalBrand(
+      vision,
+      {
+        title: "Rolex Submariner Date",
+        brand: "Rolex",
+      },
+      "Invicta"
+    );
+    expect(brand).toBe("Rolex");
   });
 });

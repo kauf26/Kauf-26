@@ -1,0 +1,8 @@
+
+# Expo build artifacts
+.expo/
+android/
+ios/
+
+# Uploads
+uploads/labels/

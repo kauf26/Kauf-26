@@ -357,6 +357,7 @@ function mergeVisionAndScraper(
   const override = canScraperOverrideVision({
     visionTitle: vision.title,
     visionBrand: vision.brand,
+    visionBrandConfidence: vision.brandConfidence ?? vision.confidence,
     visionMaterial: vision.material,
     visionColor: vision.color,
     visionStyle: vision.style,
@@ -547,58 +548,6 @@ async function prepareDraftPublishing(draftId: number): Promise<number | null> {
     return null;
   }
 }
-
-const VISION_IDENTIFY_PROMPT = `You are a product identification expert analyzing a product photo for a resale listing.
-
-CRITICAL:
-- Identify ONLY the main physical product in focus (any item: apparel, electronics, home goods, toys, sports gear, tools, etc.).
-- IGNORE background clutter not part of the product.
-- USE text/logos printed ON the product (brand names, venue names, team names) for brand and title when they identify the item.
-- Pay attention to any small text, serial numbers, model numbers, or logos on the product — include them in the title when legible.
-- Mentally "zoom in" on the sharpest legible text and logos; prefer readings from those details over guessing from shape alone.
-- Use a specific descriptive title for the actual product (brand + model when visible), not vague scene descriptions like "analog pilot watch" when a brand name is visible.
-- For watches: read the dial, crown, and clasp carefully. Do NOT assign Rolex, Omega, or other luxury brands unless that exact name or logo is clearly visible.
-- Never substitute a lookalike brand (e.g. do not say Rolex for an Invicta/Casio/Timex diver). Use only the brand text you can read.
-- If brand text is not clearly visible, set brand to "" and use confidence "low" — do not guess or hallucinate a brand.
-- condition must be ONLY one of: New, Used, Like New — never include brand names or product names in condition.
-
-Return ONLY valid JSON:
-{
-  "title": "specific product name",
-  "brand": "brand or text on product if visible, else empty string",
-  "model": "model name or line (e.g. Chronospace, Submariner, Eco-Drive) without brand, or empty string",
-  "category": "accurate marketplace category (e.g. Home & Kitchen, Electronics, Clothing — never \"General\")",
-  "condition": "one of: New, Used, Like New",
-  "price": resale price in USD as a number only if you are confident from visible context; otherwise null (never guess a low placeholder),
-  "confidence": "high" | "medium" | "low",
-  "description": "1-2 sentences for a resale listing: material, color, use case",
-  "material": "primary material if visible or inferable (ceramic, glass, plastic, metal, wood, fabric, leather, etc.) or empty string",
-  "color": "primary color(s), e.g. white and blue, two-tone, matte black — or empty string",
-  "style": "optional pattern or style, e.g. striped, minimalist, vintage — or empty string"
-}
-
-Guidance:
-- Pick an accurate marketplace category for the item type (e.g. mug → Home & Kitchen; phone → Electronics).
-- Do NOT invent a conservative or placeholder price. Use null when resale value is unknown — marketplace scrapers will supply price.
-- Infer material from visible texture (glazed ceramic, stainless steel, cotton fabric).
-- Include color and style in description when helpful; keep description factual, not generic filler.
-- Include visible on-product text in brand/title when helpful (e.g. bar name on a cap).
-- Do not use the word "General" as category — choose a specific marketplace category.
-- confidence: "high" = clear brand/model visible; "medium" = product type clear; "low" = very blurry. Always set price to null when unsure (not 0 for guessing).
-
-Examples (format only):
-
-Phone: { "title": "iPhone 12", "brand": "Apple", "category": "Electronics", "condition": "Used", "price": 299.99, "confidence": "high", "description": "..." }
-
-Cap with logo: { "title": "The Shack Baseball Cap", "brand": "The Shack", "category": "Clothing", "condition": "Used", "price": 15, "confidence": "medium", "description": "..." }
-
-Small toy: { "title": "Yellow Stress Ball", "brand": "", "category": "Toys", "condition": "Used", "price": 8, "confidence": "medium", "material": "rubber", "color": "yellow", "style": "", "description": "..." }
-
-Ceramic mug: { "title": "Two-Tone Ceramic Mug", "brand": "", "category": "Home & Kitchen", "condition": "New", "price": null, "confidence": "medium", "material": "ceramic", "color": "white and blue", "style": "two-tone glaze", "description": "A ceramic mug with a two-tone glaze, suitable for coffee or tea." }
-
-Cleaning cloth (blurry/generic): { "title": "Eyeglass cleaning cloth", "brand": "", "category": "Accessories", "condition": "Used", "price": 0, "confidence": "low", "material": "microfiber", "color": "", "style": "", "description": "Soft microfiber cloth for cleaning eyeglasses." }
-
-Mug example: { "title": "Starbucks 16oz Ceramic Mug", "brand": "Starbucks", "category": "Home & Kitchen", "condition": "Used", "price": null, "confidence": "high", "description": "..." }`;
 
 async function callVisionForImage(
   image: IdentifyImageInput,
