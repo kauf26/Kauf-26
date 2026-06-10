@@ -18,13 +18,13 @@ import {
   formatScrapedMarketAverage,
   listingDescriptionFields,
   resolveProductDescription,
-} from "../../shared/productDescription";
+} from "@shared/productDescription";
 import {
   UNKNOWN_CATEGORY_WARNING,
   evaluateMarketplaceCategorySupport,
   filterSupportedMarketplaces,
   isUnknownProductCategory,
-} from "../../shared/marketplaceCategorySupport";
+} from "@shared/marketplaceCategorySupport";
 
 export type Marketplace = (typeof SUPPORTED_MARKETPLACE_IDS)[number];
 
