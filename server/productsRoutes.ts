@@ -163,7 +163,18 @@ router.get("/drafts/count", async (_req, res) => {
  try {
    const [row] = await db
      .select({
-       count: sql<number>`cast(count(distinct ${productDrafts.id}) as int)`,
+       count: sql<number>`cast(count(distinct (
+         case
+           when ${productDrafts.sku} is not null
+             and trim(${productDrafts.sku}) <> ''
+             and upper(trim(${productDrafts.sku})) not like 'AUTO-%'
+             then 'sku:' || lower(trim(${productDrafts.sku}))
+           when coalesce(${productDrafts.attributes}->>'brand', '') <> ''
+             then 'tb:' || lower(trim(${productDrafts.attributes}->>'brand'))
+               || '|' || lower(trim(regexp_replace(${productDrafts.title}, '\\s+', ' ', 'g')))
+           else 't:' || lower(trim(regexp_replace(${productDrafts.title}, '\\s+', ' ', 'g')))
+         end
+       )) as int)`,
      })
      .from(productDrafts);
 

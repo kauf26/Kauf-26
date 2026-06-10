@@ -286,7 +286,7 @@ export default function ShippingLabelsPage() {
           </Button>
           <Button onClick={handleGenerate} disabled={isGenerating || !selectedSaleId}>
             {isGenerating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Printer className="w-4 h-4 mr-2" />}
-            Buy &amp; Print Label
+            Print Label
           </Button>
         </div>
 

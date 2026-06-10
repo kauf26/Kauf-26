@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
+import { useProductDraft } from "@/ProductDraftContext";
+import { resetListingFlow } from "@/lib/resetListingFlow";
 import { useProductDraftCount } from "@/hooks/use-product-draft-count";
 import { useSales } from "@/hooks/use-sales";
 import { useListings } from "@/hooks/use-listings";
@@ -64,6 +66,8 @@ function layoutsEqual(a: LayoutItem[], b: LayoutItem[]): boolean {
 
 export default function Dashboard() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
+  const { clearDraft } = useProductDraft();
   const [layout, setLayout] = useState<LayoutItem[]>(defaultLayout);
   const [hasChanges, setHasChanges] = useState(false);
   const layoutHydratedRef = useRef(false);
@@ -122,8 +126,8 @@ export default function Dashboard() {
   };
 
   const handleReset = () => {
-    setLayout(defaultLayout);
-    setHasChanges(true);
+    resetListingFlow({ clearDraftContext: clearDraft });
+    setLocation("/");
   };
 
   const totalRevenue = sales.reduce((sum, sale) => sum + parseFloat(sale.saleAmount), 0);
@@ -175,7 +179,7 @@ export default function Dashboard() {
         return (
           <div className="text-center">
             <div className={`text-4xl font-bold ${info.color}`}>{productCount}</div>
-            <p className="text-sm text-muted-foreground mt-2">Products uploaded</p>
+            <p className="text-sm text-muted-foreground mt-2">Unique product drafts</p>
           </div>
         );
       case "listings":
@@ -246,7 +250,7 @@ export default function Dashboard() {
             <Button
               variant="outline"
               onClick={handleReset}
-              data-testid="button-reset-layout"
+              data-testid="button-reset-listing"
             >
               <RotateCcw className="w-4 h-4 mr-2" />
               Reset

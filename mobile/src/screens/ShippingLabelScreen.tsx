@@ -172,7 +172,7 @@ export default function ShippingLabelScreen({ sale, onClose, onComplete }: Props
         ))}
 
         <TouchableOpacity style={styles.primaryButton} onPress={handleGenerate} disabled={generating}>
-          {generating ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Buy & Print Label</Text>}
+          {generating ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Print Label</Text>}
         </TouchableOpacity>
 
         {labelUrl && (

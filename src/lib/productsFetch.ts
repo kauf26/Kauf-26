@@ -1,5 +1,6 @@
 import {
   countUniqueDraftIds,
+  countUniqueProductDrafts,
   dedupeDraftRowsById,
 } from "@shared/draftCount";
 
@@ -21,12 +22,14 @@ type ProductDraftRow = {
 
 const PRODUCTS_QUERY_KEY = ["products"] as const;
 export const PRODUCT_DRAFT_COUNT_QUERY_KEY = ["productDraftCount"] as const;
-export { PRODUCTS_QUERY_KEY, countUniqueDraftIds, dedupeDraftRowsById };
+export { PRODUCTS_QUERY_KEY, countUniqueDraftIds, countUniqueProductDrafts, dedupeDraftRowsById };
 
 let inFlight: Promise<ListingProduct[]> | null = null;
 let countInFlight: Promise<number> | null = null;
 
-export function countUniqueProductDrafts(products: ListingProduct[]): number {
+export function countUniqueProductDraftsFromList(
+  products: ListingProduct[]
+): number {
   return countUniqueDraftIds(products);
 }
 
@@ -86,7 +89,7 @@ async function fetchProductDraftCountOnce(): Promise<number> {
   }
   const drafts = (await res.json()) as ProductDraftRow[];
   if (!Array.isArray(drafts)) return 0;
-  return countUniqueDraftIds(drafts);
+  return countUniqueProductDrafts(drafts);
 }
 
 /** Distinct draft count for dashboard stats (one row per product). */
