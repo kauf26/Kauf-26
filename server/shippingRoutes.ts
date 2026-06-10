@@ -19,6 +19,7 @@ import {
   isShippingAddressComplete,
   isShippingWeightValid,
 } from "../shared/shippingValidation";
+import { sendShippingLabelEmail } from "./services/shippingEmailService";
 
 const router = express.Router();
 
@@ -195,6 +196,26 @@ router.get("/labels", async (_req, res) => {
   } catch (error) {
     console.error("[KAUF26] Error listing shipping labels:", error);
     return res.status(500).json({ error: "Failed to list shipping labels" });
+  }
+});
+
+router.post("/label/email", async (req, res) => {
+  try {
+    const { email, labelUrl, labelPdfUrl, trackingNumber } = req.body ?? {};
+    const url = String(labelPdfUrl ?? labelUrl ?? "").trim();
+    if (!url) {
+      return res.status(400).json({ error: "labelUrl is required." });
+    }
+    const result = await sendShippingLabelEmail({
+      email: String(email ?? ""),
+      labelUrl: url,
+      trackingNumber: String(trackingNumber ?? "1Z9999999999"),
+    });
+    return res.status(200).json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to send email";
+    console.error("[KAUF26] Error emailing shipping label:", message);
+    return res.status(400).json({ error: message });
   }
 });
 

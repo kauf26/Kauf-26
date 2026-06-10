@@ -8,13 +8,17 @@ import { useToast } from "@/hooks/use-toast";
 import { useSales } from "@/hooks/use-sales";
 import {
   DEFAULT_FROM_ADDRESS,
+  emailShippingLabel,
   fetchShippingRates,
   formatRateLabel,
   generateShippingLabel,
   getPrintLabelBlockReason,
-  getShippingRatesBlockReason,
+  getShippingToPackageBlockReason,
+  loadStoredShipFromAddress,
   markShippingLabelCreated,
+  mergeShipFromAddress,
   parseBuyerAddress,
+  saveStoredShipFromAddress,
   type ShippingAddress,
   type ShippingRate,
 } from "@/lib/salesFetch";
@@ -79,7 +83,9 @@ export default function ShippingLabelsPage() {
 
   const selectedSale = sales.find((s) => s.id === Number(selectedSaleId));
 
-  const [fromAddress, setFromAddress] = useState<ShippingAddress>(DEFAULT_FROM_ADDRESS);
+  const [fromAddress, setFromAddress] = useState<ShippingAddress>(() =>
+    loadStoredShipFromAddress()
+  );
   const [toAddress, setToAddress] = useState<ShippingAddress>({
     name: "",
     line1: "",
@@ -107,34 +113,61 @@ export default function ShippingLabelsPage() {
   const [trackingNumber, setTrackingNumber] = useState<string | null>(null);
   const [isLoadingRates, setIsLoadingRates] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [emailTo, setEmailTo] = useState("");
+  const [isEmailing, setIsEmailing] = useState(false);
+
+  useEffect(() => {
+    saveStoredShipFromAddress(fromAddress);
+  }, [fromAddress]);
 
   useEffect(() => {
     if (!selectedSale) return;
     setToAddress(parseBuyerAddress(selectedSale.buyerInfo));
   }, [selectedSale?.id, selectedSale?.buyerInfo]);
 
+  const resolvedFrom = useMemo(
+    () => mergeShipFromAddress(fromAddress, DEFAULT_FROM_ADDRESS),
+    [fromAddress]
+  );
+
   const ratesBlockReason = useMemo(
     () =>
-      getShippingRatesBlockReason({
-        fromAddress,
+      getShippingToPackageBlockReason({
         toAddress,
         weightLbs,
         weightOz,
+        lengthIn,
+        widthIn,
+        heightIn,
       }),
-    [fromAddress, toAddress, weightLbs, weightOz]
+    [toAddress, weightLbs, weightOz, lengthIn, widthIn, heightIn]
   );
 
   const printBlockReason = useMemo(
     () =>
       getPrintLabelBlockReason({
-        fromAddress,
+        fromAddress: resolvedFrom,
         toAddress,
         weightLbs,
         weightOz,
+        lengthIn,
+        widthIn,
+        heightIn,
         selectedRateId,
         selectedService,
+        defaultFromAddress: DEFAULT_FROM_ADDRESS,
       }),
-    [fromAddress, toAddress, weightLbs, weightOz, selectedRateId, selectedService]
+    [
+      resolvedFrom,
+      toAddress,
+      weightLbs,
+      weightOz,
+      lengthIn,
+      widthIn,
+      heightIn,
+      selectedRateId,
+      selectedService,
+    ]
   );
 
   const canGetRates = ratesBlockReason == null;
@@ -150,7 +183,7 @@ export default function ShippingLabelsPage() {
     setRatesMeta(null);
     try {
       const result = await fetchShippingRates({
-        fromAddress,
+        fromAddress: resolvedFrom,
         toAddress,
         packageDetails: {
           weightLbs: parseFloat(weightLbs) || 1,
@@ -196,7 +229,7 @@ export default function ShippingLabelsPage() {
     try {
       const result = await generateShippingLabel({
         ...(hasSale ? { saleId } : {}),
-        fromAddress,
+        fromAddress: resolvedFrom,
         toAddress,
         packageDetails: {
           weightLbs: parseFloat(weightLbs) || 1,
@@ -221,6 +254,34 @@ export default function ShippingLabelsPage() {
       });
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleEmailLabel = async () => {
+    if (!labelUrl || !trackingNumber) return;
+    if (!emailTo.trim()) {
+      toast({ title: "Email required", description: "Enter a recipient email.", variant: "destructive" });
+      return;
+    }
+    setIsEmailing(true);
+    try {
+      const result = await emailShippingLabel({
+        email: emailTo.trim(),
+        labelUrl,
+        trackingNumber,
+      });
+      toast({
+        title: result.mock ? "Email logged (dev)" : "Email sent",
+        description: result.message,
+      });
+    } catch (err) {
+      toast({
+        title: "Email failed",
+        description: err instanceof Error ? err.message : "Try again",
+        variant: "destructive",
+      });
+    } finally {
+      setIsEmailing(false);
     }
   };
 
@@ -331,7 +392,7 @@ export default function ShippingLabelsPage() {
             Print Label
           </Button>
           {ratesBlockReason ? (
-            <p className="text-sm text-muted-foreground">{ratesBlockReason}</p>
+            <p className="text-sm text-destructive">{ratesBlockReason}</p>
           ) : printBlockReason ? (
             <p className="text-sm text-muted-foreground">{printBlockReason}</p>
           ) : null}
@@ -418,7 +479,7 @@ export default function ShippingLabelsPage() {
                   </p>
                 </object>
               </div>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3">
                 <Button asChild>
                   <a href={labelUrl} target="_blank" rel="noopener noreferrer" download>
                     Download PDF
@@ -426,6 +487,23 @@ export default function ShippingLabelsPage() {
                 </Button>
                 <Button variant="outline" onClick={() => setLocation("/dashboard")}>
                   Done
+                </Button>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-border">
+                <Input
+                  type="email"
+                  placeholder="Email label to…"
+                  value={emailTo}
+                  onChange={(e) => setEmailTo(e.target.value)}
+                  className="sm:flex-1"
+                />
+                <Button
+                  variant="secondary"
+                  onClick={() => void handleEmailLabel()}
+                  disabled={isEmailing || !emailTo.trim()}
+                >
+                  {isEmailing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                  Email PDF
                 </Button>
               </div>
             </CardContent>

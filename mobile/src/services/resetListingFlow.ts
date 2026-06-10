@@ -5,6 +5,10 @@ export type MobileListingResetState = {
   setDraftId: (value: number | null) => void;
   setTitle: (value: string) => void;
   setDescription: (value: string) => void;
+  setBrand: (value: string) => void;
+  setModelNumber: (value: string) => void;
+  setColor: (value: string) => void;
+  setMaterial: (value: string) => void;
   setPrice: (value: string) => void;
   setCondition: (value: 'new' | 'used') => void;
   setSelectedMarketplaces: (value: string[]) => void;
@@ -20,6 +24,10 @@ export function resetMobileListingFlow(state: MobileListingResetState): void {
   state.setDraftId(null);
   state.setTitle('');
   state.setDescription('');
+  state.setBrand('');
+  state.setModelNumber('');
+  state.setColor('');
+  state.setMaterial('');
   state.setPrice('');
   state.setCondition('new');
   state.setSelectedMarketplaces([]);

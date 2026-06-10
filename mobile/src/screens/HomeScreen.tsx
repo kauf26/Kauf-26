@@ -26,6 +26,10 @@ import {
   uploadDraftPhotosMobile,
 } from '../services/draftPhotos';
 import { resetMobileListingFlow } from '../services/resetListingFlow';
+import {
+  AUTO_DESCRIPTION_DISCLAIMER,
+  resolveProductDescription,
+} from '../../../shared/productDescription';
 
 const MOBILE_PUBLISH_PLATFORMS = new Set(['etsy', 'shopify', 'ebay']);
 
@@ -76,6 +80,10 @@ export default function HomeScreen() {
   const [image, setImage] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [brand, setBrand] = useState('');
+  const [modelNumber, setModelNumber] = useState('');
+  const [color, setColor] = useState('');
+  const [material, setMaterial] = useState('');
   const [price, setPrice] = useState('');
   const [condition, setCondition] = useState<'new' | 'used'>('new');
   const [selectedMarketplaces, setSelectedMarketplaces] = useState<string[]>([]);
@@ -97,6 +105,10 @@ export default function HomeScreen() {
       setDraftId,
       setTitle,
       setDescription,
+      setBrand,
+      setModelNumber,
+      setColor,
+      setMaterial,
       setPrice,
       setCondition,
       setSelectedMarketplaces,
@@ -179,6 +191,41 @@ export default function HomeScreen() {
     return id;
   };
 
+  const applyAnalyzeResult = (data: Record<string, unknown>) => {
+    const nextTitle = String(data.title ?? data.modelName ?? '').trim();
+    const nextBrand = String(data.brand ?? '').trim();
+    const nextModel = String(data.modelNumber ?? data.refNumber ?? '').trim();
+    const nextColor = String(data.color ?? '').trim();
+    const nextMaterial = String(data.material ?? '').trim();
+    const rawCondition = String(data.condition ?? '').toLowerCase();
+    const nextCondition: 'new' | 'used' =
+      rawCondition === 'new' || rawCondition === 'brand new' ? 'new' : 'used';
+    const conditionLabel = nextCondition === 'new' ? 'New' : 'Used';
+
+    setTitle(nextTitle);
+    setBrand(nextBrand);
+    setModelNumber(nextModel);
+    setColor(nextColor);
+    setMaterial(nextMaterial);
+    setCondition(nextCondition);
+    setDescription(
+      resolveProductDescription(String(data.description ?? data.aiDescription ?? ''), {
+        brand: nextBrand,
+        modelNumber: nextModel,
+        color: nextColor,
+        material: nextMaterial,
+        condition: conditionLabel,
+        title: nextTitle,
+      })
+    );
+
+    const suggested =
+      data.suggestedPrice ?? data.recommendedPrice ?? data.price ?? data.medianPrice;
+    if (suggested != null && String(suggested).trim() !== '') {
+      setPrice(String(suggested));
+    }
+  };
+
   const analyzeImage = async (base64: string) => {
     setIsAnalyzing(true);
     try {
@@ -193,12 +240,8 @@ export default function HomeScreen() {
       });
       
       if (response.ok) {
-        const data = await response.json();
-        setTitle(data.title || '');
-        setDescription(data.description || '');
-        if (data.suggestedPrice) {
-          setPrice(data.suggestedPrice.toString());
-        }
+        const data = (await response.json()) as Record<string, unknown>;
+        applyAnalyzeResult(data);
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to analyze image. Please enter details manually.');
@@ -403,12 +446,56 @@ export default function HomeScreen() {
             placeholderTextColor="#6b7280"
           />
 
-          <Text style={styles.label}>Description (AI-generated)</Text>
+          <Text style={styles.label}>Brand</Text>
+          <TextInput
+            style={styles.input}
+            value={brand}
+            onChangeText={setBrand}
+            placeholder="e.g. Rolex, Nike"
+            placeholderTextColor="#6b7280"
+          />
+
+          <Text style={styles.label}>Model Number</Text>
+          <TextInput
+            style={styles.input}
+            value={modelNumber}
+            onChangeText={setModelNumber}
+            placeholder="Model or reference number"
+            placeholderTextColor="#6b7280"
+          />
+
+          <View style={styles.row}>
+            <View style={styles.halfField}>
+              <Text style={styles.label}>Color</Text>
+              <TextInput
+                style={styles.input}
+                value={color}
+                onChangeText={setColor}
+                placeholder="e.g. black/silver"
+                placeholderTextColor="#6b7280"
+              />
+            </View>
+            <View style={styles.halfField}>
+              <Text style={styles.label}>Material</Text>
+              <TextInput
+                style={styles.input}
+                value={material}
+                onChangeText={setMaterial}
+                placeholder="e.g. stainless steel"
+                placeholderTextColor="#6b7280"
+              />
+            </View>
+          </View>
+
+          <Text style={styles.label}>Description</Text>
+          <View style={styles.disclaimerBox}>
+            <Text style={styles.disclaimerText}>{AUTO_DESCRIPTION_DISCLAIMER}</Text>
+          </View>
           <TextInput
             style={[styles.input, styles.textArea]}
             value={description}
             onChangeText={setDescription}
-            placeholder="Description will be generated by AI"
+            placeholder="Review and edit the listing description"
             placeholderTextColor="#6b7280"
             multiline
             numberOfLines={4}
@@ -661,6 +748,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 8,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  halfField: {
+    flex: 1,
+  },
+  disclaimerBox: {
+    backgroundColor: 'rgba(180, 83, 9, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(217, 119, 6, 0.45)',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 8,
+  },
+  disclaimerText: {
+    color: '#fcd34d',
+    fontSize: 12,
+    lineHeight: 18,
   },
   sectionLabel: {
     color: '#9ca3af',

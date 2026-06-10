@@ -3,6 +3,17 @@ import type {
   FulfillmentStatus,
   PaymentStatus,
 } from "../../shared/saleStatus";
+import { mergeShipFromAddress } from "../../shared/shippingValidation";
+import { SHIP_FROM_STORAGE_KEY, type StoredShipFromAddress } from "../../shared/shippingStorage";
+
+export {
+  getPrintLabelBlockReason,
+  getShippingRatesBlockReason,
+  getShippingToPackageBlockReason,
+  isShippingAddressComplete,
+  isShippingWeightValid,
+  mergeShipFromAddress,
+} from "../../shared/shippingValidation";
 
 export type DashboardSale = {
   id: number;
@@ -86,13 +97,6 @@ export async function updateSaleStatus(
   if (!res.ok) throw new Error(data.error ?? "Failed to update sale status");
   return data;
 }
-
-export {
-  getPrintLabelBlockReason,
-  getShippingRatesBlockReason,
-  isShippingAddressComplete,
-  isShippingWeightValid,
-} from "../../shared/shippingValidation";
 
 export type ShippingAddress = {
   name?: string;
@@ -225,3 +229,41 @@ export const DEFAULT_FROM_ADDRESS: ShippingAddress = {
   postalCode: "90001",
   country: "US",
 };
+
+export function loadStoredShipFromAddress(): ShippingAddress {
+  if (typeof window === "undefined") return DEFAULT_FROM_ADDRESS;
+  try {
+    const raw = localStorage.getItem(SHIP_FROM_STORAGE_KEY);
+    if (!raw) return DEFAULT_FROM_ADDRESS;
+    const parsed = JSON.parse(raw) as StoredShipFromAddress;
+    return mergeShipFromAddress(parsed, DEFAULT_FROM_ADDRESS);
+  } catch {
+    return DEFAULT_FROM_ADDRESS;
+  }
+}
+
+export function saveStoredShipFromAddress(address: ShippingAddress): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem(SHIP_FROM_STORAGE_KEY, JSON.stringify(address));
+  } catch {
+    /* ignore quota errors */
+  }
+}
+
+export async function emailShippingLabel(input: {
+  email: string;
+  labelUrl: string;
+  trackingNumber: string;
+}): Promise<{ mock?: boolean; message: string }> {
+  await waitForBackendReady();
+  const res = await fetch("/api/shipping/label/email", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(input),
+  });
+  const data = (await res.json()) as { message?: string; mock?: boolean; error?: string };
+  if (!res.ok) throw new Error(data.error ?? "Failed to send email");
+  return { mock: data.mock, message: data.message ?? "Email sent." };
+}

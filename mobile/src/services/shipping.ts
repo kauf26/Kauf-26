@@ -1,4 +1,5 @@
 import { API_BASE_URL } from './config';
+import * as SecureStore from 'expo-secure-store';
 import type {
   FulfillmentStatus,
   PaymentStatus,
@@ -6,11 +7,16 @@ import type {
 import {
   getPrintLabelBlockReason,
   getShippingRatesBlockReason,
+  getShippingToPackageBlockReason,
+  mergeShipFromAddress,
 } from '../../../shared/shippingValidation';
+import { SHIP_FROM_STORAGE_KEY } from '../../../shared/shippingStorage';
 
 export {
   getPrintLabelBlockReason,
   getShippingRatesBlockReason,
+  getShippingToPackageBlockReason,
+  mergeShipFromAddress,
 } from '../../../shared/shippingValidation';
 
 export type MobileSale = {
@@ -199,3 +205,37 @@ export const DEFAULT_FROM_ADDRESS: ShippingAddress = {
   postalCode: '90001',
   country: 'US',
 };
+
+export async function loadStoredShipFromAddress(): Promise<ShippingAddress> {
+  try {
+    const raw = await SecureStore.getItemAsync(SHIP_FROM_STORAGE_KEY);
+    if (!raw) return DEFAULT_FROM_ADDRESS;
+    const parsed = JSON.parse(raw) as ShippingAddress;
+    return mergeShipFromAddress(parsed, DEFAULT_FROM_ADDRESS);
+  } catch {
+    return DEFAULT_FROM_ADDRESS;
+  }
+}
+
+export async function saveStoredShipFromAddress(address: ShippingAddress): Promise<void> {
+  try {
+    await SecureStore.setItemAsync(SHIP_FROM_STORAGE_KEY, JSON.stringify(address));
+  } catch {
+    /* ignore storage errors */
+  }
+}
+
+export async function emailShippingLabel(input: {
+  email: string;
+  labelUrl: string;
+  trackingNumber: string;
+}): Promise<{ mock?: boolean; message: string }> {
+  const res = await fetch(`${API_BASE_URL}/api/shipping/label/email`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(input),
+  });
+  const data = (await res.json()) as { message?: string; mock?: boolean; error?: string };
+  if (!res.ok) throw new Error(data.error ?? 'Failed to send email');
+  return { mock: data.mock, message: data.message ?? 'Email sent.' };
+}

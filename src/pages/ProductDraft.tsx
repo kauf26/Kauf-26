@@ -13,6 +13,10 @@ import {
   persistDraftImages,
   saveDraftSnapshot,
 } from "@/lib/draftPhotos";
+import {
+  AUTO_DESCRIPTION_DISCLAIMER,
+  resolveProductDescription,
+} from "../../shared/productDescription";
 
 type ProductDraftState = {
 isExactMatch: boolean;
@@ -59,7 +63,7 @@ isExactMatch: false,
 matchType: "generic",
 title: "Draft Product Title",
 brand: "",
-description: "Detailed product description goes here...",
+description: "",
 price: "0.00",
 category: "",
 condition: "New",
@@ -148,7 +152,18 @@ function draftStateFromListing(listing: ListingSession): ProductDraftState {
       listing.matchType ?? (listing.isExactMatch ? "exact" : "generic"),
     title: listing.title.trim(),
     brand: sanitizeBrandDisplay(listing.brand),
-    description: listing.description.trim(),
+    description: resolveProductDescription(listing.description, {
+      brand: sanitizeBrandDisplay(listing.brand),
+      modelNumber: String(
+        (listing as { modelNumber?: string }).modelNumber ??
+          (listing as { refNumber?: string }).refNumber ??
+          ""
+      ).trim(),
+      color: (listing.color ?? p.color ?? "").trim(),
+      material: (listing.material ?? p.material ?? "").trim(),
+      condition: normalizeConditionForSelect(listing.condition),
+      title: listing.title.trim(),
+    }),
     price,
     category: listing.category.trim(),
     condition: normalizeConditionForSelect(listing.condition),
@@ -374,7 +389,16 @@ const applyScrapeResult = (data: Record<string, unknown>) => {
     ...p,
     title: String(data.title ?? p.title),
     brand: sanitizeBrandDisplay(String(data.brand ?? p.brand)),
-    description: String(data.description ?? p.description),
+    description: resolveProductDescription(String(data.description ?? p.description), {
+      brand: sanitizeBrandDisplay(String(data.brand ?? p.brand)),
+      modelNumber: String(
+        data.modelNumber ?? data.refNumber ?? p.modelNumber ?? ""
+      ).trim(),
+      color: String(data.color ?? p.color).trim(),
+      material: String(data.material ?? p.material).trim(),
+      condition: normalizeConditionForSelect(String(data.condition ?? p.condition)),
+      title: String(data.title ?? p.title),
+    }),
     price: priceStr,
     category: String(data.category ?? p.category) || p.category,
     productUrl: String(
@@ -383,6 +407,11 @@ const applyScrapeResult = (data: Record<string, unknown>) => {
     condition: normalizeConditionForSelect(
       String(data.condition ?? p.condition)
     ),
+    modelNumber: String(
+      data.modelNumber ?? data.refNumber ?? p.modelNumber ?? ""
+    ).trim(),
+    material: String(data.material ?? p.material).trim(),
+    color: String(data.color ?? p.color).trim(),
     allegroAverage: formatPrice(String(data.allegroAvg ?? data.allegroAverage ?? priceStr)),
     ebayAverage: formatPrice(String(data.ebayAvg ?? data.ebayPrice ?? priceStr)),
     isExactMatch: isExact,
@@ -685,7 +714,18 @@ return (
 
         <div className="space-y-1">
           <label className="text-xs font-medium text-zinc-400">Description</label>
-          <textarea rows={4} className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-700 resize-none" value={product.description} onChange={e => update("description", e.target.value)} />
+          <div
+            className="rounded-md border border-amber-700/50 bg-amber-950/40 px-3 py-2 text-xs text-amber-200/90"
+            role="note"
+          >
+            {AUTO_DESCRIPTION_DISCLAIMER}
+          </div>
+          <textarea
+            rows={4}
+            className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-700 resize-none"
+            value={product.description}
+            onChange={(e) => update("description", e.target.value)}
+          />
         </div>
       </div>
     </div>
