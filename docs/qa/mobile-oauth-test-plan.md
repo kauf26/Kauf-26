@@ -1,10 +1,10 @@
-# Mobile OAuth — QA Test Plan
+# Mobile OAuth — QA Test Plan (15 tests)
 
-Use this checklist before release. Requires a **development or production build** (Expo Go cannot receive `kauf26://` redirects).
+Use this checklist before production merge. Requires a **development or production build** — Expo Go cannot receive `kauf26://` redirects.
 
-**Related docs:** [mobile-oauth-redirect-setup.md](../mobile-oauth-redirect-setup.md)
+**Setup docs:** [mobile-oauth-redirect-setup.md](../mobile-oauth-redirect-setup.md)
 
-**Automated pre-flight (run before manual QA):**
+**Automated pre-flight (run first):**
 
 ```bash
 npm test -- shared/
@@ -17,9 +17,9 @@ cd mobile && npx tsc --noEmit
 
 - [ ] iOS device/simulator (iOS 14+)
 - [ ] Android device/emulator (Android 6+)
-- [ ] Test accounts for at least 5 OAuth marketplaces (e.g. Etsy, eBay, Shopify, Amazon, Shopee) with saved credentials in Safari (iOS) and Chrome (Android)
-- [ ] Test accounts with **no** saved credentials (fallback login)
-- [ ] Server `.env` with client IDs for test marketplaces (or mocked `/api/marketplaces/oauth-config`)
+- [ ] Test accounts for at least 5 OAuth marketplaces (Etsy, eBay, Shopify, Amazon, Shopee) with saved credentials in **Safari** (iOS) and **Chrome** (Android)
+- [ ] Test accounts with **no** saved credentials (fallback login path)
+- [ ] Server `.env` with client IDs for test marketplaces (or mocked `GET /api/marketplaces/oauth-config`)
 - [ ] Mobile build with `EXPO_PUBLIC_*` secrets for test marketplaces (`mobile/.env.example`)
 - [ ] Redirect URI `kauf26://oauth/{marketplace_id}` registered in each marketplace developer dashboard
 
@@ -29,42 +29,42 @@ cd mobile && npx tsc --noEmit
 
 ### Test 1: Saved credentials in browser — one tap, no typing
 
-| Marketplace | Steps | Expected |
-|-------------|-------|----------|
-| Etsy | Tap **Connect Etsy — one tap** → browser opens | “Continue as [username]” or one-tap authorize → returns to app → name/email auto-filled |
+| Marketplace | Action | Expected |
+|-------------|--------|----------|
+| Etsy | Tap **Connect Etsy — one tap** | Browser shows “Continue as [username]” → one tap → return to app → name/email auto-filled |
 | eBay | Same | One tap → token on device → profile auto-filled |
 | Shopify | Same (enter store domain first) | One tap → works |
 | Amazon | Same | One tap → works |
 | Shopee | Same | One tap → works |
-| Other (e.g. Allegro, MercadoLibre) | Same | Success |
+| Allegro or MercadoLibre | Same | Success |
 
 - [ ] Pass / Fail: ___________
 
-### Test 2: No saved credentials — normal OAuth login
+### Test 2: No saved credentials — normal OAuth login, no password stored by app
 
-- [ ] Clear browser cookies/passwords for one marketplace
-- [ ] Tap **Connect** → full login form in system browser
-- [ ] Enter credentials manually → authorize → returns to app
+- [ ] Clear browser cookies / saved passwords for one test marketplace
+- [ ] Tap **Connect** → system browser shows full login form
+- [ ] Enter credentials manually → authorize → return to app
 - [ ] Token stored on device; profile auto-filled
-- [ ] **Verify:** no password/token sent to Kauf26 server (check server logs — no `/oauth/token` on backend)
+- [ ] **Verify:** server logs show **no** user OAuth token storage (no backend `/oauth/token` for user tokens)
 
 - [ ] Pass / Fail: ___________
 
-### Test 3: User cancels OAuth
+### Test 3: User cancels OAuth — clean error and fallback UI
 
-- [ ] Tap **Connect** → tap Cancel/Close in browser
-- [ ] App shows **“Connection cancelled”** banner (not a crash)
-- [ ] No partial token stored
-- [ ] User can tap Connect again
+- [ ] Tap **Connect** → when browser opens, tap **Cancel** / close sheet
+- [ ] App shows banner: **“Connection cancelled”**
+- [ ] No partial token stored (marketplace still “Not connected”)
+- [ ] User can tap Connect again without restart
 
 - [ ] Pass / Fail: ___________
 
-### Test 4: App closed mid-OAuth
+### Test 4: App closed mid-OAuth — no crash, can retry
 
-- [ ] Tap **Connect** → force-close app while browser open
+- [ ] Tap **Connect** → while browser is open, force-close the app
 - [ ] Reopen app → no crash
-- [ ] Marketplace shows not connected (or completes if redirect received on cold start)
-- [ ] Tap Connect again → flow works
+- [ ] Marketplace shows not connected (or completes if cold-started from redirect)
+- [ ] Tap Connect again → flow works normally
 
 - [ ] Pass / Fail: ___________
 
@@ -72,18 +72,19 @@ cd mobile && npx tsc --noEmit
 
 ## Background / resume handling
 
-### Test 5: App backgrounded during OAuth (iOS & Android)
+### Test 5: App sent to background during OAuth (iOS & Android)
 
-- [ ] Tap **Connect** → press Home → return to app
-- [ ] OAuth completes, browser reappears, or friendly error + retry
-- [ ] iOS: ASWebAuthenticationSession not falsely reported as cancelled
+- [ ] Tap **Connect** → when browser opens, press **Home** (background app)
+- [ ] Return to app (resume)
+- [ ] Acceptable outcomes: OAuth completes automatically, browser reappears, or friendly error + retry
+- [ ] **iOS:** ASWebAuthenticationSession not falsely reported as “cancelled” due to backgrounding (check console if debugging)
 
 - [ ] Pass / Fail: ___________
 
-### Test 6: Multi-tasking during OAuth
+### Test 6: Multi-tasking switch between apps during OAuth
 
-- [ ] Start OAuth → switch to another app → switch back
-- [ ] Browser still visible or app receives token — no crash
+- [ ] Start OAuth → switch to Messages (or another app) → switch back
+- [ ] OAuth browser still visible **or** app receives token — no crash
 
 - [ ] Pass / Fail: ___________
 
@@ -91,18 +92,19 @@ cd mobile && npx tsc --noEmit
 
 ## Redirect URI handling
 
-### Test 7: Custom scheme `kauf26://oauth/{id}`
+### Test 7: Custom scheme `kauf26://oauth/{id}` works on both platforms
 
-- [ ] iOS: `CFBundleURLSchemes` includes `kauf26` (`mobile/app.json`)
-- [ ] Android: intent-filter with `kauf26` + host `oauth`
-- [ ] App opens with `kauf26://oauth/etsy?code=...` and exchanges token
+- [ ] **iOS:** `mobile/app.json` → `CFBundleURLSchemes` includes `kauf26` (generates Info.plist entries on build)
+- [ ] **Android:** `mobile/app.json` → `intentFilters` with `scheme: kauf26`, `host: oauth` (generates AndroidManifest on build)
+- [ ] After OAuth, app opens with URL e.g. `kauf26://oauth/etsy?code=...`
+- [ ] App extracts `code` and exchanges for token on device
 
 - [ ] Pass / Fail: ___________
 
-### Test 8: Incorrect redirect URI
+### Test 8: Incorrect or malformed redirect URI
 
-- [ ] Wrong redirect in server `.env`
-- [ ] Error: **“Redirect URI mismatch – check developer portal”**
+- [ ] Set wrong redirect in server `.env` (e.g. `ETSY_REDIRECT_URI=kauf26://oauth/wrong`)
+- [ ] Tap Connect → error: **“Redirect URI mismatch – check developer portal”**
 - [ ] No token stored
 
 - [ ] Pass / Fail: ___________
@@ -111,12 +113,13 @@ cd mobile && npx tsc --noEmit
 
 ## Non-OAuth marketplaces (10)
 
-### Test 9: Partnership / API-key UI
+### Test 9: Partnership / API-key marketplaces show correct UI
 
-Depop, Fruugo, Magento, Newegg, Poshmark, Rakuten, StockX, TikTok Shop, Vinted, WooCommerce
+Marketplaces: **Depop, Fruugo, Magento, Newegg, Poshmark, Rakuten, StockX, TikTok Shop, Vinted, WooCommerce**
 
-- [ ] Informational card only — no Connect button
-- [ ] No crash
+- [ ] Each shows informational card (partnership or API key message)
+- [ ] **No** Connect button that attempts OAuth
+- [ ] Viewing cards does not crash
 
 - [ ] Pass / Fail: ___________
 
@@ -124,16 +127,18 @@ Depop, Fruugo, Magento, Newegg, Poshmark, Rakuten, StockX, TikTok Shop, Vinted, 
 
 ## Token storage & security
 
-### Test 10: Device-only tokens
+### Test 10: Tokens stored only on device, never on server
 
-- [ ] No user tokens on server
-- [ ] SecureStore on device; gone after uninstall
+- [ ] After successful OAuth, server logs show no user token persistence
+- [ ] Tokens in SecureStore (iOS Keychain / Android Keystore)
+- [ ] After uninstall/reinstall, tokens are gone — user must reconnect
 
 - [ ] Pass / Fail: ___________
 
-### Test 11: Etsy token refresh
+### Test 11: Token refresh (Etsy 90-day refresh token)
 
-- [ ] Refresh or re-auth on expiry — no crash
+- [ ] For Etsy: simulate or wait for access token expiry
+- [ ] App uses refresh token automatically **or** prompts re-auth — no crash
 
 - [ ] Pass / Fail: ___________
 
@@ -141,16 +146,20 @@ Depop, Fruugo, Magento, Newegg, Poshmark, Rakuten, StockX, TikTok Shop, Vinted, 
 
 ## UI & messaging
 
-### Test 12: All 26 marketplaces on Connections screen
+### Test 12: Connections screen shows all 26 marketplaces
 
-- [ ] 26 cards (16 OAuth + 10 non-OAuth)
-- [ ] Configured → Connect button; unconfigured → gray message
+- [ ] Scroll list — **26** cards total (**16** OAuth + **10** non-OAuth)
+- [ ] OAuth + server client ID configured → active **Connect — one tap** button
+- [ ] OAuth + not configured → gray **Configure server OAuth first**
+- [ ] Non-OAuth → info only, no Connect button
 
 - [ ] Pass / Fail: ___________
 
-### Test 13: Profile auto-fill
+### Test 13: Profile auto-fill after OAuth
 
-- [ ] Name/email editable; missing email OK
+- [ ] Name and email pre-filled from marketplace user-info API
+- [ ] User can edit fields before saving
+- [ ] Missing email (e.g. some eBay tokens) → empty field, no crash
 
 - [ ] Pass / Fail: ___________
 
@@ -158,25 +167,39 @@ Depop, Fruugo, Magento, Newegg, Poshmark, Rakuten, StockX, TikTok Shop, Vinted, 
 
 ## Error handling
 
-### Test 14: Network failure
+### Test 14: Network failure during OAuth
 
-- [ ] Airplane mode → **“Network error, please try again”**
+- [ ] Start OAuth → enable airplane mode before redirect completes
+- [ ] App shows **“Network error, please try again”**
+- [ ] No partial token stored
 
 - [ ] Pass / Fail: ___________
 
-### Test 15: Invalid scope
+### Test 15: Marketplace returns error (invalid scope, etc.)
 
-- [ ] Descriptive error; user can retry
+- [ ] Use wrong scopes in server config for one marketplace
+- [ ] App shows descriptive error from marketplace response
+- [ ] User can retry
 
 - [ ] Pass / Fail: ___________
 
 ---
 
-## Regression
+## Documentation verification
 
-- [ ] Etsy, eBay, Shopify one-tap unchanged
-- [ ] Web onboarding: mobile-only, no marketplace passwords
-- [ ] Web Settings: mobile connect guidance
+- [ ] `docs/mobile-oauth-redirect-setup.md` includes redirect URI table for all 26 marketplaces
+- [ ] Developer portal checklists accurate (spot-check Etsy, eBay, Shopify)
+- [ ] Native scheme whitelisting matches `mobile/app.json` (iOS Info.plist / Android intent-filter via Expo prebuild)
+- [ ] `EXPO_PUBLIC_*` and server `.env` documented in `.env.example` and `mobile/.env.example`
+
+---
+
+## Regression checks
+
+- [ ] Etsy, eBay, Shopify one-tap flows unchanged (no degradation)
+- [ ] Web onboarding shows mobile-only message — no marketplace password fields
+- [ ] Web Settings shows mobile connect guidance for OAuth marketplaces
+- [ ] No server-side OAuth token routes (`server/*OAuthRoutes.ts` removed)
 
 ---
 
@@ -195,3 +218,12 @@ Depop, Fruugo, Magento, Newegg, Poshmark, Rakuten, StockX, TikTok Shop, Vinted, 
 
 - [ ] Yes
 - [ ] No — explain:
+
+---
+
+## Agent fix commands (if a test fails)
+
+Examples:
+
+- `Fix redirect resume on Android for Amazon OAuth — see test case 5`
+- `Fix “Connection cancelled” UI on iOS dismiss gesture — see test case 3`

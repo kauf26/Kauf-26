@@ -45,7 +45,8 @@
           "data": [
             {
               "scheme": "kauf26",
-              "host": "oauth"
+              "host": "oauth",
+              "pathPrefix": "/"
             }
           ],
           "category": ["BROWSABLE", "DEFAULT"]
