@@ -27,10 +27,21 @@ import {
   normalizeIdentificationCondition,
   resolveFinalBrand,
   resolveFinalTitle,
+  resolveScraperUsage,
   shouldRejectScraperProduct,
   shouldUseScraperPricing,
   type IdentificationWarnings,
 } from "./services/identifyMergeService";
+import {
+  prepareImageForVision,
+  USER_QUALITY_ERROR,
+  type ImageQualityReport,
+} from "./services/imageQualityService";
+import {
+  createCallVisionForImage,
+  VISION_IDENTIFY_PROMPT,
+  type VisionCallMeta,
+} from "./services/visionService";
 import { MAX_DRAFT_IMAGES } from "../shared/draftImages";
 import { extractReferenceNumbers } from "./scrapers/visionMatch";
 import { stripExternalUrlFields } from "./listingSanitizer";

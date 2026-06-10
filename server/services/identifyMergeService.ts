@@ -29,8 +29,25 @@ export type IdentificationWarnings = {
   titleBrandMismatch: boolean;
   scraperBrandRejected: boolean;
   priceRejectedAsWrongProduct: boolean;
+  manualReviewRequired: boolean;
   messages: string[];
 };
+
+export type ScraperResolution = {
+  useScraper: boolean;
+  useScraperPricing: boolean;
+  scraperRejected: boolean;
+  manualReviewRequired: boolean;
+  reasons: string[];
+  warnings: string[];
+};
+
+export function effectiveBrandConfidence(vision: VisionProduct): VisionConfidence {
+  return (
+    vision.brandConfidence ??
+    (String(vision.brand ?? "").trim() ? vision.confidence : "low")
+  );
+}
 
 /** Condition must be New | Used | Like New | Fair — never "Used Rolex". */
 export function normalizeIdentificationCondition(
@@ -75,31 +92,101 @@ export function visionScraperBrandConflict(
   return brandsConflict(visionBrand, scraperBrand, scraperTitle);
 }
 
+/** Scraper usage policy based on vision brand_confidence. */
+export function resolveScraperUsage(
+  vision: VisionProduct,
+  scraper: ScrapedListingLike | null | undefined
+): ScraperResolution {
+  const brandConfidence = effectiveBrandConfidence(vision);
+  const reasons: string[] = [];
+  const warnings: string[] = [];
+
+  if (!scraper) {
+    return {
+      useScraper: false,
+      useScraperPricing: false,
+      scraperRejected: false,
+      manualReviewRequired:
+        brandConfidence === "low" || !String(vision.brand ?? "").trim(),
+      reasons: ["no_scraper_result"],
+      warnings,
+    };
+  }
+
+  const conflict = visionScraperBrandConflict(
+    vision.brand,
+    scraper.brand,
+    scraper.title
+  );
+
+  if (brandConfidence === "high" && String(vision.brand ?? "").trim()) {
+    if (conflict) {
+      return {
+        useScraper: false,
+        useScraperPricing: false,
+        scraperRejected: true,
+        manualReviewRequired: false,
+        reasons: ["high_brand_confidence_conflict"],
+        warnings: [
+          "Marketplace search returned a different brand and was completely ignored.",
+        ],
+      };
+    }
+    return {
+      useScraper: true,
+      useScraperPricing: true,
+      scraperRejected: false,
+      manualReviewRequired: false,
+      reasons: [],
+      warnings,
+    };
+  }
+
+  if (brandConfidence === "medium") {
+    if (conflict) {
+      warnings.push(
+        "Vision brand may differ from marketplace results — confirm brand manually."
+      );
+      return {
+        useScraper: true,
+        useScraperPricing: false,
+        scraperRejected: true,
+        manualReviewRequired: true,
+        reasons: ["medium_confidence_brand_conflict"],
+        warnings,
+      };
+    }
+    warnings.push(
+      "Brand confidence is medium — please verify the brand before publishing."
+    );
+    return {
+      useScraper: true,
+      useScraperPricing: true,
+      scraperRejected: false,
+      manualReviewRequired: true,
+      reasons: [],
+      warnings,
+    };
+  }
+
+  warnings.push(
+    "Brand uncertain from photo — using marketplace data where available; manual review required."
+  );
+  return {
+    useScraper: true,
+    useScraperPricing: true,
+    scraperRejected: false,
+    manualReviewRequired: true,
+    reasons: ["low_brand_confidence"],
+    warnings,
+  };
+}
+
 export function shouldRejectScraperProduct(
   vision: VisionProduct,
   scraper: ScrapedListingLike | null | undefined
 ): boolean {
-  if (!scraper) return false;
-  const scraperBrand = String(scraper.brand ?? "").trim();
-  const scraperTitle = String(scraper.title ?? "").trim();
-  if (!scraperBrand && !scraperTitle) return false;
-
-  const conflict = visionScraperBrandConflict(
-    vision.brand,
-    scraperBrand,
-    scraperTitle
-  );
-  if (!conflict) return false;
-
-  const luxury = detectLuxuryProfile(vision.brand, vision.title);
-  if (luxury?.isLuxuryWatch) return true;
-  if (vision.confidence === "high" && String(vision.brand ?? "").trim()) {
-    return true;
-  }
-  if (vision.confidence === "medium" && String(vision.brand ?? "").trim()) {
-    return true;
-  }
-  return false;
+  return resolveScraperUsage(vision, scraper).scraperRejected;
 }
 
 export function shouldUseScraperPricing(
@@ -108,7 +195,10 @@ export function shouldUseScraperPricing(
   overrideAllowed: boolean,
   luxury: LuxuryProfile | null
 ): boolean {
+  const resolution = resolveScraperUsage(vision, scraper);
+  if (!resolution.useScraperPricing) return false;
   if (shouldRejectScraperProduct(vision, scraper)) return false;
+
   if (!overrideAllowed) {
     if (luxury?.isLuxuryWatch) return false;
     if (
@@ -184,9 +274,11 @@ export function computeIdentificationWarnings(input: {
   const finalBrand = String(input.finalBrand ?? "").trim();
   const finalTitle = String(input.finalTitle ?? "").trim();
 
+  const brandConfidence = effectiveBrandConfidence(input.vision);
   const lowBrandConfidence =
-    input.vision.confidence === "low" ||
-    (!visionBrand && input.vision.confidence !== "high");
+    brandConfidence === "low" ||
+    (!visionBrand && brandConfidence !== "high") ||
+    (input.vision.hallucinationFlags?.length ?? 0) > 0;
 
   if (lowBrandConfidence) {
     messages.push(
@@ -241,6 +333,12 @@ export function computeIdentificationWarnings(input: {
     titleBrandMismatch,
     scraperBrandRejected: input.scraperRejected,
     priceRejectedAsWrongProduct: input.priceRejected,
+    manualReviewRequired:
+      lowBrandConfidence ||
+      brandMismatch ||
+      titleBrandMismatch ||
+      input.scraperRejected ||
+      input.priceRejected,
     messages,
   };
 }

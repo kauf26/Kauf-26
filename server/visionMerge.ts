@@ -3,6 +3,7 @@ export type VisionConfidence = "high" | "medium" | "low";
 export type VisionProduct = {
   title: string;
   brand?: string;
+  brandConfidence?: VisionConfidence;
   model?: string;
   category?: string;
   condition?: string;
@@ -12,6 +13,7 @@ export type VisionProduct = {
   color?: string;
   style?: string;
   confidence: VisionConfidence;
+  hallucinationFlags?: string[];
 };
 
 export type VisionPerImage = VisionProduct & { imageIndex: number };
