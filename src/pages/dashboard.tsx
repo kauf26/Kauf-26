@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Link } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useProducts } from "@/hooks/use-products";
 import GridLayout from "react-grid-layout/legacy";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -33,10 +34,6 @@ interface Listing {
   id: number;
   marketplace: string;
   status: string;
-}
-
-interface Product {
-  id: number;
 }
 
 type LayoutItem = {
@@ -95,14 +92,7 @@ export default function Dashboard() {
     },
   });
 
-  const { data: products = [] } = useQuery<Product[]>({
-    queryKey: ["products"],
-    queryFn: async () => {
-      const res = await fetch("/api/products");
-      if (!res.ok) throw new Error("Failed to fetch products");
-      return res.json();
-    },
-  });
+  const { data: products = [] } = useProducts();
 
   const { data: savedLayout } = useQuery({
     queryKey: ["dashboardLayout"],

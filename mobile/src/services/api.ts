@@ -3,10 +3,13 @@
 // For development with physical device, use your computer's LAN IP (e.g., 'http://192.168.1.100:5000')
 // For production, use your deployed Replit app URL
 
+import { fetchProductsWithBackoff } from './productsFetch';
+import { API_BASE_URL } from './config';
+
 // @ts-ignore - __DEV__ is defined by React Native
 const isDev = typeof __DEV__ !== 'undefined' ? __DEV__ : false;
 
-export const API_BASE_URL = 'https://global-marketplace-lister.replit.app';  // Your published Replit app URL
+export { API_BASE_URL };
 
 // Helper function for API requests
 function clientTimeZoneHeader(): Record<string, string> {
@@ -50,7 +53,7 @@ export const productsApi = {
       body: JSON.stringify({ image }),
     }),
     
-  getAll: () => apiRequest('/api/products'),
+  getAll: () => fetchProductsWithBackoff(),
   
   getById: (id: number) => apiRequest(`/api/products/${id}`),
 };
