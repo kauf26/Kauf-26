@@ -1,3 +1,5 @@
+import type { MarketplaceOAuthFlow } from '../../../shared/marketplaceOAuthTypes';
+
 export type OAuthPlatform = string;
 
 /** Profile fields fetched from a marketplace API after OAuth (device-only). */
@@ -21,7 +23,7 @@ export type ProviderDisplayMeta = {
   name: string;
   color: string;
   oauthSupported: boolean;
-import type { MarketplaceOAuthFlow } from '../../../shared/marketplaceOAuthTypes';
+  oauthFlow?: MarketplaceOAuthFlow;
   configured: boolean;
   requiresShopDomain?: boolean;
   requiresSiteUrl?: boolean;
