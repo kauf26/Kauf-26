@@ -30,6 +30,8 @@ describe("oauthRedirect", () => {
   });
 
   it("rejects mismatched server redirect URIs", () => {
-    expect(() => assertRedirectUriMatches("etsy", "kauf26://oauth/wrong")).toThrow(/mismatch/i);
+    expect(() => assertRedirectUriMatches("etsy", "kauf26://oauth/wrong")).toThrow(
+      /Redirect URI mismatch.*developer portal/i
+    );
   });
 });

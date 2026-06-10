@@ -93,6 +93,6 @@ describe("QA documentation", () => {
   it("QA test plan document exists", () => {
     const qa = readFileSync(QA_DOC, "utf8");
     expect(qa).toContain("Test 1:");
-    expect(qa).toContain("Sign-Off");
+    expect(qa).toContain("Sign-off");
   });
 });

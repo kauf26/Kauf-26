@@ -193,7 +193,9 @@ cd mobile && npx tsc --noEmit
 
 ## Test report (simulated)
 
-Automated tests in `shared/marketplaceOAuthRegistry.test.ts` and `shared/oauthRedirect.test.ts`:
+**Manual QA checklist:** [docs/qa/mobile-oauth-test-plan.md](qa/mobile-oauth-test-plan.md)
+
+Automated tests in `shared/marketplaceOAuthRegistry.test.ts`, `shared/oauthRedirect.test.ts`, and `shared/qa/oauthQAChecks.test.ts`:
 
 | Check | Result |
 |-------|--------|
