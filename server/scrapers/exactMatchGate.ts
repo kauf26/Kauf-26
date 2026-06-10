@@ -10,6 +10,7 @@ import {
   type LuxuryProfile,
 } from "./luxuryPricing";
 import { hasProductListingStructure } from "./productPageFilter";
+import { brandsConflict } from "./listingUtils";
 import { normalizeText } from "./visionMatch";
 
 const GENERIC_MIN_PRICE = 5;
@@ -141,6 +142,18 @@ export function canScraperOverrideVision(input: ScraperOverrideInput): {
   if (!tokenOk) {
     reasons.push(
       `token_match=${tokenMatch.toFixed(2)} coverage=${tokenCoverage.toFixed(2)}`
+    );
+  }
+
+  if (
+    brandsConflict(
+      input.visionBrand,
+      input.scraperBrand,
+      input.scraperTitle
+    )
+  ) {
+    reasons.push(
+      `brand_conflict vision=${input.visionBrand ?? ""} scraper=${input.scraperBrand ?? ""}`
     );
   }
 

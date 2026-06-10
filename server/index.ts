@@ -21,6 +21,16 @@ import {
   validateBrandTitleConsistency,
 } from "./scrapers/listingUtils";
 import { debugIdentify } from "./scrapers/scrapeDebug";
+import {
+  computeIdentificationWarnings,
+  logIdentifyPipelineStage,
+  normalizeIdentificationCondition,
+  resolveFinalBrand,
+  resolveFinalTitle,
+  shouldRejectScraperProduct,
+  shouldUseScraperPricing,
+  type IdentificationWarnings,
+} from "./services/identifyMergeService";
 import { MAX_DRAFT_IMAGES } from "../shared/draftImages";
 import { extractReferenceNumbers } from "./scrapers/visionMatch";
 import { stripExternalUrlFields } from "./listingSanitizer";
@@ -88,15 +98,8 @@ function normalizeBrand(brand: unknown): string {
   return !s || s.toUpperCase() === "N/A" ? "" : s;
 }
 
-function normalizeCondition(condition: unknown): string {
-  const s = String(condition ?? "").trim();
-  if (!s) return "";
-  const lower = s.toLowerCase();
-  if (lower === "like new" || lower === "like-new") return "Like New";
-  if (lower === "new") return "New";
-  if (lower === "used") return "Used";
-  if (lower === "fair") return "Fair";
-  return s;
+function normalizeCondition(condition: unknown, brand?: string): string {
+  return normalizeIdentificationCondition(condition, brand);
 }
 
 interface ScrapedProduct {
@@ -191,6 +194,12 @@ function scraperHasUsableProduct(
   vision?: VisionProduct
 ): boolean {
   if (!scraped) return false;
+  if (vision && shouldRejectScraperProduct(vision, scraped)) {
+    console.warn(
+      `[Identify] Scraper product rejected — brand conflict with vision (vision="${vision.brand ?? ""}" scraper="${scraped.brand ?? ""}" title="${scraped.title ?? ""}")`
+    );
+    return false;
+  }
   const price = parseFloat(String(scraped.price ?? 0)) || 0;
   const exact =
     scraped.isExactMatch === true || scraped.matchType === "exact";
@@ -246,6 +255,15 @@ function enrichBrandModelFromScraper(
   scraper: ScrapedListing,
   vision: VisionProduct
 ): void {
+  if (shouldRejectScraperProduct(vision, scraper)) {
+    final.brand = normalizeBrand(vision.brand) || normalizeBrand(final.brand);
+    final.title = resolveFinalTitle(vision, scraper, String(final.title ?? ""));
+    if (!String(final.model ?? "").trim() && vision.model) {
+      final.model = String(vision.model).trim();
+    }
+    return;
+  }
+
   const titleForParse = String(final.title ?? scraper.title ?? "");
   const brandOpts = {
     visionModel: String(vision.model ?? "").trim(),
@@ -369,12 +387,15 @@ function mergeVisionAndScraper(
   }
 
   const scrapedPrice = resolveScraperPrice(scraper, luxury);
-  const priceOk =
-    luxury?.isLuxuryWatch
-      ? isPriceSaneForLuxury(scrapedPrice, luxury)
-      : scrapedPrice >= 5;
+  const scraperRejected = shouldRejectScraperProduct(vision, scraper);
+  const useScraperPricing = shouldUseScraperPricing(
+    vision,
+    scraper,
+    override.allowed,
+    luxury
+  );
 
-  if (priceOk && (scraper.priceReliable === true || scraperExact)) {
+  if (useScraperPricing && (scraper.priceReliable === true || scraperExact)) {
     final.price = scrapedPrice;
     final.medianPrice =
       parseFloat(String(scraper.medianPrice ?? scrapedPrice)) || scrapedPrice;
@@ -390,7 +411,7 @@ function mergeVisionAndScraper(
     if (scraper.priceMin != null) final.priceMin = scraper.priceMin;
     if (scraper.priceMax != null) final.priceMax = scraper.priceMax;
     if (!override.allowed) final.requiresManualReview = true;
-  } else if (luxury?.isLuxuryWatch && scraperExact) {
+  } else if (luxury?.isLuxuryWatch && (scraperExact || scraperRejected)) {
     final.price = luxury.fallbackSuggested;
     final.medianPrice = luxury.fallbackSuggested;
     final.priceMin = luxury.fallbackMin;
@@ -419,7 +440,7 @@ function mergeVisionAndScraper(
   if (
     scraperExact &&
     luxury?.isLuxuryWatch &&
-    priceOk &&
+    useScraperPricing &&
     !override.allowed &&
     override.tokenCoverage >= 0.75 &&
     String(scraper.title ?? "").length > String(vision.title ?? "").length
@@ -445,20 +466,14 @@ function mergeVisionAndScraper(
     vision.brand,
     { visionModel: vision.model, listingModel: scraper.model ?? final.model }
   );
-  if (finalBrandCheck.corrected || finalBrandCheck.brand !== final.brand) {
-    console.warn(
-      `[Identify] Corrected brand for title consistency: "${final.brand}" → "${finalBrandCheck.brand}" (source=${finalBrandCheck.source})`
-    );
-    final.brand = finalBrandCheck.brand;
-  }
+  final.brand = resolveFinalBrand(vision, scraper, finalBrandCheck.brand);
+  final.title = resolveFinalTitle(vision, scraper, String(final.title ?? ""));
+  final.condition = normalizeCondition(final.condition, final.brand);
   validateBrandTitleConsistency(
     String(final.title ?? ""),
     String(final.brand ?? ""),
     "mergeVisionAndScraper"
   );
-
-  final.matchValidation = scraper.matchValidation;
-  final.scraperSource = scraper.scraperSource;
 
   debugIdentify("mergeVisionAndScraper", {
     visionTitle: vision.title,
@@ -481,7 +496,12 @@ function mergeVisionAndScraper(
     preservedMaterial: final.material,
     preservedColor: final.color,
     preservedStyle: final.style,
+    scraperRejected,
+    useScraperPricing,
   });
+
+  final.matchValidation = scraper.matchValidation;
+  final.scraperSource = scraper.scraperSource;
 
   return stripListingUrls(final);
 }
@@ -526,6 +546,10 @@ CRITICAL:
 - Pay attention to any small text, serial numbers, model numbers, or logos on the product — include them in the title when legible.
 - Mentally "zoom in" on the sharpest legible text and logos; prefer readings from those details over guessing from shape alone.
 - Use a specific descriptive title for the actual product (brand + model when visible), not vague scene descriptions like "analog pilot watch" when a brand name is visible.
+- For watches: read the dial, crown, and clasp carefully. Do NOT assign Rolex, Omega, or other luxury brands unless that exact name or logo is clearly visible.
+- Never substitute a lookalike brand (e.g. do not say Rolex for an Invicta/Casio/Timex diver). Use only the brand text you can read.
+- If brand text is not clearly visible, set brand to "" and use confidence "low" — do not guess or hallucinate a brand.
+- condition must be ONLY one of: New, Used, Like New — never include brand names or product names in condition.
 
 Return ONLY valid JSON:
 {
@@ -654,10 +678,10 @@ function parseVisionResponse(content: string): VisionProduct | null {
 
     return {
       title,
-      brand,
+      brand: confidence === "low" && brand ? "" : brand,
       model,
       category: coalesceCategory(categoryFromVision),
-      condition: parsed.condition || "Used",
+      condition: normalizeCondition(parsed.condition, brand),
       price:
         typeof parsed.price === "number" && parsed.price > 0
           ? parsed.price
@@ -764,8 +788,10 @@ function applyVisionEnrichment(
   return {
     ...listing,
     title: listing.title ?? vision.title,
-    brand: normalizeBrand(listing.brand) || normalizeBrand(vision.brand),
-    model: String(listing.model ?? "").trim(),
+    brand: shouldRejectScraperProduct(vision, listing)
+      ? normalizeBrand(vision.brand)
+      : normalizeBrand(listing.brand) || normalizeBrand(vision.brand),
+    model: String(listing.model ?? vision.model ?? "").trim(),
     year: String(listing.year ?? "").trim() || undefined,
     refNumber: String(listing.refNumber ?? "").trim() || undefined,
     category,
@@ -773,8 +799,8 @@ function applyVisionEnrichment(
     color: String(listing.color ?? vision.color ?? "").trim(),
     style: String(listing.style ?? vision.style ?? "").trim(),
     condition:
-      normalizeCondition(listing.condition) ||
-      normalizeCondition(vision.condition) ||
+      normalizeCondition(listing.condition, listing.brand ?? vision.brand) ||
+      normalizeCondition(vision.condition, vision.brand) ||
       "Used",
     description,
     longDescription: String(listing.longDescription ?? "").trim(),
@@ -1081,8 +1107,51 @@ async function runIdentifyPipeline(
 
    console.log("📦 Listing result:", JSON.stringify(listings, null, 2));
 
+   const scraperRejected = shouldRejectScraperProduct(vision, scrapedRaw);
+   const priceRejected =
+     scraperRejected ||
+     (Boolean(scrapedRaw) &&
+       !shouldUseScraperPricing(
+         vision,
+         scrapedRaw!,
+         listings.isExactMatch === true,
+         detectLuxuryProfile(vision.brand, vision.title)
+       ));
+
+   const identificationWarnings = computeIdentificationWarnings({
+     vision,
+     finalTitle: String(listings.title ?? vision.title),
+     finalBrand: String(listings.brand ?? vision.brand ?? ""),
+     finalCondition: String(
+       listings.condition ?? vision.condition ?? "Used"
+     ),
+     scraper: scrapedRaw,
+     scraperRejected,
+     priceRejected,
+   });
+
+   logIdentifyPipelineStage("merged", {
+     visionTitle: vision.title,
+     visionBrand: vision.brand,
+     visionConfidence: vision.confidence,
+     scraperTitle: scrapedRaw?.title ?? null,
+     scraperBrand: scrapedRaw?.brand ?? null,
+     scraperPrice: scrapedRaw?.price ?? null,
+     finalTitle: listings.title,
+     finalBrand: listings.brand,
+     finalCondition: listings.condition,
+     finalPrice: listings.price,
+     scraperRejected,
+     priceRejected,
+     warningCount: identificationWarnings.messages.length,
+   });
+
    const requiresManualReview =
-     fallbackToVision || listings.requiresManualReview === true;
+     fallbackToVision ||
+     listings.requiresManualReview === true ||
+     identificationWarnings.lowBrandConfidence ||
+     identificationWarnings.brandMismatch ||
+     identificationWarnings.titleBrandMismatch;
    const draftStatus = requiresManualReview
      ? "requires_review"
      : "ready_for_posting";
@@ -1103,8 +1172,8 @@ async function runIdentifyPipeline(
        referenceNumber: String(listings.refNumber ?? "").trim(),
        year: listings.year || new Date().getFullYear().toString(),
        condition:
-         normalizeCondition(listings.condition) ||
-         normalizeCondition(vision.condition) ||
+         normalizeCondition(listings.condition, listings.brand ?? vision.brand) ||
+         normalizeCondition(vision.condition, vision.brand) ||
          "Used",
        material: String(listings.material ?? vision.material ?? "").trim(),
        color: String(listings.color ?? vision.color ?? "").trim(),
@@ -1187,6 +1256,8 @@ async function runIdentifyPipeline(
      isExactMatch,
      matchType,
      visionConfidence: vision.confidence,
+     brandConfidence: vision.confidence,
+     identificationWarnings,
      matchConfidence: listings.matchConfidence ?? "low",
      matchScore: listings.matchScore ?? 0,
      timedOut: listings.timedOut === true,
@@ -1213,8 +1284,8 @@ async function runIdentifyPipeline(
        year: String(listings.year ?? "").trim() || undefined,
        category: coalesceCategory(listings.category, vision.category),
        condition:
-         normalizeCondition(listings.condition) ||
-         normalizeCondition(vision.condition) ||
+         normalizeCondition(listings.condition, listings.brand ?? vision.brand) ||
+         normalizeCondition(vision.condition, vision.brand) ||
          "Used",
        material: String(listings.material ?? vision.material ?? "").trim(),
        color: String(listings.color ?? vision.color ?? "").trim(),
@@ -1278,6 +1349,109 @@ app.post(
           error instanceof Error
             ? error.message
             : "Identification failed — please try again",
+      });
+    }
+  }
+);
+
+/** Debug identify pipeline — returns raw vision, scraper, and merged output (no DB write). */
+app.post(
+  "/api/identify/debug",
+  upload.fields([
+    { name: "image", maxCount: 1 },
+    { name: "images", maxCount: MAX_IDENTIFY_IMAGES },
+  ]),
+  async (req: Request, res: Response) => {
+    const imageInputs = extractIdentifyImages(req);
+    if (imageInputs.length === 0) {
+      return res.status(400).json({
+        error: "No image uploaded",
+        message:
+          "Send multipart field `images[]` (preferred) or `image`, or JSON { images: [] } / { image }",
+      });
+    }
+
+    try {
+      const visionPhase = await runVisionPhase(
+        { images: imageInputs },
+        callVisionForImage
+      );
+      const { vision, sources, primaryImageIndex, searchQuery, perImage } =
+        visionPhase;
+      const primaryImage =
+        imageInputs[primaryImageIndex] ?? imageInputs[0];
+
+      let scrapedRaw: ScrapedListing | null = null;
+      try {
+        scrapedRaw = (await fetchMasterProductData(searchQuery, {
+          vision: {
+            visionTitle: vision.title,
+            visionBrand: vision.brand ?? "",
+            visionModel: vision.model ?? "",
+            modelNumbers: vision.model ? [vision.model] : undefined,
+          },
+          imageBase64: primaryImage.buffer.toString("base64"),
+          imageMimeType: primaryImage.mimetype || "image/jpeg",
+        })) as ScrapedListing | null;
+      } catch {
+        scrapedRaw = null;
+      }
+
+      let mergedListing: ScrapedListing;
+      let fallbackToVision = false;
+      if (!scraperHasUsableProduct(scrapedRaw, vision)) {
+        fallbackToVision = true;
+        mergedListing = buildVisionFallback(vision);
+      } else {
+        mergedListing = mergeVisionAndScraper(vision, scrapedRaw!);
+      }
+
+      const scraperRejected = shouldRejectScraperProduct(vision, scrapedRaw);
+      const priceRejected =
+        scraperRejected ||
+        (Boolean(scrapedRaw) &&
+          !shouldUseScraperPricing(
+            vision,
+            scrapedRaw!,
+            mergedListing.isExactMatch === true,
+            detectLuxuryProfile(vision.brand, vision.title)
+          ));
+
+      const warnings = computeIdentificationWarnings({
+        vision,
+        finalTitle: String(mergedListing.title ?? vision.title),
+        finalBrand: String(mergedListing.brand ?? vision.brand ?? ""),
+        finalCondition: String(
+          mergedListing.condition ?? vision.condition ?? "Used"
+        ),
+        scraper: scrapedRaw,
+        scraperRejected,
+        priceRejected,
+      });
+
+      return res.json({
+        success: true,
+        perImageVision: perImage,
+        mergedVision: vision,
+        visionSources: sources,
+        searchQuery,
+        scraperRaw: scrapedRaw,
+        mergedListing,
+        fallbackToVision,
+        scraperRejected,
+        priceRejected,
+        identificationWarnings: warnings,
+      });
+    } catch (error) {
+      if (error instanceof VisionIdentifyError) {
+        return res.status(422).json({
+          message: "Could not identify product from any image",
+        });
+      }
+      console.error("[IdentifyDebug] error:", error);
+      return res.status(500).json({
+        error: "Debug identification failed",
+        message: error instanceof Error ? error.message : String(error),
       });
     }
   }

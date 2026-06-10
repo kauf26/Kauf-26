@@ -182,6 +182,13 @@ type IdentifyApiResponse = {
   timedOut?: boolean;
   verificationWarning?: string | null;
   requiresManualReview?: boolean;
+  brandConfidence?: MatchConfidence;
+  identificationWarnings?: {
+    lowBrandConfidence?: boolean;
+    brandMismatch?: boolean;
+    titleBrandMismatch?: boolean;
+    messages?: string[];
+  };
   priceMin?: number | string | null;
   priceMax?: number | string | null;
   publishJobId?: number | null;
@@ -251,7 +258,12 @@ function persistPendingAnalysisFromIdentify(
     p.matchType ??
     ((result.isExactMatch ?? p.isExactMatch) ? 'exact' : 'generic');
   const isExactMatch = matchType === 'exact';
-  const warning = result.verificationWarning?.trim();
+  const warning = [
+    result.verificationWarning?.trim(),
+    ...(result.identificationWarnings?.messages ?? []),
+  ]
+    .filter(Boolean)
+    .join(" ");
   saveListingSession({
     title: p.title ?? '',
     description: p.description ?? '',
@@ -297,6 +309,14 @@ function persistPendingAnalysisFromIdentify(
     sessionStorage.setItem('identifyVerificationWarning', warning);
   } else {
     sessionStorage.removeItem('identifyVerificationWarning');
+  }
+  if (result.identificationWarnings) {
+    sessionStorage.setItem(
+      'identifyWarnings',
+      JSON.stringify(result.identificationWarnings)
+    );
+  } else {
+    sessionStorage.removeItem('identifyWarnings');
   }
 }
 

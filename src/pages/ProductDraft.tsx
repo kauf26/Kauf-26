@@ -117,10 +117,10 @@ function scrapedMarketAverage(product: ProductDraftState): string {
 function normalizeConditionForSelect(condition: string): string {
   const c = condition.trim().toLowerCase();
   if (!c || c === "n/a") return "Used";
-  if (c === "like new" || c === "like-new" || c === "mint") return "Like New";
-  if (c === "new" || c === "brand new") return "New";
-  if (c === "used" || c === "pre-owned") return "Used";
-  if (c === "fair" || c === "vintage") return "Fair";
+  if (c.includes("like new") || c.includes("like-new") || c === "mint") return "Like New";
+  if (/\bnew\b/.test(c) && !/\bused\b/.test(c)) return "New";
+  if (/\bused\b/.test(c) || c.includes("pre-owned")) return "Used";
+  if (c.includes("fair") || c.includes("vintage")) return "Fair";
   const options = ["New", "Like New", "Used", "Fair"];
   const match = options.find((o) => o.toLowerCase() === c);
   return match ?? "Used";
