@@ -3,6 +3,7 @@ import { Strategy as GoogleStrategy } from "passport-google-oauth20";
 import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import connectPg from "connect-pg-simple";
+import { isWebOAuthConfigured } from "../../shared/webOAuthEnv";
 import { pool } from "../db";
 import { upsertOAuthUser } from "./authStorage";
 import type { SessionUser } from "./types";
@@ -156,6 +157,13 @@ export async function setupAuth(app: Express): Promise<void> {
     console.log("[auth] Apple Sign In registered");
   } else {
     console.warn("[auth] Apple Sign In credentials not set");
+  }
+
+  if (!isWebOAuthConfigured(process.env)) {
+    console.warn(
+      "[auth] Web OAuth disabled — set GOOGLE_CLIENT_ID/SECRET or Apple Sign In vars in .env for login. " +
+        "The web app will not call /api/auth/user until configured."
+    );
   }
 
   app.get(

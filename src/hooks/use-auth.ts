@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { AuthUser } from "@shared/models/auth";
 
+const webOAuthEnabled = import.meta.env.VITE_WEB_OAUTH_ENABLED === "true";
+
 async function fetchUser(): Promise<AuthUser | null> {
   const response = await fetch("/api/auth/user", {
     credentials: "include",
@@ -26,6 +28,7 @@ export function useAuth() {
   const { data: user, isLoading } = useQuery<AuthUser | null>({
     queryKey: ["/api/auth/user"],
     queryFn: fetchUser,
+    enabled: webOAuthEnabled,
     retry: false,
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
@@ -38,9 +41,10 @@ export function useAuth() {
   });
 
   return {
-    user,
-    isLoading,
-    isAuthenticated: !!user,
+    user: webOAuthEnabled ? user : null,
+    isLoading: webOAuthEnabled ? isLoading : false,
+    isAuthenticated: webOAuthEnabled ? !!user : false,
+    webOAuthEnabled,
     logout: logoutMutation.mutate,
     isLoggingOut: logoutMutation.isPending,
   };
