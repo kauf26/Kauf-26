@@ -1,11 +1,59 @@
 /** Shared fetch dedupe + React Query defaults for dashboard data endpoints. */
 
+const HEALTH_PATH = "/api/health";
+
 const inFlight = new Map<string, Promise<unknown>>();
 const resolvedCache = new Map<string, unknown>();
 const fallbackLogged = new Set<string>();
 
+let backendReady = false;
+let backendReadyPromise: Promise<boolean> | null = null;
+
 export function fetchRetryDelay(attemptIndex: number): number {
   return Math.min(1000 * 2 ** attemptIndex, 8000);
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isHealthCheck(url: string): boolean {
+  return url === HEALTH_PATH || url.endsWith(HEALTH_PATH);
+}
+
+/**
+ * Ping /api/health with exponential backoff until the backend accepts
+ * connections. Deduped across all callers for the session.
+ */
+export async function waitForBackendReady(maxAttempts = 10): Promise<boolean> {
+  if (backendReady) return true;
+  if (backendReadyPromise) return backendReadyPromise;
+
+  backendReadyPromise = (async () => {
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        const res = await fetch(HEALTH_PATH, { credentials: "include" });
+        if (res.ok) {
+          backendReady = true;
+          return true;
+        }
+      } catch {
+        /* ECONNREFUSED / network — backend still starting */
+      }
+
+      if (attempt < maxAttempts - 1) {
+        await sleep(fetchRetryDelay(attempt));
+      }
+    }
+
+    return false;
+  })();
+
+  return backendReadyPromise;
+}
+
+export function isBackendReady(): boolean {
+  return backendReady;
 }
 
 /** React Query options: fetch once per session, no polling, no refetch storms. */
@@ -47,6 +95,13 @@ function logFallbackOnce(cacheKey: string, url: string, error: unknown): void {
 }
 
 async function fetchJsonOnce<T>(url: string, init?: RequestInit): Promise<T> {
+  if (!isHealthCheck(url)) {
+    const ready = await waitForBackendReady();
+    if (!ready) {
+      throw new TypeError(`Backend unavailable: ${url}`);
+    }
+  }
+
   const res = await fetch(url, { credentials: "include", ...init });
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
@@ -135,4 +190,6 @@ export function clearStableFetchCacheForTests(): void {
   inFlight.clear();
   resolvedCache.clear();
   fallbackLogged.clear();
+  backendReady = false;
+  backendReadyPromise = null;
 }

@@ -27,6 +27,7 @@ import PublishConfirmation from "./pages/PublishConfirmation";
 import { IdentificationResultsPage } from "./pages/IdentificationResults";
 import ShippingLabelsPage from "./pages/shipping-labels";
 import SoldItemAlert from "./components/SoldItemAlert";
+import BackendStatusBanner from "./components/BackendStatusBanner";
 
 function App() {
   return (
@@ -34,6 +35,7 @@ function App() {
       <TooltipProvider>
         <div className="min-h-screen flex flex-col">
           <AuthSessionRestore />
+          <BackendStatusBanner />
           <SoldItemAlert />
           <main className="flex-grow">
             <Switch>

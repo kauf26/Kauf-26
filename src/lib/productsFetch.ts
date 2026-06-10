@@ -1,8 +1,8 @@
 import {
-  countUniqueDraftIds,
   countUniqueProductDrafts,
   dedupeDraftRowsById,
 } from "@shared/draftCount";
+import { fetchJsonDeduped, fetchOptionalEndpoint } from "./stableFetch";
 
 export type ListingProduct = {
   id: number;
@@ -16,22 +16,16 @@ export type ListingProduct = {
 type ProductDraftRow = {
   id: number;
   title?: string | null;
+  sku?: unknown;
   images?: unknown;
   attributes?: Record<string, unknown> | null;
 };
 
 const PRODUCTS_QUERY_KEY = ["products"] as const;
-export const PRODUCT_DRAFT_COUNT_QUERY_KEY = ["productDraftCount"] as const;
-export { PRODUCTS_QUERY_KEY, countUniqueDraftIds, countUniqueProductDrafts, dedupeDraftRowsById };
+export const PRODUCT_DRAFT_COUNT_QUERY_KEY = ["productDraftCount", "v2"] as const;
+export { PRODUCTS_QUERY_KEY, countUniqueProductDrafts, dedupeDraftRowsById };
 
-let inFlight: Promise<ListingProduct[]> | null = null;
-let countInFlight: Promise<number> | null = null;
-
-export function countUniqueProductDraftsFromList(
-  products: ListingProduct[]
-): number {
-  return countUniqueDraftIds(products);
-}
+let productsInFlight: Promise<ListingProduct[]> | null = null;
 
 function draftToListingProduct(draft: ProductDraftRow): ListingProduct {
   const attrs = (draft.attributes ?? {}) as Record<string, unknown>;
@@ -57,83 +51,39 @@ function draftToListingProduct(draft: ProductDraftRow): ListingProduct {
 }
 
 async function fetchDraftProductsOnce(): Promise<ListingProduct[]> {
-  const res = await fetch("/api/drafts", { credentials: "include" });
-  if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
-  }
-  const drafts = (await res.json()) as ProductDraftRow[];
+  const drafts = await fetchJsonDeduped<ProductDraftRow[]>(
+    `${PRODUCTS_QUERY_KEY.join("/")}:drafts`,
+    "/api/drafts"
+  );
   if (!Array.isArray(drafts)) return [];
   return dedupeDraftRowsById(drafts).map(draftToListingProduct);
 }
 
-async function fetchProductDraftCountOnce(): Promise<number> {
-  try {
-    const res = await fetch("/api/drafts/count", { credentials: "include" });
-    if (res.ok) {
-      const data = (await res.json()) as { count?: unknown };
-      const parsed =
-        typeof data.count === "number" ? data.count : Number(data.count);
-      if (Number.isInteger(parsed) && parsed >= 0) {
-        return parsed;
-      }
-    }
-  } catch {
-    /* fall back to deduped draft list */
-  }
-
-  const res = await fetch("/api/drafts", { credentials: "include" });
-  if (!res.ok) {
-    const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
-  }
-  const drafts = (await res.json()) as ProductDraftRow[];
-  if (!Array.isArray(drafts)) return 0;
-  return countUniqueProductDrafts(drafts);
-}
-
-/** Distinct draft count for dashboard stats (one row per product). */
+/** Distinct product count for dashboard stats (one logical product per fingerprint). */
 export async function fetchProductDraftCount(): Promise<number> {
-  if (countInFlight) {
-    return countInFlight;
-  }
-
-  countInFlight = fetchProductDraftCountOnce().finally(() => {
-    countInFlight = null;
-  });
-
-  return countInFlight;
+  const data = await fetchOptionalEndpoint(
+    PRODUCT_DRAFT_COUNT_QUERY_KEY.join("/"),
+    "/api/drafts/count",
+    { count: 0 }
+  );
+  const parsed = Number(data.count);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
 }
 
 /** Deduplicates concurrent product list fetches across components. */
 export async function fetchProducts(): Promise<ListingProduct[]> {
-  if (inFlight) {
-    return inFlight;
+  if (productsInFlight) {
+    return productsInFlight;
   }
 
-  inFlight = fetchDraftProductsOnce().finally(() => {
-    inFlight = null;
+  productsInFlight = fetchDraftProductsOnce().finally(() => {
+    productsInFlight = null;
   });
 
-  return inFlight;
+  return productsInFlight;
 }
 
 /** Drop in-memory dedupe so the next listing flow fetches fresh data. */
 export function clearProductsFetchCache(): void {
-  inFlight = null;
-  countInFlight = null;
-}
-
-export function productsRetryDelay(attemptIndex: number): number {
-  return Math.min(1000 * 2 ** attemptIndex, 8000);
-}
-
-export function shouldRetryProductsFetch(
-  failureCount: number,
-  error: unknown
-): boolean {
-  if (failureCount >= 3) return false;
-  if (!(error instanceof Error)) return false;
-  if (/^4\d\d:/.test(error.message)) return false;
-  return true;
+  productsInFlight = null;
 }

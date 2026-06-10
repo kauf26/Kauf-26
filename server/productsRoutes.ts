@@ -1,7 +1,7 @@
 import express from 'express';
 import { db } from './db';
 import { productDrafts, publishJobs, publishTasks } from '../shared/schema';
-import { eq, inArray, sql } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { collectDraftImages } from './services/adapters/adapterUtils';
 import {
   MAX_DRAFT_IMAGES,
@@ -13,6 +13,7 @@ import {
   ensureUploadsDir,
   filesToPublicUrls,
 } from './services/draftPhotoUpload';
+import { countUniqueProductDrafts } from '../shared/draftCount';
 
 const router = express.Router();
 
@@ -161,25 +162,17 @@ router.post("/drafts", async (req, res) => {
 // --- 2. FETCH ALL SAVED DRAFTS (GET) ---
 router.get("/drafts/count", async (_req, res) => {
  try {
-   const [row] = await db
+   const rows = await db
      .select({
-       count: sql<number>`cast(count(distinct (
-         case
-           when ${productDrafts.sku} is not null
-             and trim(${productDrafts.sku}) <> ''
-             and upper(trim(${productDrafts.sku})) not like 'AUTO-%'
-             then 'sku:' || lower(trim(${productDrafts.sku}))
-           when coalesce(${productDrafts.attributes}->>'brand', '') <> ''
-             then 'tb:' || lower(trim(${productDrafts.attributes}->>'brand'))
-               || '|' || lower(trim(regexp_replace(${productDrafts.title}, '\\s+', ' ', 'g')))
-           else 't:' || lower(trim(regexp_replace(${productDrafts.title}, '\\s+', ' ', 'g')))
-         end
-       )) as int)`,
+       id: productDrafts.id,
+       title: productDrafts.title,
+       sku: productDrafts.sku,
+       attributes: productDrafts.attributes,
      })
      .from(productDrafts);
 
-   const count = Number(row?.count ?? 0);
-   return res.status(200).json({ count: Number.isFinite(count) ? count : 0 });
+   const count = countUniqueProductDrafts(rows);
+   return res.status(200).json({ count });
  } catch (error) {
    console.error("[KAUF26] Error counting product drafts:", error);
    return res.status(500).json({ error: "Internal Server Error" });

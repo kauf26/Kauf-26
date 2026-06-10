@@ -178,7 +178,9 @@ export default function Dashboard() {
       case "products":
         return (
           <div className="text-center">
-            <div className={`text-4xl font-bold ${info.color}`}>{productCount}</div>
+            <div className={`text-4xl font-bold ${info.color}`}>
+              {productCountFetching ? "…" : productCount}
+            </div>
             <p className="text-sm text-muted-foreground mt-2">Unique product drafts</p>
           </div>
         );
