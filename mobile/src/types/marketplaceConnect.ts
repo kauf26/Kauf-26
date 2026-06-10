@@ -1,8 +1,8 @@
-export type OAuthPlatform = 'etsy' | 'shopify' | 'ebay';
+export type OAuthPlatform = string;
 
 /** Profile fields fetched from a marketplace API after OAuth (device-only). */
 export type MarketplaceUserProfile = {
-  marketplace: OAuthPlatform;
+  marketplace: string;
   name?: string;
   email?: string;
   accountLabel?: string;
@@ -11,7 +11,19 @@ export type MarketplaceUserProfile = {
 };
 
 export type ConnectResult = {
-  marketplace: OAuthPlatform;
+  marketplace: string;
   oneTapLikely: boolean;
   profile: MarketplaceUserProfile;
+};
+
+export type ProviderDisplayMeta = {
+  id: string;
+  name: string;
+  color: string;
+  oauthSupported: boolean;
+  configured: boolean;
+  requiresShopDomain?: boolean;
+  requiresSiteUrl?: boolean;
+  requiresBaseUrl?: boolean;
+  notes?: string;
 };

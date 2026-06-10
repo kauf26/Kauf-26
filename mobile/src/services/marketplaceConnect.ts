@@ -1,28 +1,29 @@
 /**
- * Unified mobile marketplace connect adapter (Etsy, Shopify, eBay).
- * Delegates to one-tap OAuth + on-device user profile fetch.
+ * Unified mobile marketplace connect adapter — all OAuth marketplaces.
  */
-import { connectMarketplaceOneTap, oneTapHelpText } from './marketplaceOAuth';
+import { connectMarketplaceOneTap, oneTapHelpText } from './unifiedMarketplaceOAuth';
 import { fetchMarketplaceUserProfile } from './marketplaceUserInfo';
-import { getOAuthConfig } from './oauthConfig';
-import { loadPlatformTokens } from './secureTokenStore';
-import type { ConnectResult, MarketplaceUserProfile, OAuthPlatform } from '../types/marketplaceConnect';
+import { getOAuthProvider } from './oauthConfig';
+import { loadConnectContext, loadPlatformTokens } from './secureTokenStore';
+import type { ConnectResult, MarketplaceUserProfile } from '../types/marketplaceConnect';
 
-export type { ConnectResult, MarketplaceUserProfile, OAuthPlatform };
-
+export type { ConnectResult, MarketplaceUserProfile };
 export { oneTapHelpText };
 
-export async function connectPlatform(platform: OAuthPlatform, shopDomain?: string): Promise<ConnectResult> {
-  return connectMarketplaceOneTap(platform, shopDomain);
+export async function connectPlatform(
+  marketplaceId: string,
+  options?: { shopDomain?: string; siteUrl?: string; baseUrl?: string }
+): Promise<ConnectResult> {
+  return connectMarketplaceOneTap(marketplaceId, options);
 }
 
-/** Reload profile from marketplace API using stored on-device tokens. */
 export async function refreshPlatformProfile(
-  platform: OAuthPlatform
+  marketplaceId: string
 ): Promise<MarketplaceUserProfile> {
-  const tokens = await loadPlatformTokens(platform);
-  if (!tokens) throw new Error(`${platform} not connected`);
-  const config = await getOAuthConfig(platform);
+  const tokens = await loadPlatformTokens(marketplaceId);
+  if (!tokens) throw new Error(`${marketplaceId} not connected`);
+  const config = await getOAuthProvider(marketplaceId);
   if (!config) throw new Error('OAuth config unavailable');
-  return fetchMarketplaceUserProfile(platform, config, tokens);
+  const ctx = (await loadConnectContext(marketplaceId)) ?? {};
+  return fetchMarketplaceUserProfile(marketplaceId, config, tokens, ctx);
 }

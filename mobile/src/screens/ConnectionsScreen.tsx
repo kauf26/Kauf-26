@@ -21,24 +21,22 @@ import {
   saveOnboardingProfile,
   type OnboardingProfile,
 } from '../services/onboardingProfile';
+import { loadProviderRegistry } from '../services/providerRegistry';
 import {
   deletePlatformTokens,
   hasPlatformTokens,
   loadPlatformTokens,
   loadShopDomain,
 } from '../services/secureTokenStore';
-import type { OAuthPlatform } from '../types/marketplaceConnect';
+import type { ProviderDisplayMeta } from '../types/marketplaceConnect';
 
-const PLATFORMS: { id: OAuthPlatform; name: string; color: string }[] = [
-  { id: 'etsy', name: 'Etsy', color: '#f45800' },
-  { id: 'shopify', name: 'Shopify', color: '#95bf47' },
-  { id: 'ebay', name: 'eBay', color: '#e53238' },
-];
+type ConnectFields = Record<string, { shopDomain?: string; siteUrl?: string; baseUrl?: string }>;
 
 export default function ConnectionsScreen() {
+  const [providers, setProviders] = useState<ProviderDisplayMeta[]>([]);
   const [statuses, setStatuses] = useState<Record<string, { ok: boolean; message: string }>>({});
   const [loading, setLoading] = useState<string | null>(null);
-  const [shopifyShop, setShopifyShop] = useState('');
+  const [connectFields, setConnectFields] = useState<ConnectFields>({});
   const [profile, setProfile] = useState<OnboardingProfile>({
     name: '',
     email: '',
@@ -49,29 +47,42 @@ export default function ConnectionsScreen() {
   const [oauthNotice, setOauthNotice] = useState<{
     kind: 'cancel' | 'error';
     message: string;
-    platform?: OAuthPlatform;
+    platform?: string;
   } | null>(null);
 
   const refresh = useCallback(async () => {
+    const { providers: registry } = await loadProviderRegistry();
+    setProviders(registry);
+
     const next: Record<string, { ok: boolean; message: string }> = {};
-    for (const p of PLATFORMS) {
+    for (const p of registry) {
+      if (!p.oauthSupported) {
+        next[p.id] = { ok: false, message: p.notes ?? 'Partnership / API key required' };
+        continue;
+      }
       const connected = await hasPlatformTokens(p.id);
       if (!connected) {
-        next[p.id] = { ok: false, message: 'Not connected' };
+        next[p.id] = {
+          ok: false,
+          message: p.configured ? 'Not connected' : 'Server OAuth not configured',
+        };
         continue;
       }
       const tokens = await loadPlatformTokens(p.id);
       const v = await verifyMarketplace(p.id);
       const label =
-        tokens?.userName ??
-        tokens?.accountName ??
-        v.accountName ??
-        v.message;
+        tokens?.userName ?? tokens?.accountName ?? v.accountName ?? v.message;
       next[p.id] = { ok: v.ok, message: label };
     }
     setStatuses(next);
+
     const savedShop = await loadShopDomain();
-    if (savedShop) setShopifyShop(savedShop);
+    if (savedShop) {
+      setConnectFields((f) => ({
+        ...f,
+        shopify: { ...f.shopify, shopDomain: savedShop },
+      }));
+    }
 
     if (!profileDirty) {
       const saved = await loadOnboardingProfile();
@@ -89,11 +100,28 @@ export default function ConnectionsScreen() {
     setProfileDirty(false);
   };
 
-  const handleConnect = async (id: OAuthPlatform) => {
-    setLoading(id);
+  const updateField = (id: string, field: keyof ConnectFields[string], value: string) => {
+    setConnectFields((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], [field]: value },
+    }));
+  };
+
+  const handleConnect = async (p: ProviderDisplayMeta) => {
+    if (!p.oauthSupported) return;
+    if (!p.configured) {
+      Alert.alert(
+        'Not configured',
+        `Set ${p.name} client credentials on the server and rebuild the mobile app secrets if required.`
+      );
+      return;
+    }
+
+    setLoading(p.id);
     setOauthNotice(null);
+    const fields = connectFields[p.id] ?? {};
     try {
-      const result = await connectPlatform(id, id === 'shopify' ? shopifyShop : undefined);
+      const result = await connectPlatform(p.id, fields);
       const merged = await mergeProfileFromMarketplace(result.profile);
       setProfile(merged);
       setProfileDirty(false);
@@ -103,7 +131,7 @@ export default function ConnectionsScreen() {
         : 'Connected — you signed in via the system browser.';
 
       Alert.alert(
-        `${PLATFORMS.find((p) => p.id === id)?.name} connected`,
+        `${p.name} connected`,
         [
           tapNote,
           result.profile.name ? `Name: ${result.profile.name}` : '',
@@ -118,7 +146,7 @@ export default function ConnectionsScreen() {
       if (isOAuthCancelledError(err)) {
         setOauthNotice({
           kind: 'cancel',
-          platform: id,
+          platform: p.id,
           message:
             'Sign-in was cancelled. Tap Connect again when you are ready — your password is never stored in this app.',
         });
@@ -127,7 +155,7 @@ export default function ConnectionsScreen() {
       const message = err instanceof Error ? err.message : 'Unknown error';
       setOauthNotice({
         kind: 'error',
-        platform: id,
+        platform: p.id,
         message: `${message} Tap Connect to try again.`,
       });
     } finally {
@@ -139,6 +167,9 @@ export default function ConnectionsScreen() {
     await deletePlatformTokens(id);
     await refresh();
   };
+
+  const oauthProviders = providers.filter((p) => p.oauthSupported);
+  const otherProviders = providers.filter((p) => !p.oauthSupported);
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -157,7 +188,11 @@ export default function ConnectionsScreen() {
             ]}
           >
             <Ionicons
-              name={oauthNotice.kind === 'cancel' ? 'information-circle-outline' : 'alert-circle-outline'}
+              name={
+                oauthNotice.kind === 'cancel'
+                  ? 'information-circle-outline'
+                  : 'alert-circle-outline'
+              }
               size={18}
               color={oauthNotice.kind === 'cancel' ? '#93c5fd' : '#fca5a5'}
             />
@@ -171,8 +206,8 @@ export default function ConnectionsScreen() {
         <View style={styles.profileCard}>
           <Text style={styles.sectionTitle}>Your profile (auto-filled from OAuth)</Text>
           <Text style={styles.sectionHint}>
-            After you connect, we fetch your name and email from the marketplace API and fill these
-            fields. Edit anytime — stored only on this device.
+            After you connect, we fetch your name and email from the marketplace API. Edit anytime —
+            stored only on this device.
           </Text>
           <Text style={styles.label}>Name</Text>
           <TextInput
@@ -182,7 +217,7 @@ export default function ConnectionsScreen() {
             value={profile.name}
             onChangeText={(name) => {
               setProfileDirty(true);
-              setProfile((p) => ({ ...p, name }));
+              setProfile((prev) => ({ ...prev, name }));
             }}
             onBlur={() => persistProfile({ ...profile, updatedAt: Date.now() })}
           />
@@ -194,71 +229,28 @@ export default function ConnectionsScreen() {
             value={profile.email}
             onChangeText={(email) => {
               setProfileDirty(true);
-              setProfile((p) => ({ ...p, email }));
+              setProfile((prev) => ({ ...prev, email }));
             }}
             onBlur={() => persistProfile({ ...profile, updatedAt: Date.now() })}
             keyboardType="email-address"
             autoCapitalize="none"
           />
           {profile.sources.length > 0 && (
-            <Text style={styles.sources}>
-              Auto-filled from: {profile.sources.join(', ')}
-            </Text>
+            <Text style={styles.sources}>Auto-filled from: {profile.sources.join(', ')}</Text>
           )}
         </View>
 
-        {PLATFORMS.map((p) => {
-          const st = statuses[p.id];
-          const isConnected = st?.ok;
-          return (
-            <View key={p.id} style={styles.card}>
-              <View style={styles.cardHeader}>
-                <Text style={[styles.cardTitle, { color: p.color }]}>{p.name}</Text>
-                <Text style={isConnected ? styles.badgeOk : styles.badgeOff}>
-                  {isConnected ? 'Connected' : 'Not connected'}
-                </Text>
-              </View>
-              {st?.message ? <Text style={styles.message}>{st.message}</Text> : null}
+        <Text style={styles.groupTitle}>OAuth marketplaces ({oauthProviders.length})</Text>
+        {oauthProviders.map((p) => renderProviderCard(p))}
 
-              {p.id === 'shopify' && !isConnected && (
-                <>
-                  <Text style={styles.label}>Store domain (required once)</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="your-store.myshopify.com"
-                    placeholderTextColor="#6b7280"
-                    value={shopifyShop}
-                    onChangeText={setShopifyShop}
-                    autoCapitalize="none"
-                  />
-                </>
-              )}
-
-              <View style={styles.actions}>
-                {!isConnected ? (
-                  <TouchableOpacity
-                    style={[styles.button, { backgroundColor: p.color }]}
-                    onPress={() => handleConnect(p.id)}
-                    disabled={loading === p.id}
-                  >
-                    {loading === p.id ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <View style={styles.buttonInner}>
-                        <Ionicons name="flash-outline" size={18} color="#fff" />
-                        <Text style={styles.buttonText}>Connect {p.name} — one tap</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                ) : (
-                  <TouchableOpacity style={styles.disconnect} onPress={() => handleDisconnect(p.id)}>
-                    <Text style={styles.disconnectText}>Disconnect</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          );
-        })}
+        {otherProviders.length > 0 && (
+          <>
+            <Text style={[styles.groupTitle, { marginTop: 8 }]}>
+              Partnership / API key ({otherProviders.length})
+            </Text>
+            {otherProviders.map((p) => renderProviderCard(p))}
+          </>
+        )}
 
         <Text style={styles.footerNote}>
           {Platform.OS === 'ios'
@@ -270,6 +262,100 @@ export default function ConnectionsScreen() {
       </ScrollView>
     </SafeAreaView>
   );
+
+  function renderProviderCard(p: ProviderDisplayMeta) {
+    const st = statuses[p.id];
+    const isConnected = st?.ok;
+    const fields = connectFields[p.id] ?? {};
+
+    return (
+      <View key={p.id} style={styles.card}>
+        <View style={styles.cardHeader}>
+          <Text style={[styles.cardTitle, { color: p.color }]}>{p.name}</Text>
+          <Text style={isConnected ? styles.badgeOk : styles.badgeOff}>
+            {!p.oauthSupported
+              ? 'N/A'
+              : isConnected
+                ? 'Connected'
+                : p.configured
+                  ? 'Not connected'
+                  : 'Not configured'}
+          </Text>
+        </View>
+        {st?.message ? <Text style={styles.message}>{st.message}</Text> : null}
+
+        {p.oauthSupported && p.requiresShopDomain && !isConnected && (
+          <>
+            <Text style={styles.label}>Store domain</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="your-store.myshopify.com"
+              placeholderTextColor="#6b7280"
+              value={fields.shopDomain ?? ''}
+              onChangeText={(v) => updateField(p.id, 'shopDomain', v)}
+              autoCapitalize="none"
+            />
+          </>
+        )}
+
+        {p.oauthSupported && p.requiresSiteUrl && !isConnected && (
+          <>
+            <Text style={styles.label}>Site URL</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="yourstore.com"
+              placeholderTextColor="#6b7280"
+              value={fields.siteUrl ?? ''}
+              onChangeText={(v) => updateField(p.id, 'siteUrl', v)}
+              autoCapitalize="none"
+            />
+          </>
+        )}
+
+        {p.oauthSupported && p.requiresBaseUrl && !isConnected && (
+          <>
+            <Text style={styles.label}>Store base URL</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="store.example.com"
+              placeholderTextColor="#6b7280"
+              value={fields.baseUrl ?? ''}
+              onChangeText={(v) => updateField(p.id, 'baseUrl', v)}
+              autoCapitalize="none"
+            />
+          </>
+        )}
+
+        <View style={styles.actions}>
+          {p.oauthSupported && !isConnected ? (
+            <TouchableOpacity
+              style={[
+                styles.button,
+                { backgroundColor: p.configured ? p.color : '#4b5563' },
+              ]}
+              onPress={() => handleConnect(p)}
+              disabled={loading === p.id || !p.configured}
+            >
+              {loading === p.id ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <View style={styles.buttonInner}>
+                  <Ionicons name="flash-outline" size={18} color="#fff" />
+                  <Text style={styles.buttonText}>
+                    {p.configured ? `Connect ${p.name} — one tap` : 'Configure server OAuth first'}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          ) : p.oauthSupported && isConnected ? (
+            <TouchableOpacity style={styles.disconnect} onPress={() => handleDisconnect(p.id)}>
+              <Text style={styles.disconnectText}>Disconnect</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </View>
+    );
+  }
 }
 
 const styles = StyleSheet.create({
@@ -278,6 +364,14 @@ const styles = StyleSheet.create({
   hero: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   heroTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
   subtitle: { color: '#9ca3af', fontSize: 14, lineHeight: 20, marginBottom: 16 },
+  groupTitle: {
+    color: '#9ca3af',
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
   notice: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -287,14 +381,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
   },
-  noticeCancel: {
-    backgroundColor: '#1e3a5f40',
-    borderColor: '#3b82f650',
-  },
-  noticeError: {
-    backgroundColor: '#450a0a40',
-    borderColor: '#ef444450',
-  },
+  noticeCancel: { backgroundColor: '#1e3a5f40', borderColor: '#3b82f650' },
+  noticeError: { backgroundColor: '#450a0a40', borderColor: '#ef444450' },
   noticeText: { flex: 1, color: '#e5e7eb', fontSize: 13, lineHeight: 18 },
   noticeDismiss: { color: '#9ca3af', fontSize: 12, fontWeight: '600' },
   profileCard: {
@@ -317,10 +405,10 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardTitle: { fontSize: 18, fontWeight: '700' },
-  badgeOk: { color: '#10b981', fontSize: 12, fontWeight: '600' },
-  badgeOff: { color: '#f87171', fontSize: 12, fontWeight: '600' },
-  message: { color: '#d1d5db', fontSize: 13, marginTop: 8 },
+  cardTitle: { fontSize: 16, fontWeight: '700', flex: 1, marginRight: 8 },
+  badgeOk: { color: '#10b981', fontSize: 11, fontWeight: '600' },
+  badgeOff: { color: '#f87171', fontSize: 11, fontWeight: '600' },
+  message: { color: '#d1d5db', fontSize: 12, marginTop: 6 },
   label: { color: '#fff', fontSize: 13, marginTop: 12, marginBottom: 6 },
   input: {
     backgroundColor: '#0a0a0f',
@@ -338,7 +426,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   buttonInner: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  buttonText: { color: '#fff', fontWeight: '600' },
+  buttonText: { color: '#fff', fontWeight: '600', fontSize: 13 },
   disconnect: { paddingVertical: 10, alignItems: 'center' },
   disconnectText: { color: '#f87171', fontWeight: '600' },
   footerNote: { color: '#6b7280', fontSize: 11, textAlign: 'center', marginTop: 8 },

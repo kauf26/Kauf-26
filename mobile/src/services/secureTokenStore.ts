@@ -52,3 +52,26 @@ export async function saveShopDomain(shopDomain: string): Promise<void> {
 export async function loadShopDomain(): Promise<string | null> {
   return SecureStore.getItemAsync('oauth:shopify:shopDomain');
 }
+
+export type ConnectContext = {
+  shopDomain?: string;
+  siteUrl?: string;
+  baseUrl?: string;
+};
+
+export async function saveConnectContext(
+  marketplace: string,
+  ctx: ConnectContext
+): Promise<void> {
+  await SecureStore.setItemAsync(key(marketplace, 'connectContext'), JSON.stringify(ctx));
+}
+
+export async function loadConnectContext(marketplace: string): Promise<ConnectContext | null> {
+  const raw = await SecureStore.getItemAsync(key(marketplace, 'connectContext'));
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as ConnectContext;
+  } catch {
+    return null;
+  }
+}

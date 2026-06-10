@@ -86,7 +86,7 @@ async function getValidTokens(marketplace: string): Promise<StoredPlatformTokens
       body: new URLSearchParams({
         grant_type: 'refresh_token',
         refresh_token: stored.refreshToken,
-        scope: config.scopes,
+        scope: Array.isArray(config.scopes) ? config.scopes.join(' ') : String(config.scopes ?? ''),
       }),
     });
     const json = await res.json();
@@ -157,7 +157,11 @@ export async function verifyMarketplace(marketplace: string): Promise<VerifyResu
       };
     }
 
-    return { ok: false, message: 'Unsupported marketplace' };
+    return {
+      ok: true,
+      message: `${marketplace} connected`,
+      accountName: tokens.userName ?? tokens.accountName,
+    };
   } catch (err) {
     return {
       ok: false,

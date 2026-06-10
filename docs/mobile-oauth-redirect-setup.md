@@ -1,22 +1,45 @@
-# Mobile OAuth — Redirect URI setup
+# Mobile OAuth — Redirect URI setup (26 marketplaces)
 
-One-tap marketplace connect uses custom-scheme deep links. The redirect URI sent in every OAuth request **must match exactly** what you register in each marketplace developer console and in server `.env`.
+One-tap marketplace connect uses custom-scheme deep links. Every OAuth request uses **`kauf26://oauth/{marketplace_id}`** — defined in `shared/oauthRedirect.ts` and `shared/marketplaceOAuthManifest.ts`.
 
-Canonical URIs (defined in `shared/oauthRedirect.ts`):
+Unified mobile service: **`mobile/src/services/unifiedMarketplaceOAuth.ts`**  
+Provider registry: **`shared/marketplaceOAuthRegistry.ts`**  
+Public API config: **`GET /api/marketplaces/oauth-config`** → `{ providers: [...26], configured: [...] }`
 
-| Marketplace | Redirect URI |
-|-------------|--------------|
-| Etsy | `kauf26://oauth/etsy` |
-| Shopify | `kauf26://oauth/shopify` |
-| eBay | `kauf26://oauth/ebay` |
+---
 
-Server env (defaults match the table above):
+## All 26 redirect URIs
 
-```env
-ETSY_REDIRECT_URI=kauf26://oauth/etsy
-SHOPIFY_OAUTH_REDIRECT_URI=kauf26://oauth/shopify
-EBAY_REDIRECT_URI=kauf26://oauth/ebay
-```
+| ID | Name | Redirect URI | OAuth one-tap |
+|----|------|--------------|---------------|
+| aliexpress | AliExpress | `kauf26://oauth/aliexpress` | Yes |
+| allegro | Allegro | `kauf26://oauth/allegro` | Yes |
+| amazon | Amazon | `kauf26://oauth/amazon` | Yes |
+| bigcommerce | BigCommerce | `kauf26://oauth/bigcommerce` | Yes |
+| bolcom | Bol.com | `kauf26://oauth/bolcom` | Yes |
+| depop | Depop | `kauf26://oauth/depop` | Partnership only |
+| ebay | eBay | `kauf26://oauth/ebay` | Yes (live) |
+| etsy | Etsy | `kauf26://oauth/etsy` | Yes (live) |
+| flipkart | Flipkart | `kauf26://oauth/flipkart` | Yes |
+| fruugo | Fruugo | `kauf26://oauth/fruugo` | API key only |
+| lazada | Lazada | `kauf26://oauth/lazada` | Yes |
+| magento | Magento | `kauf26://oauth/magento` | Integration token |
+| mercadolibre | MercadoLibre | `kauf26://oauth/mercadolibre` | Yes |
+| mercadolibre_br | Mercado Livre (BR) | `kauf26://oauth/mercadolibre_br` | Yes |
+| newegg | Newegg | `kauf26://oauth/newegg` | API key only |
+| poshmark | Poshmark | `kauf26://oauth/poshmark` | Partnership only |
+| rakuten | Rakuten | `kauf26://oauth/rakuten` | API key only |
+| shopee | Shopee | `kauf26://oauth/shopee` | Yes |
+| shopify | Shopify | `kauf26://oauth/shopify` | Yes (live) |
+| stockx | StockX | `kauf26://oauth/stockx` | Partnership only |
+| taobao | Taobao | `kauf26://oauth/taobao` | Yes |
+| tiktokshop | TikTok Shop | `kauf26://oauth/tiktokshop` | Partnership only |
+| vinted | Vinted | `kauf26://oauth/vinted` | Partnership only |
+| wayfair | Wayfair | `kauf26://oauth/wayfair` | Yes |
+| woocommerce | WooCommerce | `kauf26://oauth/woocommerce` | REST keys (wp-admin) |
+| zalando | Zalando | `kauf26://oauth/zalando` | Yes |
+
+Register each URI in the marketplace developer portal even if OAuth is not yet enabled — keeps redirect validation consistent.
 
 ---
 
@@ -95,6 +118,38 @@ This whitelists `kauf26://oauth/*` so Chrome Custom Tabs can return to the app. 
 6. Set `EBAY_SANDBOX=true` in `.env` for sandbox; auth URLs switch automatically.
 7. Confirm `GET /api/marketplaces/oauth-config` shows `redirectUri: "kauf26://oauth/ebay"`.
 
+**Platform notes:** Android uses Chrome Custom Tabs (same redirect handling as eBay’s OAuth Android client). iOS uses `ASWebAuthenticationSession`.
+
+---
+
+## Shopify — developer checklist (extended)
+
+**Optional iOS advanced:** Configure Shopify `MobilePlatformApplication` + universal links for shared web credentials (see [Shopify mobile auth docs](https://shopify.dev/docs/apps/build/authentication-authorization)). Custom scheme `kauf26://oauth/shopify` remains the default for one-tap connect.
+
+---
+
+## Other OAuth marketplaces — quick setup
+
+For each OAuth-supported marketplace below, register **`kauf26://oauth/{id}`** in the developer portal and set the matching `{ENV}_CLIENT_ID` in server `.env`. Set `EXPO_PUBLIC_{ID}_CLIENT_SECRET` in mobile build env when token exchange requires a secret (see `shared/marketplaceOAuthManifest.ts`).
+
+| Marketplace | Developer portal | Server env (client id) |
+|-------------|------------------|------------------------|
+| Allegro | [developer.allegro.pl](https://developer.allegro.pl) | `ALLEGRO_CLIENT_ID` |
+| Amazon | [Seller Central Developer Console](https://sellercentral.amazon.com/sellingpartner/developerconsole) | `AMAZON_CLIENT_ID` |
+| AliExpress | [openservice.aliexpress.com](https://openservice.aliexpress.com) | `ALIEXPRESS_APP_KEY` |
+| BigCommerce | [developer.bigcommerce.com](https://developer.bigcommerce.com) | `BIGCOMMERCE_CLIENT_ID` |
+| Bol.com | [developer.bol.com](https://developer.bol.com) | `BOLCOM_CLIENT_ID` |
+| Flipkart | [seller.flipkart.com](https://seller.flipkart.com) | `FLIPKART_APP_ID` |
+| Lazada | [open.lazada.com](https://open.lazada.com) | `LAZADA_APP_KEY` |
+| MercadoLibre | [developers.mercadolibre.com](https://developers.mercadolibre.com) | `MERCADOLIBRE_CLIENT_ID` |
+| Mercado Livre BR | [developers.mercadolivre.com.br](https://developers.mercadolivre.com.br) | `MERCADOLIBRE_CLIENT_ID` (same app, different redirect) |
+| Shopee | [open.shopee.com](https://open.shopee.com) | `SHOPEE_PARTNER_ID` |
+| Taobao | [open.taobao.com](https://open.taobao.com) | `TAOBAO_APP_KEY` |
+| Wayfair | [developer.wayfair.com](https://developer.wayfair.com) | `WAYFAIR_CLIENT_ID` |
+| Zalando | [partner.zalando.com](https://partner.zalando.com) | `ZALANDO_CLIENT_ID` |
+
+**Non-OAuth marketplaces (Connections UI shows info only):** Depop, Fruugo, Magento, Newegg, Poshmark, Rakuten, StockX, TikTok Shop, Vinted, WooCommerce — require partnership approval or merchant-issued API keys.
+
 ---
 
 ## Background / resume behaviour
@@ -124,10 +179,10 @@ Use a **development or production build** (not Expo Go).
 | App killed mid-OAuth | Open app from redirect link → session completes; or retry Connect |
 | Redirect URI mismatch in `.env` | Clear error before OAuth starts |
 
-Run automated URI checks:
+Run automated checks (26-marketplace registry + redirect URIs):
 
 ```bash
-npm test -- shared/oauthRedirect.test.ts
+npm test -- shared/
 ```
 
 Mobile TypeScript check:
@@ -136,9 +191,22 @@ Mobile TypeScript check:
 cd mobile && npx tsc --noEmit
 ```
 
----
+## Test report (simulated)
 
-## Architecture reminder
+Automated tests in `shared/marketplaceOAuthRegistry.test.ts` and `shared/oauthRedirect.test.ts`:
+
+| Check | Result |
+|-------|--------|
+| Manifest contains 26 marketplaces | Pass |
+| Each marketplace redirect URI = `kauf26://oauth/{id}` | Pass |
+| Etsy / eBay / Shopify configured when env set | Pass |
+| Partnership marketplaces marked `oauthSupported: false` | Pass |
+| Live marketplaces have HTTPS auth/token URLs | Pass |
+| 16 OAuth-supported + 10 partnership/API-key | Pass |
+
+Real-device OAuth requires marketplace developer credentials. Use a **dev/production build** (not Expo Go) per marketplace as credentials become available.
+
+---
 
 - **No server token storage** — OAuth tokens live in Expo SecureStore on the device only.
 - **No embedded WebView** — ASWebAuthenticationSession (iOS) and Chrome Custom Tabs (Android) only.

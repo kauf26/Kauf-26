@@ -53,7 +53,7 @@ import {
 } from "./services/ebayApi";
 import { verifyEtsyConnection } from "./services/etsyApi";
 import { verifyShopifyConnection } from "./services/shopifyApi";
-import { getMarketplaceOAuthConfigs } from "./config/oauthConfig";
+import { getAllMarketplaceOAuthConfigs, getMarketplaceOAuthConfigs } from "./config/oauthConfig";
 import {
   type VisionConfidence,
   type VisionPerImage,
@@ -1357,7 +1357,20 @@ app.get("/api/etsy/verify", makeVerifyRoute("etsy", verifyEtsyConnection));
 app.get("/api/ebay/verify", makeVerifyRoute("ebay", verifyEbayConnection));
 
 app.get("/api/marketplaces/oauth-config", (_req, res) => {
-  res.json({ marketplaces: getMarketplaceOAuthConfigs() });
+  res.json({
+    providers: getAllMarketplaceOAuthConfigs(),
+    configured: getMarketplaceOAuthConfigs(),
+    /** @deprecated use `providers` */
+    marketplaces: getMarketplaceOAuthConfigs().map((p) => ({
+      marketplace: p.id,
+      clientId: p.clientId,
+      scopes: p.scopes.join(" "),
+      redirectUri: p.redirectUri,
+      authorizeUrl: p.authUrl,
+      tokenUrl: p.tokenUrl,
+      requiresShopDomain: p.requiresShopDomain,
+    })),
+  });
 });
 
 // -------------------- SERVER SETUP --------------------
