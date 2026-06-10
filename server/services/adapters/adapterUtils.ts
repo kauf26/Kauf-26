@@ -1,5 +1,6 @@
 import type { DraftPublishPayload } from "../../publishToMarketplaces";
 import type { AdapterPublishResult, FormattedListing } from "./types";
+import { MAX_DRAFT_IMAGES } from "../../../shared/draftImages";
 
 function isUsableCredential(value: string): boolean {
   const v = value.trim();
@@ -62,7 +63,8 @@ function isImageRef(value: unknown): value is string {
   return (
     s.startsWith("data:image/") ||
     s.startsWith("http://") ||
-    s.startsWith("https://")
+    s.startsWith("https://") ||
+    s.startsWith("/uploads/")
   );
 }
 
@@ -94,7 +96,7 @@ export function collectDraftImages(draft: {
     for (const url of a.productPageImageUrls) add(url);
   }
 
-  return merged;
+  return merged.slice(0, MAX_DRAFT_IMAGES);
 }
 
 export function draftImageCount(draft: DraftPublishPayload): number {

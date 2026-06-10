@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -7,6 +7,12 @@ import {
   type ListingSession,
   type MatchType,
 } from "@/lib/pendingAnalysis";
+import DraftPhotoGallery from "@/components/DraftPhotoGallery";
+import {
+  loadInitialDraftImages,
+  persistDraftImages,
+  saveDraftSnapshot,
+} from "@/lib/draftPhotos";
 
 type ProductDraftState = {
 isExactMatch: boolean;
@@ -43,26 +49,9 @@ const CATEGORY_SUGGESTIONS = [
   "Other",
 ];
 
-function loadDraftImagesForSave(capturedImage: string): string[] {
-  const images: string[] = [];
-  const add = (img: string) => {
-    if (img.trim() && !images.includes(img)) images.push(img);
-  };
-  try {
-    const stored = sessionStorage.getItem("identifyCapturedImages");
-    if (stored) {
-      const parsed = JSON.parse(stored) as unknown;
-      if (Array.isArray(parsed)) {
-        for (const img of parsed) {
-          if (typeof img === "string") add(img);
-        }
-      }
-    }
-  } catch {
-    /* ignore */
-  }
-  add(capturedImage);
-  return images;
+function loadDraftImagesForSave(capturedImage: string, draftImages: string[]): string[] {
+  if (draftImages.length > 0) return draftImages;
+  return loadInitialDraftImages(capturedImage);
 }
 
 const DEFAULT_PRODUCT: ProductDraftState = {
@@ -200,10 +189,20 @@ const [verificationWarning, setVerificationWarning] = useState<string | null>(
 );
 const [exactSearchTerm, setExactSearchTerm] = useState("");
 const [isRescraping, setIsRescraping] = useState(false);
+const [draftImages, setDraftImages] = useState<string[]>([]);
+const [draftId, setDraftId] = useState<number | null>(null);
 
 useEffect(() => {
   const warning = sessionStorage.getItem("identifyVerificationWarning");
   setVerificationWarning(warning?.trim() || null);
+
+  const storedDraftId =
+    sessionStorage.getItem("productDraftId") ??
+    sessionStorage.getItem("identifyDraftId");
+  if (storedDraftId) {
+    const parsed = Number(storedDraftId);
+    if (Number.isFinite(parsed)) setDraftId(parsed);
+  }
 
   const saved = sessionStorage.getItem("pendingAnalysis");
   if (!saved) return;
@@ -214,9 +213,54 @@ useEffect(() => {
 
     setExactSearchTerm(listing.title);
 
-    setProduct(draftStateFromListing(listing));
+    const nextProduct = draftStateFromListing(listing);
+    setProduct(nextProduct);
+    setDraftImages(loadInitialDraftImages(nextProduct.capturedImage));
   } catch (e) {
     console.error("Error parsing product draft data:", e);
+  }
+}, []);
+
+const buildDraftAttributes = useCallback(
+  (images: string[]) => ({
+    capturedImage: images[0] ?? product.capturedImage,
+    capturedImages: images,
+    modelName: product.title,
+    brand: product.brand,
+    condition: product.condition,
+    category: product.category,
+    aiDescription: product.description,
+    recommendedPrice: parseFloat(product.price) || 0,
+    medianPrice: product.price,
+    allegroAvg: parseFloat(product.allegroAverage) || 0,
+    ebayAvg: parseFloat(product.ebayAverage) || 0,
+    marketPrices: {
+      recommendedPrice: product.price,
+      allegroAvg: product.allegroAverage,
+      ebayAvg: product.ebayAverage,
+    },
+  }),
+  [product]
+);
+
+const ensureDraftId = useCallback(async (): Promise<number> => {
+  if (draftId != null) return draftId;
+  const images = loadDraftImagesForSave(product.capturedImage, draftImages);
+  const id = await saveDraftSnapshot({
+    draftId,
+    title: product.title || "Untitled draft",
+    images,
+    attributes: buildDraftAttributes(images),
+  });
+  setDraftId(id);
+  return id;
+}, [buildDraftAttributes, draftId, draftImages, product.capturedImage, product.title]);
+
+const handleDraftImagesChange = useCallback((images: string[]) => {
+  setDraftImages(images);
+  persistDraftImages(images);
+  if (images[0]) {
+    setProduct((p) => ({ ...p, capturedImage: images[0] }));
   }
 }, []);
 
@@ -264,18 +308,18 @@ const handleContinue = async () => {
     const existingDraftId =
       sessionStorage.getItem("productDraftId") ??
       sessionStorage.getItem("identifyDraftId");
-    const draftImages = loadDraftImagesForSave(product.capturedImage);
+    const imagesForSave = loadDraftImagesForSave(product.capturedImage, draftImages);
     const res = await fetch("/api/drafts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        id: existingDraftId ? Number(existingDraftId) : undefined,
+        id: existingDraftId ? Number(existingDraftId) : draftId ?? undefined,
         title: product.title,
         status: "draft",
-        images: draftImages,
+        images: imagesForSave,
         attributes: {
-          capturedImage: product.capturedImage,
-          capturedImages: draftImages,
+          capturedImage: imagesForSave[0] ?? product.capturedImage,
+          capturedImages: imagesForSave,
           modelName: product.title,
           brand: product.brand,
           condition: product.condition,
@@ -530,13 +574,13 @@ return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
       {/* Left Column: Image Preview & Marketplace Estimates */}
       <div className="space-y-4">
-        <div className="border border-zinc-800 rounded bg-zinc-950 p-2 flex items-center justify-center min-h-[200px]">
-          {product.capturedImage ? (
-            <img src={product.capturedImage} alt="Product Match" className="w-full h-auto rounded object-cover" />
-          ) : (
-            <span className="text-xs text-zinc-600">No Image Preview Available</span>
-          )}
-        </div>
+        <DraftPhotoGallery
+          draftId={draftId}
+          images={draftImages}
+          onImagesChange={handleDraftImagesChange}
+          onDraftId={setDraftId}
+          ensureDraftId={ensureDraftId}
+        />
 
         <div className="bg-zinc-950 border border-zinc-800 rounded p-4 space-y-3">
           <h3 className="text-xs font-semibold tracking-wider text-zinc-400 uppercase">Scraped Valuations</h3>

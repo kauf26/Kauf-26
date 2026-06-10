@@ -1,17 +1,22 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Link } from "wouter";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useProducts } from "@/hooks/use-products";
+import { useProductDraftCount } from "@/hooks/use-product-draft-count";
+import { useSales } from "@/hooks/use-sales";
+import { useListings } from "@/hooks/use-listings";
+import {
+  useDashboardLayout,
+  useSaveDashboardLayout,
+} from "@/hooks/use-dashboard-layout";
 import GridLayout from "react-grid-layout/legacy";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  LayoutDashboard, 
-  DollarSign, 
-  ShoppingBag, 
-  TrendingUp, 
-  Clock, 
+import {
+  LayoutDashboard,
+  DollarSign,
+  ShoppingBag,
+  TrendingUp,
+  Clock,
   CheckCircle2,
   Package,
   Globe,
@@ -20,21 +25,6 @@ import {
 } from "lucide-react";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
-
-interface Sale {
-  id: number;
-  saleAmount: string;
-  saleCurrency: string;
-  ourFee: string;
-  feePaid: boolean;
-  saleDate: string;
-}
-
-interface Listing {
-  id: number;
-  marketplace: string;
-  status: string;
-}
 
 type LayoutItem = {
   i: string;
@@ -68,45 +58,30 @@ const widgetInfo: Record<string, { title: string; icon: React.ReactNode; color: 
   recent: { title: "Recent Activity", icon: <Clock className="w-5 h-5" />, color: "text-primary" },
 };
 
+function layoutsEqual(a: LayoutItem[], b: LayoutItem[]): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 export default function Dashboard() {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
   const [layout, setLayout] = useState<LayoutItem[]>(defaultLayout);
   const [hasChanges, setHasChanges] = useState(false);
+  const layoutHydratedRef = useRef(false);
 
-  const { data: sales = [] } = useQuery<Sale[]>({
-    queryKey: ["sales"],
-    queryFn: async () => {
-      const res = await fetch("/api/sales");
-      if (!res.ok) throw new Error("Failed to fetch sales");
-      return res.json();
-    },
-  });
+  const { data: sales = [] } = useSales();
+  const { data: listings = [] } = useListings();
+  const { data: productCount = 0 } = useProductDraftCount();
+  const { data: savedLayout, isFetching: layoutFetching } = useDashboardLayout();
 
-  const { data: listings = [] } = useQuery<Listing[]>({
-    queryKey: ["listings"],
-    queryFn: async () => {
-      const res = await fetch("/api/listings");
-      if (!res.ok) throw new Error("Failed to fetch listings");
-      return res.json();
-    },
-  });
-
-  const { data: products = [] } = useProducts();
-
-  const { data: savedLayout } = useQuery({
-    queryKey: ["dashboardLayout"],
-    queryFn: async () => {
-      const res = await fetch("/api/dashboard/layout");
-      if (!res.ok) throw new Error("Failed to fetch layout");
-      return res.json();
-    },
-  });
+  const saveLayoutMutation = useSaveDashboardLayout();
 
   useEffect(() => {
+    if (layoutHydratedRef.current || savedLayout === undefined) return;
+    layoutHydratedRef.current = true;
+
     if (savedLayout?.layout) {
       try {
-        const parsed = JSON.parse(savedLayout.layout);
+        const parsed = JSON.parse(savedLayout.layout) as LayoutItem[];
         setLayout(parsed);
       } catch {
         setLayout(defaultLayout);
@@ -114,33 +89,32 @@ export default function Dashboard() {
     }
   }, [savedLayout]);
 
-  const saveLayoutMutation = useMutation({
-    mutationFn: async (newLayout: LayoutItem[]) => {
-      const res = await fetch("/api/dashboard/layout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ layout: newLayout }),
-      });
-      if (!res.ok) throw new Error("Failed to save layout");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["dashboardLayout"] });
-      setHasChanges(false);
-      toast({ title: "Layout saved!", description: "Your dashboard arrangement has been saved." });
-    },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to save layout", variant: "destructive" });
-    },
-  });
-
   const handleLayoutChange = useCallback((newLayout: LayoutItem[]) => {
-    setLayout(newLayout);
-    setHasChanges(true);
+    setLayout((prev) => {
+      if (layoutsEqual(prev, newLayout)) return prev;
+      setHasChanges(true);
+      return newLayout;
+    });
   }, []);
 
   const handleSave = () => {
-    saveLayoutMutation.mutate(layout);
+    if (saveLayoutMutation.isPending) return;
+    saveLayoutMutation.mutate(layout, {
+      onSuccess: () => {
+        setHasChanges(false);
+        toast({
+          title: "Layout saved!",
+          description: "Your dashboard arrangement has been saved.",
+        });
+      },
+      onError: () => {
+        toast({
+          title: "Error",
+          description: "Failed to save layout",
+          variant: "destructive",
+        });
+      },
+    });
   };
 
   const handleReset = () => {
@@ -196,7 +170,7 @@ export default function Dashboard() {
       case "products":
         return (
           <div className="text-center">
-            <div className={`text-4xl font-bold ${info.color}`}>{products.length}</div>
+            <div className={`text-4xl font-bold ${info.color}`}>{productCount}</div>
             <p className="text-sm text-muted-foreground mt-2">Products uploaded</p>
           </div>
         );
@@ -272,7 +246,7 @@ export default function Dashboard() {
             </Button>
             <Button
               onClick={handleSave}
-              disabled={!hasChanges || saveLayoutMutation.isPending}
+              disabled={!hasChanges || saveLayoutMutation.isPending || layoutFetching}
               data-testid="button-save-layout"
             >
               <Save className="w-4 h-4 mr-2" />

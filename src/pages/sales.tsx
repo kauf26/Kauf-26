@@ -1,8 +1,9 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { useSales } from "@/hooks/use-sales";
 import { Loader2, DollarSign, CheckCircle2, TrendingUp, CreditCard } from "lucide-react";
 
 interface Sale {
@@ -20,16 +21,8 @@ interface Sale {
 
 export default function Sales() {
   const { toast } = useToast();
-  const queryClient = useQueryClient();
 
-  const { data: sales = [], isLoading } = useQuery<Sale[]>({
-    queryKey: ["sales"],
-    queryFn: async () => {
-      const res = await fetch("/api/sales");
-      if (!res.ok) throw new Error("Failed to fetch sales");
-      return res.json();
-    },
-  });
+  const { data: sales = [], isLoading, isFetching } = useSales();
 
   const payFeeMutation = useMutation({
     mutationFn: async (saleId: number) => {
@@ -180,7 +173,7 @@ export default function Sales() {
                           variant="destructive"
                           className="flex items-center gap-1"
                           onClick={() => payFeeMutation.mutate(sale.id)}
-                          disabled={payFeeMutation.isPending}
+                          disabled={payFeeMutation.isPending || isFetching}
                           data-testid={`button-pay-fee-${sale.id}`}
                         >
                           <CreditCard className="w-3 h-3" />

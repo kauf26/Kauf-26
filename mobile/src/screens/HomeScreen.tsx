@@ -16,6 +16,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { API_BASE_URL } from '../services/api';
 import { publishListing } from '../services/marketplaceClients';
 import { hasPlatformTokens } from '../services/secureTokenStore';
+import {
+  MAX_DRAFT_IMAGES,
+  addPhotosToDraftMobile,
+  draftImagesFromRecord,
+  saveDraftSnapshotMobile,
+  uploadDraftPhotosMobile,
+} from '../services/draftPhotos';
 
 const MOBILE_PUBLISH_PLATFORMS = new Set(['etsy', 'shopify', 'ebay']);
 
@@ -70,6 +77,9 @@ export default function HomeScreen() {
   const [selectedMarketplaces, setSelectedMarketplaces] = useState<string[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isListing, setIsListing] = useState(false);
+  const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [draftId, setDraftId] = useState<number | null>(null);
+  const [isAddingPhotos, setIsAddingPhotos] = useState(false);
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -82,6 +92,8 @@ export default function HomeScreen() {
 
     if (!result.canceled && result.assets[0]) {
       setImage(result.assets[0].uri);
+      setGalleryImages([result.assets[0].uri]);
+      setDraftId(null);
       analyzeImage(result.assets[0].base64 || '');
     }
   };
@@ -102,8 +114,28 @@ export default function HomeScreen() {
 
     if (!result.canceled && result.assets[0]) {
       setImage(result.assets[0].uri);
+      setGalleryImages([result.assets[0].uri]);
+      setDraftId(null);
       analyzeImage(result.assets[0].base64 || '');
     }
+  };
+
+  const ensureDraftId = async (): Promise<number> => {
+    if (draftId != null) return draftId;
+    const images = galleryImages.length > 0 ? galleryImages : image ? [image] : [];
+    const id = await saveDraftSnapshotMobile({
+      draftId,
+      title: title || 'Untitled draft',
+      images,
+      attributes: {
+        capturedImage: images[0] ?? '',
+        capturedImages: images,
+        aiDescription: description,
+        recommendedPrice: parseFloat(price) || 0,
+      },
+    });
+    setDraftId(id);
+    return id;
   };
 
   const analyzeImage = async (base64: string) => {
@@ -132,6 +164,60 @@ export default function HomeScreen() {
     } finally {
       setIsAnalyzing(false);
     }
+  };
+
+  const addMorePhotos = async () => {
+    const remaining = MAX_DRAFT_IMAGES - galleryImages.length;
+    if (remaining <= 0) {
+      Alert.alert('Photo limit', `Maximum ${MAX_DRAFT_IMAGES} photos per listing.`);
+      return;
+    }
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permission required', 'Photo library access is needed to add images');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      selectionLimit: Math.min(5, remaining),
+      quality: 0.85,
+    });
+
+    if (result.canceled || !result.assets.length) return;
+
+    const previousImages = galleryImages;
+    setIsAddingPhotos(true);
+    try {
+      const id = await ensureDraftId();
+      const uploadedUrls = await uploadDraftPhotosMobile(id, result.assets);
+      const addResult = await addPhotosToDraftMobile(id, uploadedUrls);
+      const nextImages = draftImagesFromRecord(addResult.draft);
+      setGalleryImages(nextImages);
+      if (nextImages[0]) {
+        setImage(nextImages[0]);
+      }
+    } catch (error) {
+      setGalleryImages(previousImages);
+      Alert.alert(
+        'Add photos failed',
+        error instanceof Error ? error.message : 'Could not add photos'
+      );
+    } finally {
+      setIsAddingPhotos(false);
+    }
+  };
+
+  const resetListingForm = () => {
+    setImage(null);
+    setGalleryImages([]);
+    setDraftId(null);
+    setTitle('');
+    setDescription('');
+    setPrice('');
+    setSelectedMarketplaces([]);
   };
 
   const toggleMarketplace = (id: string) => {
@@ -182,11 +268,7 @@ export default function HomeScreen() {
           [...results, ...errors].join('\n\n')
         );
         if (errors.length === 0) {
-          setImage(null);
-          setTitle('');
-          setDescription('');
-          setPrice('');
-          setSelectedMarketplaces([]);
+          resetListingForm();
         }
       } else {
         Alert.alert('Publish failed', errors.join('\n\n'));
@@ -207,7 +289,7 @@ export default function HomeScreen() {
               <Image source={{ uri: image }} style={styles.image} />
               <TouchableOpacity
                 style={styles.removeImage}
-                onPress={() => setImage(null)}
+                onPress={resetListingForm}
               >
                 <Ionicons name="close-circle" size={28} color="#ef4444" />
               </TouchableOpacity>
@@ -224,6 +306,49 @@ export default function HomeScreen() {
                   <Text style={styles.imageButtonText}>Choose Photo</Text>
                 </TouchableOpacity>
               </View>
+            </View>
+          )}
+
+          {galleryImages.length > 0 && (
+            <View style={styles.gallerySection}>
+              <View style={styles.galleryHeader}>
+                <Text style={styles.galleryTitle}>Product Photos</Text>
+                <Text style={styles.galleryCount}>
+                  {galleryImages.length}/{MAX_DRAFT_IMAGES}
+                </Text>
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                {galleryImages.map((uri, index) => (
+                  <Image
+                    key={`${uri}-${index}`}
+                    source={{ uri }}
+                    style={styles.galleryThumb}
+                  />
+                ))}
+              </ScrollView>
+              <TouchableOpacity
+                style={[
+                  styles.addPhotosButton,
+                  (galleryImages.length >= MAX_DRAFT_IMAGES || isAddingPhotos) &&
+                    styles.addPhotosButtonDisabled,
+                ]}
+                onPress={addMorePhotos}
+                disabled={galleryImages.length >= MAX_DRAFT_IMAGES || isAddingPhotos}
+              >
+                {isAddingPhotos ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <>
+                    <Ionicons name="add-circle-outline" size={18} color="#ffffff" />
+                    <Text style={styles.addPhotosButtonText}>Add Photos</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+              {galleryImages.length >= MAX_DRAFT_IMAGES && (
+                <Text style={styles.galleryLimitText}>
+                  Maximum {MAX_DRAFT_IMAGES} photos reached.
+                </Text>
+              )}
             </View>
           )}
         </View>
@@ -411,6 +536,52 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 8,
     right: 8,
+  },
+  gallerySection: {
+    marginTop: 12,
+    gap: 8,
+  },
+  galleryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  galleryTitle: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  galleryCount: {
+    color: '#9ca3af',
+    fontSize: 12,
+  },
+  galleryThumb: {
+    width: 72,
+    height: 72,
+    borderRadius: 8,
+    marginRight: 8,
+    backgroundColor: '#1f2937',
+  },
+  addPhotosButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#374151',
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  addPhotosButtonDisabled: {
+    opacity: 0.5,
+  },
+  addPhotosButtonText: {
+    color: '#ffffff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  galleryLimitText: {
+    color: '#fbbf24',
+    fontSize: 12,
   },
   imagePlaceholder: {
     width: '100%',

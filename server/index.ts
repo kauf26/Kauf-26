@@ -21,7 +21,7 @@ import {
   validateBrandTitleConsistency,
 } from "./scrapers/listingUtils";
 import { debugIdentify } from "./scrapers/scrapeDebug";
-import { MAX_PRODUCT_PAGE_IMAGES } from "./scrapers/productPageImages";
+import { MAX_DRAFT_IMAGES } from "../shared/draftImages";
 import { extractReferenceNumbers } from "./scrapers/visionMatch";
 import { stripExternalUrlFields } from "./listingSanitizer";
 import { SUPPORTED_MARKETPLACE_IDS } from "./publishToMarketplaces";
@@ -41,6 +41,7 @@ import {
   VisionIdentifyError,
   type IdentifyJobData,
 } from "./identifyQueue";
+import { ensureUploadsDir, UPLOADS_DIR } from "./services/draftPhotoUpload";
 import {
   extractIdentifyImages,
   MAX_IDENTIFY_IMAGES,
@@ -149,10 +150,10 @@ function mergeDraftImages(
 ): string[] {
   const merged = [...captured];
   for (const url of pageUrls ?? []) {
-    if (merged.length >= MAX_PRODUCT_PAGE_IMAGES) break;
+    if (merged.length >= MAX_DRAFT_IMAGES) break;
     if (!merged.includes(url)) merged.push(url);
   }
-  return merged.slice(0, MAX_PRODUCT_PAGE_IMAGES);
+  return merged.slice(0, MAX_DRAFT_IMAGES);
 }
 
 function visionToListing(vision: VisionProduct): ScrapedListing {
@@ -877,6 +878,11 @@ const PORT = Number(process.env.PORT ?? 3000);
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: false, limit: "10mb" }));
+
+void ensureUploadsDir().catch((err) => {
+  console.warn("[KAUF26] Could not create uploads directory:", err);
+});
+app.use("/uploads", express.static(UPLOADS_DIR));
 
 // Mount product routes (handles POST /api/drafts and GET /api/drafts)
 app.use("/api", productRoutes);

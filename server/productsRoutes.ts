@@ -3,7 +3,16 @@ import { db } from './db';
 import { productDrafts, publishJobs, publishTasks } from '../shared/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { collectDraftImages } from './services/adapters/adapterUtils';
-import { MAX_PRODUCT_PAGE_IMAGES } from './scrapers/productPageImages';
+import {
+  MAX_DRAFT_IMAGES,
+  mergeUniqueDraftImageUrls,
+  validateAddPhotosRequest,
+} from '../shared/draftImages';
+import {
+  draftPhotoUpload,
+  ensureUploadsDir,
+  filesToPublicUrls,
+} from './services/draftPhotoUpload';
 
 const router = express.Router();
 
@@ -62,7 +71,18 @@ function resolveDraftImagesForSave(
     ],
     attributes,
   });
-  return merged.slice(0, MAX_PRODUCT_PAGE_IMAGES);
+  return merged.slice(0, MAX_DRAFT_IMAGES);
+}
+
+function syncDraftImageAttributes(
+  attributes: Record<string, unknown>,
+  images: string[]
+): Record<string, unknown> {
+  return {
+    ...attributes,
+    capturedImage: images[0] ?? attributes.capturedImage ?? "",
+    capturedImages: images,
+  };
 }
 
 // --- 1. SAVE OR UPDATE A DRAFT (POST) ---
@@ -139,6 +159,17 @@ router.post("/drafts", async (req, res) => {
 });
 
 // --- 2. FETCH ALL SAVED DRAFTS (GET) ---
+router.get("/drafts/count", async (_req, res) => {
+ try {
+   const rows = await db.select({ id: productDrafts.id }).from(productDrafts);
+   const count = new Set(rows.map((row) => row.id)).size;
+   return res.status(200).json({ count });
+ } catch (error) {
+   console.error("[KAUF26] Error counting product drafts:", error);
+   return res.status(500).json({ error: "Internal Server Error" });
+ }
+});
+
 router.get("/drafts", async (_req, res) => {
  try {
    const allDrafts = await db.select().from(productDrafts);
@@ -301,7 +332,144 @@ router.post("/drafts/:id/post-to-marketplaces", async (req, res) => {
  }
 });
 
-// --- 6. GET DRAFT BY ID (GET) ---
+// --- 6. UPLOAD DRAFT PHOTOS (multipart) ---
+router.post(
+  "/drafts/:id/upload-photos",
+  (req, res, next) => {
+    draftPhotoUpload.array("images", 5)(req, res, (err) => {
+      if (err) {
+        return res.status(400).json({
+          error: err instanceof Error ? err.message : "Invalid upload",
+        });
+      }
+      next();
+    });
+  },
+  async (req, res) => {
+    try {
+      const draftId = Number(req.params.id);
+      if (!Number.isFinite(draftId)) {
+        return res.status(400).json({ error: "Invalid draft id" });
+      }
+
+      const [draft] = await db
+        .select()
+        .from(productDrafts)
+        .where(eq(productDrafts.id, draftId));
+
+      if (!draft) {
+        return res.status(404).json({ error: "Draft not found" });
+      }
+
+      const files = req.files as Express.Multer.File[] | undefined;
+      if (!files?.length) {
+        return res.status(400).json({ error: "No images uploaded" });
+      }
+
+      const existing = collectDraftImages({
+        images: draft.images,
+        attributes: draft.attributes as Record<string, unknown>,
+      });
+
+      if (existing.length + files.length > MAX_DRAFT_IMAGES) {
+        return res.status(400).json({
+          error: `Upload would exceed the ${MAX_DRAFT_IMAGES}-image limit (currently ${existing.length})`,
+        });
+      }
+
+      await ensureUploadsDir();
+      const urls = filesToPublicUrls(files);
+
+      return res.status(200).json({ urls });
+    } catch (error) {
+      console.error("[KAUF26] Error uploading draft photos:", error);
+      return res.status(500).json({ error: "Failed to upload photos" });
+    }
+  }
+);
+
+// --- 7. ADD PHOTO URLS TO DRAFT (POST) ---
+router.post("/drafts/:id/add-photos", async (req, res) => {
+  try {
+    const draftId = Number(req.params.id);
+    if (!Number.isFinite(draftId)) {
+      return res.status(400).json({ error: "Invalid draft id" });
+    }
+
+    const [existingDraft] = await db
+      .select()
+      .from(productDrafts)
+      .where(eq(productDrafts.id, draftId));
+
+    if (!existingDraft) {
+      return res.status(404).json({ error: "Draft not found" });
+    }
+
+    const existingImages = collectDraftImages({
+      images: existingDraft.images,
+      attributes: existingDraft.attributes as Record<string, unknown>,
+    });
+
+    const validation = validateAddPhotosRequest(
+      req.body?.imageUrls,
+      existingImages
+    );
+    if (!validation.ok) {
+      return res.status(400).json({ error: validation.error });
+    }
+
+    const { merged, added, duplicates } = mergeUniqueDraftImageUrls(
+      existingImages,
+      validation.imageUrls
+    );
+
+    if (added.length === 0) {
+      return res.status(400).json({
+        error:
+          duplicates.length > 0
+            ? "All provided photos are already on this draft"
+            : "No new photos to add",
+        duplicates,
+      });
+    }
+
+    const priorAttributes =
+      existingDraft.attributes && typeof existingDraft.attributes === "object"
+        ? (existingDraft.attributes as Record<string, unknown>)
+        : {};
+
+    const updatedAttributes = syncDraftImageAttributes(
+      normalizeDraftAttributes(priorAttributes),
+      merged
+    );
+
+    const [updatedDraft] = await db
+      .update(productDrafts)
+      .set({
+        images: merged,
+        attributes: updatedAttributes,
+        updatedAt: new Date(),
+      })
+      .where(eq(productDrafts.id, draftId))
+      .returning();
+
+    console.log(
+      `[KAUF26] Added ${added.length} photo(s) to draft ${draftId} (total ${merged.length})`
+    );
+
+    return res.status(200).json({
+      draft: updatedDraft,
+      added,
+      duplicates,
+      imageCount: merged.length,
+    });
+  } catch (error) {
+    console.error("[KAUF26] Error adding photos to draft:", error);
+    return res.status(500).json({ error: "Failed to add photos to draft" });
+  }
+});
+
+// --- 8. GET DRAFT BY ID (GET) ---
 router.get("/drafts/:id", async (req, res) => {
  try {
    const draftId = req.params.id;
@@ -320,7 +488,7 @@ router.get("/drafts/:id", async (req, res) => {
  }
 });
 
-// --- 7. PARTIAL DRAFT UPDATE (PATCH) ---
+// --- 9. PARTIAL DRAFT UPDATE (PATCH) ---
 router.patch("/drafts/:id", async (req, res) => {
  try {
    const draftId = Number(req.params.id);
@@ -358,7 +526,7 @@ router.patch("/drafts/:id", async (req, res) => {
  }
 });
 
-// --- 8. UPDATE DRAFT STATUS (PATCH) ---
+// --- 10. UPDATE DRAFT STATUS (PATCH) ---
 router.patch("/drafts/:id/status", async (req, res) => {
  try {
    const draftId = req.params.id;
@@ -393,7 +561,7 @@ router.patch("/drafts/:id/status", async (req, res) => {
  }
 });
 
-// --- 9. DELETE DRAFT (DELETE) ---
+// --- 11. DELETE DRAFT (DELETE) ---
 router.delete("/drafts/:id", async (req, res) => {
  try {
    const draftId = req.params.id;

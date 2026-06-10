@@ -51,6 +51,11 @@ export default defineConfig(({ mode }) => {
             });
           },
         },
+        '/uploads': {
+          target: `http://localhost:${apiPort}`,
+          changeOrigin: true,
+          secure: false,
+        },
       },
     },
   };

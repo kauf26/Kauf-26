@@ -1,9 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
+import { STABLE_QUERY_OPTIONS } from "@/lib/stableFetch";
 import {
   fetchProducts,
   PRODUCTS_QUERY_KEY,
-  productsRetryDelay,
-  shouldRetryProductsFetch,
   type ListingProduct,
 } from "@/lib/productsFetch";
 
@@ -18,13 +17,6 @@ export function useProducts(options: UseProductsOptions = {}) {
     queryKey: PRODUCTS_QUERY_KEY,
     queryFn: fetchProducts,
     enabled,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    retry: shouldRetryProductsFetch,
-    retryDelay: productsRetryDelay,
-    retryOnMount: false,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
+    ...STABLE_QUERY_OPTIONS,
   });
 }

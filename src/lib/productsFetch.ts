@@ -15,9 +15,27 @@ type ProductDraftRow = {
 };
 
 const PRODUCTS_QUERY_KEY = ["products"] as const;
+export const PRODUCT_DRAFT_COUNT_QUERY_KEY = ["productDraftCount"] as const;
 export { PRODUCTS_QUERY_KEY };
 
 let inFlight: Promise<ListingProduct[]> | null = null;
+let countInFlight: Promise<number> | null = null;
+
+/** One draft row = one product, regardless of photo or marketplace count. */
+export function dedupeDraftRowsById(drafts: ProductDraftRow[]): ProductDraftRow[] {
+  const byId = new Map<number, ProductDraftRow>();
+  for (const draft of drafts) {
+    if (!Number.isInteger(draft?.id)) continue;
+    byId.set(draft.id, draft);
+  }
+  return [...byId.values()];
+}
+
+export function countUniqueProductDrafts(products: ListingProduct[]): number {
+  return new Set(
+    products.map((product) => product.id).filter((id) => Number.isInteger(id))
+  ).size;
+}
 
 function draftToListingProduct(draft: ProductDraftRow): ListingProduct {
   const attrs = (draft.attributes ?? {}) as Record<string, unknown>;
@@ -49,7 +67,31 @@ async function fetchDraftProductsOnce(): Promise<ListingProduct[]> {
     throw new Error(`${res.status}: ${text}`);
   }
   const drafts = (await res.json()) as ProductDraftRow[];
-  return Array.isArray(drafts) ? drafts.map(draftToListingProduct) : [];
+  if (!Array.isArray(drafts)) return [];
+  return dedupeDraftRowsById(drafts).map(draftToListingProduct);
+}
+
+async function fetchProductDraftCountOnce(): Promise<number> {
+  const res = await fetch("/api/drafts/count", { credentials: "include" });
+  if (!res.ok) {
+    const text = (await res.text()) || res.statusText;
+    throw new Error(`${res.status}: ${text}`);
+  }
+  const data = (await res.json()) as { count?: number };
+  return Number.isInteger(data.count) ? data.count! : 0;
+}
+
+/** Distinct draft count for dashboard stats (one row per product). */
+export async function fetchProductDraftCount(): Promise<number> {
+  if (countInFlight) {
+    return countInFlight;
+  }
+
+  countInFlight = fetchProductDraftCountOnce().finally(() => {
+    countInFlight = null;
+  });
+
+  return countInFlight;
 }
 
 /** Deduplicates concurrent product list fetches across components. */
