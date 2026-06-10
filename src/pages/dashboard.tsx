@@ -128,7 +128,7 @@ export default function Dashboard() {
     });
   };
 
-  const handleReset = () => {
+  const handleHomepage = () => {
     resetListingFlow({ clearDraftContext: clearDraft });
     setLocation("/");
   };
@@ -247,11 +247,11 @@ export default function Dashboard() {
             </Button>
             <Button
               variant="outline"
-              onClick={handleReset}
-              data-testid="button-reset-listing"
+              onClick={handleHomepage}
+              data-testid="button-homepage"
             >
               <RotateCcw className="w-4 h-4 mr-2" />
-              Reset
+              Homepage
             </Button>
             <Button
               onClick={handleSave}
