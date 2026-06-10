@@ -120,6 +120,22 @@ feePaid: boolean("fee_paid").notNull().default(false),
 saleDate: timestamp("sale_date").default(sql`CURRENT_TIMESTAMP`).notNull(),
 buyerInfo: text("buyer_info"),
 shippingLabelGenerated: boolean("shipping_label_generated").notNull().default(false),
+shippingLabelCreated: boolean("shipping_label_created").notNull().default(false),
+});
+
+export const shippingLabels = pgTable("shipping_labels", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
+  saleId: integer("sale_id")
+    .notNull()
+    .references(() => sales.id, { onDelete: "cascade" }),
+  fromAddress: jsonb("from_address").notNull().default({}),
+  toAddress: jsonb("to_address").notNull().default({}),
+  packageDetails: jsonb("package_details").notNull().default({}),
+  service: text("service").notNull(),
+  trackingNumber: text("tracking_number").notNull(),
+  labelPdfUrl: text("label_pdf_url").notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
 export const marketplaceCredentials = pgTable("marketplace_credentials", {
@@ -292,6 +308,8 @@ export type MarketplaceSettings = typeof marketplaceSettings.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type ProductDraft = typeof productDrafts.$inferSelect;
 export type InsertProductDraft = z.infer<typeof insertProductDraftSchema>;
+export type Sale = typeof sales.$inferSelect;
+export type ShippingLabel = typeof shippingLabels.$inferSelect;
 export type InventoryPool = typeof inventoryPools.$inferSelect;
 export type InventoryMarketplaceListing =
  typeof inventoryMarketplaceListings.$inferSelect;

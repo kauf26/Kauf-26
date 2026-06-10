@@ -26,6 +26,9 @@ import { extractReferenceNumbers } from "./scrapers/visionMatch";
 import { stripExternalUrlFields } from "./listingSanitizer";
 import { SUPPORTED_MARKETPLACE_IDS } from "./publishToMarketplaces";
 import { productRoutes } from "./productsRoutes";
+import { dashboardDataRoutes } from "./dashboardDataRoutes";
+import { shippingRoutes } from "./shippingRoutes";
+import { LABELS_DIR, ensureLabelsDir } from "./services/shippingLabelService";
 import marketplaceRoutes from "./marketplaceRoutes";
 import inventoryRoutes from "./inventoryRoutes";
 import analyticsRoutes from "./analyticsRoutes";
@@ -882,10 +885,20 @@ app.use(express.urlencoded({ extended: false, limit: "10mb" }));
 void ensureUploadsDir().catch((err) => {
   console.warn("[KAUF26] Could not create uploads directory:", err);
 });
+void ensureLabelsDir().catch((err) => {
+  console.warn("[KAUF26] Could not create labels directory:", err);
+});
 app.use("/uploads", express.static(UPLOADS_DIR));
+app.use("/uploads/labels", express.static(LABELS_DIR));
 
 // Mount product routes (handles POST /api/drafts and GET /api/drafts)
 app.use("/api", productRoutes);
+
+// Listings, sales, dashboard layout
+app.use("/api", dashboardDataRoutes);
+
+// Shipping label maker
+app.use("/api/shipping", shippingRoutes);
 
 // Marketplace publish queue (POST /api/marketplaces/publish, GET /api/marketplaces/status/:jobId)
 app.use("/api/marketplaces", marketplaceRoutes);

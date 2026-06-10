@@ -2,36 +2,48 @@
 
 const inFlight = new Map<string, Promise<unknown>>();
 const resolvedCache = new Map<string, unknown>();
+const fallbackLogged = new Set<string>();
 
 export function fetchRetryDelay(attemptIndex: number): number {
   return Math.min(1000 * 2 ** attemptIndex, 8000);
-}
-
-export function shouldRetryFetch(failureCount: number, error: unknown): boolean {
-  if (failureCount >= 3) return false;
-  if (!(error instanceof Error)) return false;
-  if (/^4\d\d:/.test(error.message)) return false;
-  return true;
 }
 
 /** React Query options: fetch once per session, no polling, no refetch storms. */
 export const STABLE_QUERY_OPTIONS = {
   staleTime: Infinity,
   gcTime: Infinity,
-  retry: false,
-  retryDelay: fetchRetryDelay,
+  retry: false as const,
   retryOnMount: false,
   refetchOnMount: false,
   refetchOnWindowFocus: false,
   refetchOnReconnect: false,
-  refetchInterval: false,
+  refetchInterval: false as const,
   refetchIntervalInBackground: false,
+} as const;
+
+/** Polling hook options (e.g. sold-item alert every 30s). */
+export const POLLING_QUERY_OPTIONS = {
+  staleTime: 25_000,
+  gcTime: 5 * 60 * 1000,
+  retry: false as const,
+  retryOnMount: false,
+  refetchOnMount: false,
+  refetchOnWindowFocus: false,
+  refetchOnReconnect: false,
 } as const;
 
 function isOptionalEndpointFallbackError(error: unknown): boolean {
   if (error instanceof TypeError) return true;
   if (!(error instanceof Error)) return false;
-  return /^(404|502|503|504):/.test(error.message);
+  // Never retry-loop on missing routes or upstream/proxy failures.
+  return /^[45]\d\d:/.test(error.message);
+}
+
+function logFallbackOnce(cacheKey: string, url: string, error: unknown): void {
+  if (fallbackLogged.has(cacheKey)) return;
+  fallbackLogged.add(cacheKey);
+  const reason = error instanceof Error ? error.message : String(error);
+  console.warn(`[stableFetch] Using fallback for ${url}: ${reason}`);
 }
 
 async function fetchJsonOnce<T>(url: string, init?: RequestInit): Promise<T> {
@@ -63,8 +75,8 @@ export async function fetchJsonDeduped<T>(
 }
 
 /**
- * Optional dashboard endpoints (listings, sales, layout): return fallback when
- * route is missing or backend/proxy is unavailable — never retry-loop.
+ * Optional dashboard endpoints: return fallback when route is missing or
+ * unavailable — cache result for the session (one network call max).
  */
 export async function fetchOptionalEndpoint<T>(
   cacheKey: string,
@@ -82,7 +94,26 @@ export async function fetchOptionalEndpoint<T>(
     return data;
   } catch (error) {
     if (isOptionalEndpointFallbackError(error)) {
+      logFallbackOnce(cacheKey, url, error);
       resolvedCache.set(cacheKey, fallback);
+      return fallback;
+    }
+    throw error;
+  }
+}
+
+/** Live fetch for polling — dedupes in-flight only, no permanent session cache. */
+export async function fetchLiveEndpoint<T>(
+  cacheKey: string,
+  url: string,
+  fallback: T,
+  init?: RequestInit
+): Promise<T> {
+  try {
+    return await fetchJsonDeduped<T>(cacheKey, url, init);
+  } catch (error) {
+    if (isOptionalEndpointFallbackError(error)) {
+      logFallbackOnce(`live:${cacheKey}`, url, error);
       return fallback;
     }
     throw error;
@@ -103,4 +134,5 @@ export async function fetchJsonOrDefault<T>(
 export function clearStableFetchCacheForTests(): void {
   inFlight.clear();
   resolvedCache.clear();
+  fallbackLogged.clear();
 }

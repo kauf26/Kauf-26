@@ -25,6 +25,8 @@ import SettingsPage from "./pages/settings";
 import DepopAnalyticsPage from "./pages/analytics-depop";
 import PublishConfirmation from "./pages/PublishConfirmation";
 import { IdentificationResultsPage } from "./pages/IdentificationResults";
+import ShippingLabelsPage from "./pages/shipping-labels";
+import SoldItemAlert from "./components/SoldItemAlert";
 
 function App() {
   return (
@@ -32,6 +34,7 @@ function App() {
       <TooltipProvider>
         <div className="min-h-screen flex flex-col">
           <AuthSessionRestore />
+          <SoldItemAlert />
           <main className="flex-grow">
             <Switch>
               <Route path="/product-draft" component={ProductDraftPage} />
@@ -39,6 +42,7 @@ function App() {
               <Route path="/publish-confirmation" component={PublishConfirmation} />
               <Route path="/identification-results" component={IdentificationResultsPage} />
               <Route path="/dashboard" component={Dashboard} />
+              <Route path="/dashboard/shipping" component={ShippingLabelsPage} />
               <Route path="/analytics/depop" component={DepopAnalyticsPage} />
               <Route path="/inventory" component={Inventory} />
               <Route path="/listings" component={Listings} />

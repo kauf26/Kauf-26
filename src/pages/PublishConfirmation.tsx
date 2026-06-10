@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useLocation } from "wouter";
+import { useProductDraft } from "@/ProductDraftContext";
+import { resetListingFlow } from "@/lib/resetListingFlow";
 
 type PublishOutcome = {
   marketplace: string;
@@ -56,6 +58,7 @@ function outcomeBadge(o: PublishOutcome) {
 
 const PublishConfirmation: React.FC = () => {
   const [, setLocation] = useLocation();
+  const { clearDraft } = useProductDraft();
   const [report, setReport] = useState<PublishReport | null>(null);
   const [loaded, setLoaded] = useState(false);
 
@@ -87,6 +90,11 @@ const PublishConfirmation: React.FC = () => {
   const published = outcomes.filter((o) => o.success && !o.dryRun).length;
   const dryRun = outcomes.filter((o) => o.success && o.dryRun).length;
   const failed = outcomes.filter((o) => !o.success).length;
+
+  const handleListAnotherItem = () => {
+    resetListingFlow({ clearDraftContext: clearDraft });
+    setLocation("/");
+  };
 
   return (
     <div className="max-w-3xl mx-auto p-6 my-6 space-y-6">
@@ -165,7 +173,7 @@ const PublishConfirmation: React.FC = () => {
         </button>
         <button
           className="flex-1 rounded-md bg-emerald-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-emerald-500"
-          onClick={() => setLocation("/create")}
+          onClick={handleListAnotherItem}
         >
           List Another Item
         </button>

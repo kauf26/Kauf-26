@@ -115,6 +115,12 @@ export async function fetchProducts(): Promise<ListingProduct[]> {
   return inFlight;
 }
 
+/** Drop in-memory dedupe so the next listing flow fetches fresh data. */
+export function clearProductsFetchCache(): void {
+  inFlight = null;
+  countInFlight = null;
+}
+
 export function productsRetryDelay(attemptIndex: number): number {
   return Math.min(1000 * 2 ** attemptIndex, 8000);
 }

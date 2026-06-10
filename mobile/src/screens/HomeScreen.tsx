@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +25,7 @@ import {
   saveDraftSnapshotMobile,
   uploadDraftPhotosMobile,
 } from '../services/draftPhotos';
+import { resetMobileListingFlow } from '../services/resetListingFlow';
 
 const MOBILE_PUBLISH_PLATFORMS = new Set(['etsy', 'shopify', 'ebay']);
 
@@ -69,6 +72,7 @@ const LOCAL_MARKETPLACES = MARKETPLACES.filter((m) => US_MARKETPLACE_IDS.has(m.i
 const GLOBAL_MARKETPLACES = MARKETPLACES.filter((m) => !US_MARKETPLACE_IDS.has(m.id));
 
 export default function HomeScreen() {
+  const navigation = useNavigation<BottomTabNavigationProp<Record<string, object | undefined>>>();
   const [image, setImage] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -80,6 +84,43 @@ export default function HomeScreen() {
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
   const [draftId, setDraftId] = useState<number | null>(null);
   const [isAddingPhotos, setIsAddingPhotos] = useState(false);
+  const [flowSessionKey, setFlowSessionKey] = useState(0);
+
+  const bumpFlowSessionKey = useCallback(() => {
+    setFlowSessionKey((key) => key + 1);
+  }, []);
+
+  const resetListingForm = useCallback(() => {
+    resetMobileListingFlow({
+      setImage,
+      setGalleryImages,
+      setDraftId,
+      setTitle,
+      setDescription,
+      setPrice,
+      setCondition,
+      setSelectedMarketplaces,
+      setIsAnalyzing,
+      setIsListing,
+      setIsAddingPhotos,
+      bumpFlowSessionKey,
+    });
+  }, [bumpFlowSessionKey]);
+
+  const startFreshListing = useCallback(() => {
+    resetListingForm();
+    navigation.navigate('Home');
+  }, [navigation, resetListingForm]);
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        setIsAnalyzing(false);
+        setIsListing(false);
+        setIsAddingPhotos(false);
+      };
+    }, [])
+  );
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -210,16 +251,6 @@ export default function HomeScreen() {
     }
   };
 
-  const resetListingForm = () => {
-    setImage(null);
-    setGalleryImages([]);
-    setDraftId(null);
-    setTitle('');
-    setDescription('');
-    setPrice('');
-    setSelectedMarketplaces([]);
-  };
-
   const toggleMarketplace = (id: string) => {
     setSelectedMarketplaces((prev) =>
       prev.includes(id)
@@ -263,12 +294,14 @@ export default function HomeScreen() {
       }
 
       if (results.length > 0) {
-        Alert.alert(
-          errors.length ? 'Partial success' : 'Success',
-          [...results, ...errors].join('\n\n')
-        );
+        const message = [...results, ...errors].join('\n\n');
         if (errors.length === 0) {
-          resetListingForm();
+          Alert.alert('Success', message, [
+            { text: 'List Another Item', onPress: startFreshListing },
+            { text: 'View Listings', onPress: () => navigation.navigate('Listings') },
+          ]);
+        } else {
+          Alert.alert('Partial success', message);
         }
       } else {
         Alert.alert('Publish failed', errors.join('\n\n'));
@@ -283,7 +316,7 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
-        <View style={styles.imageSection}>
+        <View key={flowSessionKey} style={styles.imageSection}>
           {image ? (
             <View style={styles.imageContainer}>
               <Image source={{ uri: image }} style={styles.image} />

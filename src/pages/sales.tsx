@@ -132,7 +132,7 @@ export default function Sales() {
             {sales.map((sale) => {
               const saleAmount = parseFloat(sale.saleAmount);
               const ourFee = parseFloat(sale.ourFee);
-              const platformFee = parseFloat(sale.platformFee);
+              const platformFee = parseFloat(sale.platformFee ?? "0");
               const netAmount = saleAmount - ourFee - platformFee;
 
               return (

@@ -238,3 +238,22 @@ export function loadPendingAnalysis(): PendingAnalysis | null {
     return null;
   }
 }
+
+const LISTING_SESSION_KEYS = [
+  PENDING_ANALYSIS_KEY,
+  PRODUCT_LISTING_DATA_KEY,
+  "productDraftId",
+  "identifyDraftId",
+  "identifyCapturedImages",
+  "identifyVerificationWarning",
+  "selectedMarkets",
+  "publishJobId",
+  "publishReport",
+] as const;
+
+/** Clear all in-progress listing/draft state so the user starts fresh. */
+export function clearListingSession(): void {
+  for (const key of LISTING_SESSION_KEYS) {
+    sessionStorage.removeItem(key);
+  }
+}

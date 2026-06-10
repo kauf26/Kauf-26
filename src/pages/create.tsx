@@ -5,6 +5,8 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button" // (or whatever your button path is)
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import { loadListingSession } from "@/lib/pendingAnalysis";
+import { resetListingFlow } from "@/lib/resetListingFlow";
+import { useProductDraft } from "@/ProductDraftContext";
 
 interface ProductDraft {
  capturedImage: string;
@@ -23,6 +25,7 @@ interface ProductDraft {
 
 export default function Create() {
  const [, navigate] = useLocation();
+ const { clearDraft } = useProductDraft();
  const [draft, setDraft] = useState<ProductDraft | null>(null);
  const [isEditing, setIsEditing] = useState(false);
 
@@ -57,7 +60,7 @@ export default function Create() {
  }, []);
 
  const handleStartOver = () => {
-   sessionStorage.removeItem("pendingAnalysis");
+   resetListingFlow({ clearDraftContext: clearDraft });
    navigate("/");
  };
 

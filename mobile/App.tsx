@@ -6,6 +6,7 @@ import * as SecureStore from 'expo-secure-store';
 import * as WebBrowser from 'expo-web-browser';
 import MainNavigator from './src/navigation/MainNavigator';
 import PinAuthScreen from './src/screens/PinAuthScreen';
+import SoldItemAlertMobile from './src/components/SoldItemAlertMobile';
 import { wireOAuthSessionLifecycle } from './src/services/oauthSessionLifecycle';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -77,6 +78,7 @@ export default function App() {
     <SafeAreaProvider>
       <NavigationContainer theme={DarkTheme}>
         <MainNavigator />
+        <SoldItemAlertMobile />
         <StatusBar style="light" />
       </NavigationContainer>
     </SafeAreaProvider>
