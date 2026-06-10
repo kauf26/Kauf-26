@@ -6,9 +6,65 @@ import {
   products,
   sales,
 } from "../shared/schema";
+import {
+  FULFILLMENT_STATUSES,
+  PAYMENT_STATUSES,
+  type FulfillmentStatus,
+  type PaymentStatus,
+} from "../shared/saleStatus";
 import { desc, eq } from "drizzle-orm";
 
 const router = express.Router();
+
+function serializeSale(row: {
+  id: number;
+  listingId: number;
+  saleAmount: unknown;
+  saleCurrency: string;
+  platformFee: unknown;
+  ourFee: unknown;
+  feePaid: boolean;
+  saleDate: Date | string | null;
+  buyerInfo: string | null;
+  shippingLabelGenerated: boolean;
+  shippingLabelCreated: boolean;
+  paymentStatus: string;
+  fulfillmentStatus: string;
+  shippedAt: Date | string | null;
+  deliveredAt: Date | string | null;
+  acceptedAt: Date | string | null;
+  marketplace?: string | null;
+  productTitle?: string | null;
+  productId?: number | null;
+}) {
+  return {
+    id: row.id,
+    listingId: row.listingId,
+    saleAmount: String(row.saleAmount),
+    saleCurrency: row.saleCurrency,
+    platformFee: String(row.platformFee),
+    ourFee: String(row.ourFee),
+    feePaid: row.feePaid,
+    saleDate: row.saleDate?.toString?.() ?? String(row.saleDate),
+    buyerInfo: row.buyerInfo,
+    shippingLabelGenerated: row.shippingLabelGenerated,
+    shipping_label_created: row.shippingLabelCreated,
+    shippingLabelCreated: row.shippingLabelCreated,
+    paymentStatus: row.paymentStatus,
+    payment_status: row.paymentStatus,
+    fulfillmentStatus: row.fulfillmentStatus,
+    fulfillment_status: row.fulfillmentStatus,
+    shippedAt: row.shippedAt?.toString?.() ?? row.shippedAt ?? null,
+    shipped_at: row.shippedAt?.toString?.() ?? row.shippedAt ?? null,
+    deliveredAt: row.deliveredAt?.toString?.() ?? row.deliveredAt ?? null,
+    delivered_at: row.deliveredAt?.toString?.() ?? row.deliveredAt ?? null,
+    acceptedAt: row.acceptedAt?.toString?.() ?? row.acceptedAt ?? null,
+    accepted_at: row.acceptedAt?.toString?.() ?? row.acceptedAt ?? null,
+    marketplace: row.marketplace,
+    productTitle: row.productTitle,
+    productId: row.productId,
+  };
+}
 
 router.get("/listings", async (_req, res) => {
   try {
@@ -45,6 +101,11 @@ router.get("/sales", async (_req, res) => {
         buyerInfo: sales.buyerInfo,
         shippingLabelGenerated: sales.shippingLabelGenerated,
         shippingLabelCreated: sales.shippingLabelCreated,
+        paymentStatus: sales.paymentStatus,
+        fulfillmentStatus: sales.fulfillmentStatus,
+        shippedAt: sales.shippedAt,
+        deliveredAt: sales.deliveredAt,
+        acceptedAt: sales.acceptedAt,
         marketplace: listings.marketplace,
         productTitle: products.name,
         productId: products.id,
@@ -54,28 +115,97 @@ router.get("/sales", async (_req, res) => {
       .innerJoin(products, eq(listings.productId, products.id))
       .orderBy(desc(sales.saleDate));
 
-    const payload = rows.map((row) => ({
-      id: row.id,
-      listingId: row.listingId,
-      saleAmount: String(row.saleAmount),
-      saleCurrency: row.saleCurrency,
-      platformFee: String(row.platformFee),
-      ourFee: String(row.ourFee),
-      feePaid: row.feePaid,
-      saleDate: row.saleDate?.toISOString?.() ?? String(row.saleDate),
-      buyerInfo: row.buyerInfo,
-      shippingLabelGenerated: row.shippingLabelGenerated,
-      shipping_label_created: row.shippingLabelCreated,
-      shippingLabelCreated: row.shippingLabelCreated,
-      marketplace: row.marketplace,
-      productTitle: row.productTitle,
-      productId: row.productId,
-    }));
+    const payload = rows.map((row) => serializeSale(row));
 
     return res.status(200).json(payload);
   } catch (error) {
     console.error("[KAUF26] Error fetching sales:", error);
     return res.status(500).json({ error: "Failed to fetch sales" });
+  }
+});
+
+router.patch("/sales/:saleId/status", async (req, res) => {
+  try {
+    const saleId = Number(req.params.saleId);
+    if (!Number.isFinite(saleId)) {
+      return res.status(400).json({ error: "Invalid sale id" });
+    }
+
+    const body = req.body ?? {};
+    const paymentStatus = body.payment_status ?? body.paymentStatus;
+    const fulfillmentStatus = body.fulfillment_status ?? body.fulfillmentStatus;
+
+    if (paymentStatus == null && fulfillmentStatus == null) {
+      return res.status(400).json({
+        error: "Provide payment_status and/or fulfillment_status",
+      });
+    }
+
+    const updates: Record<string, unknown> = {};
+
+    if (paymentStatus != null) {
+      if (!PAYMENT_STATUSES.includes(paymentStatus as PaymentStatus)) {
+        return res.status(400).json({ error: "Invalid payment_status" });
+      }
+      updates.paymentStatus = paymentStatus;
+    }
+
+    if (fulfillmentStatus != null) {
+      if (!FULFILLMENT_STATUSES.includes(fulfillmentStatus as FulfillmentStatus)) {
+        return res.status(400).json({ error: "Invalid fulfillment_status" });
+      }
+      updates.fulfillmentStatus = fulfillmentStatus;
+      const now = new Date();
+      if (fulfillmentStatus === "shipped") {
+        updates.shippedAt = now;
+      } else if (fulfillmentStatus === "delivered") {
+        updates.deliveredAt = now;
+      } else if (fulfillmentStatus === "accepted") {
+        updates.acceptedAt = now;
+      }
+    }
+
+    const [updated] = await db
+      .update(sales)
+      .set(updates)
+      .where(eq(sales.id, saleId))
+      .returning();
+
+    if (!updated) {
+      return res.status(404).json({ error: "Sale not found" });
+    }
+
+    const [enriched] = await db
+      .select({
+        id: sales.id,
+        listingId: sales.listingId,
+        saleAmount: sales.saleAmount,
+        saleCurrency: sales.saleCurrency,
+        platformFee: sales.platformFee,
+        ourFee: sales.ourFee,
+        feePaid: sales.feePaid,
+        saleDate: sales.saleDate,
+        buyerInfo: sales.buyerInfo,
+        shippingLabelGenerated: sales.shippingLabelGenerated,
+        shippingLabelCreated: sales.shippingLabelCreated,
+        paymentStatus: sales.paymentStatus,
+        fulfillmentStatus: sales.fulfillmentStatus,
+        shippedAt: sales.shippedAt,
+        deliveredAt: sales.deliveredAt,
+        acceptedAt: sales.acceptedAt,
+        marketplace: listings.marketplace,
+        productTitle: products.name,
+        productId: products.id,
+      })
+      .from(sales)
+      .innerJoin(listings, eq(sales.listingId, listings.id))
+      .innerJoin(products, eq(listings.productId, products.id))
+      .where(eq(sales.id, saleId));
+
+    return res.status(200).json(serializeSale(enriched));
+  } catch (error) {
+    console.error("[KAUF26] Error updating sale status:", error);
+    return res.status(500).json({ error: "Failed to update sale status" });
   }
 });
 

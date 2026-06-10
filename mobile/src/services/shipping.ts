@@ -1,5 +1,11 @@
 import { API_BASE_URL } from './config';
 
+import { API_BASE_URL } from './config';
+import type {
+  FulfillmentStatus,
+  PaymentStatus,
+} from '../../../shared/saleStatus';
+
 export type MobileSale = {
   id: number;
   listingId?: number;
@@ -11,6 +17,17 @@ export type MobileSale = {
   buyerInfo?: string | null;
   shippingLabelCreated?: boolean;
   shipping_label_created?: boolean;
+  shippingLabelGenerated?: boolean;
+  paymentStatus?: PaymentStatus;
+  payment_status?: PaymentStatus;
+  fulfillmentStatus?: FulfillmentStatus;
+  fulfillment_status?: FulfillmentStatus;
+  shippedAt?: string | null;
+  shipped_at?: string | null;
+  deliveredAt?: string | null;
+  delivered_at?: string | null;
+  acceptedAt?: string | null;
+  accepted_at?: string | null;
   productTitle?: string;
   marketplace?: string;
 };
@@ -84,6 +101,23 @@ export async function fetchSalesLive(): Promise<MobileSale[]> {
   if (!res.ok) return [];
   const data = await res.json();
   return Array.isArray(data) ? data : data.sales ?? [];
+}
+
+export async function updateSaleStatus(
+  saleId: number,
+  patch: {
+    payment_status?: PaymentStatus;
+    fulfillment_status?: FulfillmentStatus;
+  }
+): Promise<MobileSale> {
+  const res = await fetch(`${API_BASE_URL}/api/sales/${saleId}/status`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  const data = (await res.json()) as MobileSale & { error?: string };
+  if (!res.ok) throw new Error(data.error ?? 'Failed to update sale status');
+  return data;
 }
 
 export async function markShippingLabelCreated(saleId: number): Promise<void> {

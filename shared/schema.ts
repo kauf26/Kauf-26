@@ -121,6 +121,11 @@ saleDate: timestamp("sale_date").default(sql`CURRENT_TIMESTAMP`).notNull(),
 buyerInfo: text("buyer_info"),
 shippingLabelGenerated: boolean("shipping_label_generated").notNull().default(false),
 shippingLabelCreated: boolean("shipping_label_created").notNull().default(false),
+paymentStatus: text("payment_status").notNull().default("pending"),
+fulfillmentStatus: text("fulfillment_status").notNull().default("not_shipped"),
+shippedAt: timestamp("shipped_at"),
+deliveredAt: timestamp("delivered_at"),
+acceptedAt: timestamp("accepted_at"),
 });
 
 export const shippingLabels = pgTable("shipping_labels", {

@@ -51,7 +51,12 @@ export async function createShippingLabelRecord(input: {
 
   await db
     .update(sales)
-    .set({ shippingLabelCreated: true, shippingLabelGenerated: true })
+    .set({
+      shippingLabelCreated: true,
+      shippingLabelGenerated: true,
+      fulfillmentStatus: "shipped",
+      shippedAt: new Date(),
+    })
     .where(eq(sales.id, input.saleId));
 
   return row;

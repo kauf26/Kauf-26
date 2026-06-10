@@ -1,4 +1,8 @@
 import { fetchLiveEndpoint, fetchOptionalEndpoint } from "./stableFetch";
+import type {
+  FulfillmentStatus,
+  PaymentStatus,
+} from "../../shared/saleStatus";
 
 export type DashboardSale = {
   id: number;
@@ -13,6 +17,16 @@ export type DashboardSale = {
   shippingLabelGenerated?: boolean;
   shippingLabelCreated?: boolean;
   shipping_label_created?: boolean;
+  paymentStatus?: PaymentStatus;
+  payment_status?: PaymentStatus;
+  fulfillmentStatus?: FulfillmentStatus;
+  fulfillment_status?: FulfillmentStatus;
+  shippedAt?: string | null;
+  shipped_at?: string | null;
+  deliveredAt?: string | null;
+  delivered_at?: string | null;
+  acceptedAt?: string | null;
+  accepted_at?: string | null;
   productTitle?: string;
   marketplace?: string;
   productId?: number;
@@ -53,6 +67,24 @@ export async function markShippingLabelCreated(saleId: number): Promise<void> {
     const data = (await res.json()) as { error?: string };
     throw new Error(data.error ?? `Failed to update label status (${res.status})`);
   }
+}
+
+export async function updateSaleStatus(
+  saleId: number,
+  patch: {
+    payment_status?: PaymentStatus;
+    fulfillment_status?: FulfillmentStatus;
+  }
+): Promise<DashboardSale> {
+  const res = await fetch(`/api/sales/${saleId}/status`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(patch),
+  });
+  const data = (await res.json()) as DashboardSale & { error?: string };
+  if (!res.ok) throw new Error(data.error ?? "Failed to update sale status");
+  return data;
 }
 
 export type ShippingAddress = {
