@@ -32,7 +32,7 @@ export function assertRedirectUriMatches(
   const canonical = getOAuthRedirectUri(marketplaceId);
   if (configuredUri && configuredUri !== canonical) {
     throw new Error(
-      `${marketplaceId} redirect URI mismatch: server has "${configuredUri}" but OAuth requires "${canonical}". Update .env and the developer console.`
+      `Redirect URI mismatch – check developer portal. Expected "${canonical}" but server has "${configuredUri}".`
     );
   }
   return configuredUri ?? canonical;

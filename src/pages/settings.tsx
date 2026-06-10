@@ -446,7 +446,7 @@ function MarketplaceStatusSection() {
         Marketplace Status (mobile app)
       </h2>
       <p className="text-sm text-muted-foreground mb-4">
-        Etsy, Shopify, and eBay use one-tap OAuth in the mobile app (Safari / Chrome session + Keychain).
+        Etsy, Shopify, eBay, and other OAuth marketplaces use one-tap connect in the mobile app (Safari / Chrome session + Keychain).
         Tokens and profile data stay on the device — not on this server.
       </p>
       {loading ? (

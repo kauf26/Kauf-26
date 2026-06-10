@@ -21,6 +21,7 @@ export type ProviderDisplayMeta = {
   name: string;
   color: string;
   oauthSupported: boolean;
+import type { MarketplaceOAuthFlow } from '../../../shared/marketplaceOAuthTypes';
   configured: boolean;
   requiresShopDomain?: boolean;
   requiresSiteUrl?: boolean;

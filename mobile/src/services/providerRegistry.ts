@@ -3,6 +3,7 @@
  */
 import { MARKETPLACE_OAUTH_MANIFEST } from '../../../shared/marketplaceOAuthManifest';
 import type { MarketplaceOAuthProviderConfig } from '../../../shared/marketplaceOAuthTypes';
+import type { MarketplaceOAuthFlow } from '../../../shared/marketplaceOAuthTypes';
 import type { ProviderDisplayMeta } from '../types/marketplaceConnect';
 import { fetchOAuthProviders } from './oauthConfig';
 
@@ -35,6 +36,16 @@ const MARKETPLACE_COLORS: Record<string, string> = {
   zalando: '#ff6900',
 };
 
+export function nonOAuthStatusMessage(oauthFlow: MarketplaceOAuthFlow): string {
+  if (oauthFlow === 'partnership') {
+    return 'Contact us for partnership access — mobile OAuth is not available for this marketplace.';
+  }
+  if (oauthFlow === 'api_key') {
+    return 'API key required — configure credentials on the server (no mobile OAuth connect).';
+  }
+  return 'Mobile OAuth not available for this marketplace.';
+}
+
 export async function loadProviderRegistry(): Promise<{
   providers: ProviderDisplayMeta[];
   configured: MarketplaceOAuthProviderConfig[];
@@ -49,6 +60,7 @@ export async function loadProviderRegistry(): Promise<{
       name: entry.name,
       color: MARKETPLACE_COLORS[entry.id] ?? '#3b82f6',
       oauthSupported: entry.oauthSupported,
+      oauthFlow: entry.oauthFlow,
       configured: remoteEntry?.configured ?? false,
       requiresShopDomain: entry.requiresShopDomain,
       requiresSiteUrl: entry.requiresSiteUrl,

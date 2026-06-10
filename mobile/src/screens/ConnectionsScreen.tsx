@@ -21,7 +21,7 @@ import {
   saveOnboardingProfile,
   type OnboardingProfile,
 } from '../services/onboardingProfile';
-import { loadProviderRegistry } from '../services/providerRegistry';
+import { loadProviderRegistry, nonOAuthStatusMessage } from '../services/providerRegistry';
 import {
   deletePlatformTokens,
   hasPlatformTokens,
@@ -57,7 +57,10 @@ export default function ConnectionsScreen() {
     const next: Record<string, { ok: boolean; message: string }> = {};
     for (const p of registry) {
       if (!p.oauthSupported) {
-        next[p.id] = { ok: false, message: p.notes ?? 'Partnership / API key required' };
+        next[p.id] = {
+          ok: false,
+          message: p.notes ?? nonOAuthStatusMessage(p.oauthFlow ?? 'api_key'),
+        };
         continue;
       }
       const connected = await hasPlatformTokens(p.id);
@@ -148,7 +151,7 @@ export default function ConnectionsScreen() {
           kind: 'cancel',
           platform: p.id,
           message:
-            'Sign-in was cancelled. Tap Connect again when you are ready — your password is never stored in this app.',
+            'Connection cancelled. Tap Connect to try again — your password is never stored in this app.',
         });
         return;
       }
@@ -284,6 +287,15 @@ export default function ConnectionsScreen() {
         </View>
         {st?.message ? <Text style={styles.message}>{st.message}</Text> : null}
 
+        {!p.oauthSupported && (
+          <View style={styles.infoBox}>
+            <Ionicons name="information-circle-outline" size={16} color="#9ca3af" />
+            <Text style={styles.infoText}>
+              {nonOAuthStatusMessage(p.oauthFlow ?? 'api_key')}
+            </Text>
+          </View>
+        )}
+
         {p.oauthSupported && p.requiresShopDomain && !isConnected && (
           <>
             <Text style={styles.label}>Store domain</Text>
@@ -409,6 +421,17 @@ const styles = StyleSheet.create({
   badgeOk: { color: '#10b981', fontSize: 11, fontWeight: '600' },
   badgeOff: { color: '#f87171', fontSize: 11, fontWeight: '600' },
   message: { color: '#d1d5db', fontSize: 12, marginTop: 6 },
+  infoBox: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: '#1f293780',
+    borderWidth: 1,
+    borderColor: '#374151',
+  },
+  infoText: { flex: 1, color: '#9ca3af', fontSize: 12, lineHeight: 17 },
   label: { color: '#fff', fontSize: 13, marginTop: 12, marginBottom: 6 },
   input: {
     backgroundColor: '#0a0a0f',

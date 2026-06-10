@@ -23,6 +23,7 @@ import {
   type StoredPlatformTokens,
 } from './secureTokenStore';
 import type { ConnectResult, MarketplaceUserProfile } from '../types/marketplaceConnect';
+import { normalizeOAuthError } from './oauthErrors';
 
 export type ConnectOptions = ConnectContext;
 
@@ -220,54 +221,58 @@ export async function connectMarketplaceOneTap(
   marketplaceId: string,
   options: ConnectOptions = {}
 ): Promise<ConnectResult> {
-  const manifest = getOAuthManifestEntry(marketplaceId);
-  if (!manifest?.oauthSupported) {
-    throw new Error(
-      `${manifest?.name ?? marketplaceId} does not support mobile OAuth — partnership or API key required.`
+  try {
+    const manifest = getOAuthManifestEntry(marketplaceId);
+    if (!manifest?.oauthSupported) {
+      throw new Error(
+        `${manifest?.name ?? marketplaceId} does not support mobile OAuth — partnership or API key required.`
+      );
+    }
+
+    const config = await getOAuthProvider(marketplaceId);
+    if (!config?.configured) {
+      throw new Error(`${config?.name ?? marketplaceId} OAuth is not configured on the server`);
+    }
+
+    const savedCtx = (await loadConnectContext(marketplaceId)) ?? {};
+    const ctx = await validateConnectContext(config, { ...savedCtx, ...options });
+    const redirectUri = assertRedirectUriMatches(marketplaceId, config.redirectUri);
+    const { authUrl } = resolveUrls(config, ctx);
+
+    const usePkce = config.usePkce ?? config.tokenExchange === 'json_pkce';
+    const request = new AuthSession.AuthRequest({
+      clientId: config.clientId,
+      scopes: config.scopes,
+      redirectUri,
+      responseType: AuthSession.ResponseType.Code,
+      usePKCE: usePkce,
+    });
+
+    const { code, elapsedMs } = await openSystemBrowserOAuth(request, {
+      authorizationEndpoint: authUrl,
+      tokenEndpoint: resolveUrls(config, ctx).tokenUrl,
+    });
+
+    let tokens = await exchangeAuthorizationCode(
+      config,
+      redirectUri,
+      code,
+      request.codeVerifier ?? undefined,
+      ctx
     );
+
+    const profile = await fetchMarketplaceUserProfile(marketplaceId, config, tokens, ctx);
+    tokens = mergeProfileIntoTokens(tokens, profile);
+    await savePlatformTokens(marketplaceId, tokens);
+
+    return {
+      marketplace: marketplaceId,
+      oneTapLikely: elapsedMs < 8000,
+      profile,
+    };
+  } catch (err) {
+    throw normalizeOAuthError(err);
   }
-
-  const config = await getOAuthProvider(marketplaceId);
-  if (!config?.configured) {
-    throw new Error(`${config?.name ?? marketplaceId} OAuth is not configured on the server`);
-  }
-
-  const savedCtx = (await loadConnectContext(marketplaceId)) ?? {};
-  const ctx = await validateConnectContext(config, { ...savedCtx, ...options });
-  const redirectUri = assertRedirectUriMatches(marketplaceId, config.redirectUri);
-  const { authUrl } = resolveUrls(config, ctx);
-
-  const usePkce = config.usePkce ?? config.tokenExchange === 'json_pkce';
-  const request = new AuthSession.AuthRequest({
-    clientId: config.clientId,
-    scopes: config.scopes,
-    redirectUri,
-    responseType: AuthSession.ResponseType.Code,
-    usePKCE: usePkce,
-  });
-
-  const { code, elapsedMs } = await openSystemBrowserOAuth(request, {
-    authorizationEndpoint: authUrl,
-    tokenEndpoint: resolveUrls(config, ctx).tokenUrl,
-  });
-
-  let tokens = await exchangeAuthorizationCode(
-    config,
-    redirectUri,
-    code,
-    request.codeVerifier ?? undefined,
-    ctx
-  );
-
-  const profile = await fetchMarketplaceUserProfile(marketplaceId, config, tokens, ctx);
-  tokens = mergeProfileIntoTokens(tokens, profile);
-  await savePlatformTokens(marketplaceId, tokens);
-
-  return {
-    marketplace: marketplaceId,
-    oneTapLikely: elapsedMs < 8000,
-    profile,
-  };
 }
 
 /** @deprecated Use connectMarketplaceOneTap */
