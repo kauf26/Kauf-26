@@ -35,20 +35,7 @@ export function publicLabelUrl(filename: string): string {
   return `${base}/uploads/labels/${filename}`;
 }
 
-export function mockShippingRates(weightLbs: number): Array<{
-  service: string;
-  carrier: string;
-  price: number;
-  etaDays: number;
-}> {
-  const w = Math.max(0.1, weightLbs);
-  return [
-    { carrier: "USPS", service: "Priority Mail", price: 5 + w * 0.5, etaDays: 2 },
-    { carrier: "USPS", service: "Ground Advantage", price: 8 + w * 0.35, etaDays: 5 },
-    { carrier: "UPS", service: "Ground", price: 10 + w * 0.4, etaDays: 4 },
-    { carrier: "FedEx", service: "Home Delivery", price: 12 + w * 0.45, etaDays: 3 },
-  ].map((r) => ({ ...r, price: Math.round(r.price * 100) / 100 }));
-}
+export { mockShippingRates } from "./shippingRatesService";
 
 function escapePdfText(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");

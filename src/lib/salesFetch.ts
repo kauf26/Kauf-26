@@ -55,13 +55,6 @@ export async function markShippingLabelCreated(saleId: number): Promise<void> {
   }
 }
 
-export type ShippingRate = {
-  carrier: string;
-  service: string;
-  price: number;
-  etaDays: number;
-};
-
 export type ShippingAddress = {
   name?: string;
   line1?: string;
@@ -72,16 +65,74 @@ export type ShippingAddress = {
   country?: string;
 };
 
-export async function fetchShippingRates(weightLbs: number): Promise<ShippingRate[]> {
+export type ShippingRate = {
+  rateId: string;
+  carrier: string;
+  service: string;
+  price: number;
+  currency: string;
+  /** @deprecated Prefer deliveryDays */
+  etaDays?: number;
+  deliveryDays?: string;
+  deliveryDate?: string;
+  source?: "live" | "mock";
+};
+
+export type ShippingRatesResponse = {
+  rates: ShippingRate[];
+  source: "live" | "mixed" | "mock";
+  distanceMiles: number | null;
+  isInternational: boolean;
+  billableWeightLbs: number;
+  currency: string;
+  shipDate?: string;
+  shipDateLabel?: string;
+};
+
+/** Human-readable rate line with graceful fallback when deliveryDays is missing. */
+export function formatRateLabel(rate: ShippingRate): string {
+  const price =
+    rate.currency === "USD"
+      ? `$${rate.price.toFixed(2)}`
+      : `${rate.currency} ${rate.price.toFixed(2)}`;
+  const transit =
+    rate.deliveryDays ??
+    (rate.etaDays != null
+      ? rate.etaDays === 1
+        ? "1 business day"
+        : `${rate.etaDays} business days`
+      : null);
+  const transitPart = transit ? ` (${transit})` : "";
+  return `${rate.carrier} ${rate.service} — ${price}${transitPart}`;
+}
+
+export type ShippingRateRequest = {
+  fromAddress: ShippingAddress;
+  toAddress: ShippingAddress;
+  packageDetails: {
+    weightLbs: number;
+    weightOz?: number;
+    lengthIn: number;
+    widthIn: number;
+    heightIn: number;
+  };
+};
+
+export async function fetchShippingRates(
+  input: ShippingRateRequest
+): Promise<ShippingRatesResponse> {
   const res = await fetch("/api/shipping/rates", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
-    body: JSON.stringify({ weightLbs }),
+    body: JSON.stringify(input),
   });
-  const data = (await res.json()) as { rates?: ShippingRate[]; error?: string };
+  const data = (await res.json()) as ShippingRatesResponse & { error?: string };
   if (!res.ok) throw new Error(data.error ?? "Failed to fetch rates");
-  return data.rates ?? [];
+  return {
+    ...data,
+    rates: data.rates ?? [],
+  };
 }
 
 export async function generateShippingLabel(input: {

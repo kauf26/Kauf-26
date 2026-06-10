@@ -13,6 +13,7 @@ import {
 import {
   DEFAULT_FROM_ADDRESS,
   fetchShippingRates,
+  formatRateLabel,
   generateShippingLabel,
   markShippingLabelCreated,
   parseBuyerAddress,
@@ -33,7 +34,14 @@ export default function ShippingLabelScreen({ sale, onClose, onComplete }: Props
     parseBuyerAddress(sale.buyerInfo)
   );
   const [weightLbs, setWeightLbs] = useState('1');
+  const [weightOz, setWeightOz] = useState('0');
+  const [lengthIn, setLengthIn] = useState('10');
+  const [widthIn, setWidthIn] = useState('10');
+  const [heightIn, setHeightIn] = useState('10');
   const [rates, setRates] = useState<ShippingRate[]>([]);
+  const [shipDateLabel, setShipDateLabel] = useState<string | null>(null);
+  const [isInternational, setIsInternational] = useState(false);
+  const [selectedRateId, setSelectedRateId] = useState('');
   const [selectedService, setSelectedService] = useState('');
   const [labelUrl, setLabelUrl] = useState<string | null>(null);
   const [trackingNumber, setTrackingNumber] = useState<string | null>(null);
@@ -47,9 +55,24 @@ export default function ShippingLabelScreen({ sale, onClose, onComplete }: Props
   const handleGetRates = async () => {
     setLoadingRates(true);
     try {
-      const next = await fetchShippingRates(parseFloat(weightLbs) || 1);
-      setRates(next);
-      if (next[0]) setSelectedService(next[0].service);
+      const result = await fetchShippingRates({
+        fromAddress,
+        toAddress,
+        packageDetails: {
+          weightLbs: parseFloat(weightLbs) || 1,
+          weightOz: parseFloat(weightOz) || 0,
+          lengthIn: parseFloat(lengthIn) || 10,
+          widthIn: parseFloat(widthIn) || 10,
+          heightIn: parseFloat(heightIn) || 10,
+        },
+      });
+      setRates(result.rates);
+      setShipDateLabel(result.shipDateLabel ?? null);
+      setIsInternational(result.isInternational);
+      if (result.rates[0]) {
+        setSelectedRateId(result.rates[0].rateId);
+        setSelectedService(result.rates[0].service);
+      }
     } catch (error) {
       Alert.alert('Rates failed', error instanceof Error ? error.message : 'Try again');
     } finally {
@@ -70,11 +93,11 @@ export default function ShippingLabelScreen({ sale, onClose, onComplete }: Props
         toAddress,
         packageDetails: {
           weightLbs: parseFloat(weightLbs) || 1,
-          lengthIn: 10,
-          widthIn: 10,
-          heightIn: 10,
+          lengthIn: parseFloat(lengthIn) || 10,
+          widthIn: parseFloat(widthIn) || 10,
+          heightIn: parseFloat(heightIn) || 10,
         },
-        service: selectedService,
+        service: selectedService || rates.find((r) => r.rateId === selectedRateId)?.service || '',
       });
       await markShippingLabelCreated(sale.id);
       setLabelUrl(result.labelPdfUrl);
@@ -107,21 +130,44 @@ export default function ShippingLabelScreen({ sale, onClose, onComplete }: Props
         <TextInput style={styles.input} placeholder="State" value={toAddress.state ?? ''} onChangeText={(v) => updateTo('state', v)} placeholderTextColor="#6b7280" />
         <TextInput style={styles.input} placeholder="ZIP" value={toAddress.postalCode ?? ''} onChangeText={(v) => updateTo('postalCode', v)} placeholderTextColor="#6b7280" />
 
-        <Text style={styles.sectionLabel}>Weight (lb)</Text>
-        <TextInput style={styles.input} value={weightLbs} onChangeText={setWeightLbs} keyboardType="decimal-pad" placeholderTextColor="#6b7280" />
+        <Text style={styles.sectionLabel}>Weight</Text>
+        <View style={styles.weightRow}>
+          <TextInput style={[styles.input, styles.weightInput]} value={weightLbs} onChangeText={setWeightLbs} keyboardType="decimal-pad" placeholder="lb" placeholderTextColor="#6b7280" />
+          <TextInput style={[styles.input, styles.weightInput]} value={weightOz} onChangeText={setWeightOz} keyboardType="decimal-pad" placeholder="oz" placeholderTextColor="#6b7280" />
+        </View>
+
+        <Text style={styles.sectionLabel}>Dimensions (in)</Text>
+        <View style={styles.weightRow}>
+          <TextInput style={[styles.input, styles.weightInput]} value={lengthIn} onChangeText={setLengthIn} keyboardType="decimal-pad" placeholder="L" placeholderTextColor="#6b7280" />
+          <TextInput style={[styles.input, styles.weightInput]} value={widthIn} onChangeText={setWidthIn} keyboardType="decimal-pad" placeholder="W" placeholderTextColor="#6b7280" />
+          <TextInput style={[styles.input, styles.weightInput]} value={heightIn} onChangeText={setHeightIn} keyboardType="decimal-pad" placeholder="H" placeholderTextColor="#6b7280" />
+        </View>
 
         <TouchableOpacity style={styles.secondaryButton} onPress={handleGetRates} disabled={loadingRates}>
           {loadingRates ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Get Rates</Text>}
         </TouchableOpacity>
 
+        {shipDateLabel ? (
+          <Text style={styles.shipDateNote}>{shipDateLabel}</Text>
+        ) : null}
+        <Text style={styles.deliveryDisclaimer}>
+          Delivery time estimates are based on carrier data and may vary.
+          {isInternational ? ' Customs clearance may add time.' : ''}
+        </Text>
+
         {rates.map((rate) => (
           <TouchableOpacity
-            key={`${rate.carrier}-${rate.service}`}
-            style={[styles.rateRow, selectedService === rate.service && styles.rateRowSelected]}
-            onPress={() => setSelectedService(rate.service)}
+            key={rate.rateId}
+            style={[styles.rateRow, selectedRateId === rate.rateId && styles.rateRowSelected]}
+            onPress={() => {
+              setSelectedRateId(rate.rateId);
+              setSelectedService(rate.service);
+            }}
           >
-            <Text style={styles.rateText}>{rate.carrier} — {rate.service}</Text>
-            <Text style={styles.ratePrice}>${rate.price.toFixed(2)}</Text>
+            <Text style={styles.rateText}>
+              {formatRateLabel(rate)}
+              {rate.source === 'mock' ? ' est.' : ''}
+            </Text>
           </TouchableOpacity>
         ))}
 
@@ -172,6 +218,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   buttonText: { color: '#fff', fontWeight: '600' },
+  shipDateNote: { color: '#93c5fd', fontSize: 13, marginTop: 4 },
+  deliveryDisclaimer: { color: '#6b7280', fontSize: 11, lineHeight: 16 },
   rateRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -182,6 +230,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#111827',
   },
   rateRowSelected: { borderColor: '#3b82f6' },
-  rateText: { color: '#fff', flex: 1 },
-  ratePrice: { color: '#93c5fd', fontWeight: '700' },
+  rateText: { color: '#fff', flex: 1, fontSize: 14 },
+  weightRow: { flexDirection: 'row', gap: 8 },
+  weightInput: { flex: 1 },
 });

@@ -9,13 +9,14 @@ import { useSales } from "@/hooks/use-sales";
 import {
   DEFAULT_FROM_ADDRESS,
   fetchShippingRates,
+  formatRateLabel,
   generateShippingLabel,
   markShippingLabelCreated,
   parseBuyerAddress,
   type ShippingAddress,
   type ShippingRate,
 } from "@/lib/salesFetch";
-import { Loader2, Package, Printer } from "lucide-react";
+import { Loader2, Package, Printer, Info } from "lucide-react";
 
 function readSaleIdFromSearch(): number | null {
   const params = new URLSearchParams(window.location.search);
@@ -86,10 +87,19 @@ export default function ShippingLabelsPage() {
     country: "US",
   });
   const [weightLbs, setWeightLbs] = useState("1");
+  const [weightOz, setWeightOz] = useState("0");
   const [lengthIn, setLengthIn] = useState("10");
   const [widthIn, setWidthIn] = useState("10");
   const [heightIn, setHeightIn] = useState("10");
   const [rates, setRates] = useState<ShippingRate[]>([]);
+  const [ratesMeta, setRatesMeta] = useState<{
+    source: string;
+    distanceMiles: number | null;
+    billableWeightLbs: number;
+    shipDateLabel?: string;
+    isInternational?: boolean;
+  } | null>(null);
+  const [selectedRateId, setSelectedRateId] = useState("");
   const [selectedService, setSelectedService] = useState("");
   const [labelUrl, setLabelUrl] = useState<string | null>(null);
   const [trackingNumber, setTrackingNumber] = useState<string | null>(null);
@@ -103,10 +113,32 @@ export default function ShippingLabelsPage() {
 
   const handleGetRates = async () => {
     setIsLoadingRates(true);
+    setRates([]);
+    setRatesMeta(null);
     try {
-      const next = await fetchShippingRates(parseFloat(weightLbs) || 1);
-      setRates(next);
-      if (next[0]) setSelectedService(next[0].service);
+      const result = await fetchShippingRates({
+        fromAddress,
+        toAddress,
+        packageDetails: {
+          weightLbs: parseFloat(weightLbs) || 1,
+          weightOz: parseFloat(weightOz) || 0,
+          lengthIn: parseFloat(lengthIn) || 10,
+          widthIn: parseFloat(widthIn) || 10,
+          heightIn: parseFloat(heightIn) || 10,
+        },
+      });
+      setRates(result.rates);
+      setRatesMeta({
+        source: result.source,
+        distanceMiles: result.distanceMiles,
+        billableWeightLbs: result.billableWeightLbs,
+        shipDateLabel: result.shipDateLabel,
+        isInternational: result.isInternational,
+      });
+      if (result.rates[0]) {
+        setSelectedRateId(result.rates[0].rateId);
+        setSelectedService(result.rates[0].service);
+      }
     } catch (err) {
       toast({
         title: "Rates unavailable",
@@ -141,7 +173,7 @@ export default function ShippingLabelsPage() {
           widthIn: parseFloat(widthIn) || 10,
           heightIn: parseFloat(heightIn) || 10,
         },
-        service: selectedService,
+        service: selectedService || rates.find((r) => r.rateId === selectedRateId)?.service || "",
       });
       await markShippingLabelCreated(saleId);
       setLabelUrl(result.labelPdfUrl);
@@ -168,7 +200,7 @@ export default function ShippingLabelsPage() {
               <h1 className="text-3xl font-bold tracking-tight">Shipping Labels</h1>
             </div>
             <p className="text-muted-foreground">
-              Generate mock labels for sold items (PDF download).
+              Compare live carrier quotes or realistic estimates based on weight, distance, and service.
             </p>
           </div>
           <Button variant="outline" asChild>
@@ -223,10 +255,14 @@ export default function ShippingLabelsPage() {
           <CardHeader>
             <CardTitle className="text-lg">Package</CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <CardContent className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <div>
               <Label htmlFor="weight">Weight (lb)</Label>
               <Input id="weight" value={weightLbs} onChange={(e) => setWeightLbs(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="weightOz">Weight (oz)</Label>
+              <Input id="weightOz" value={weightOz} onChange={(e) => setWeightOz(e.target.value)} />
             </div>
             <div>
               <Label htmlFor="length">Length (in)</Label>
@@ -258,23 +294,54 @@ export default function ShippingLabelsPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Available rates</CardTitle>
+              {ratesMeta && (
+                <p className="text-sm text-muted-foreground">
+                  {ratesMeta.shipDateLabel ? `${ratesMeta.shipDateLabel} · ` : ""}
+                  {ratesMeta.source === "live"
+                    ? "Live carrier quotes"
+                    : ratesMeta.source === "mixed"
+                      ? "Live quotes + estimated rates for other carriers"
+                      : "Estimated rates (add carrier API keys in .env for live quotes)"}
+                  {ratesMeta.distanceMiles != null
+                    ? ` · ~${ratesMeta.distanceMiles} mi`
+                    : ""}
+                  {ratesMeta.billableWeightLbs
+                    ? ` · billable ${ratesMeta.billableWeightLbs.toFixed(2)} lb`
+                    : ""}
+                </p>
+              )}
             </CardHeader>
             <CardContent className="space-y-2">
+              <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                Delivery time estimates are based on carrier data and may vary.
+                {ratesMeta?.isInternational
+                  ? " Customs clearance may add time."
+                  : null}
+              </p>
               {rates.map((rate) => (
                 <label
-                  key={`${rate.carrier}-${rate.service}`}
+                  key={rate.rateId}
                   className="flex items-center justify-between rounded-md border border-input px-3 py-2 cursor-pointer"
                 >
-                  <span className="flex items-center gap-2">
+                  <span className="flex items-center gap-2 min-w-0">
                     <input
                       type="radio"
                       name="service"
-                      checked={selectedService === rate.service}
-                      onChange={() => setSelectedService(rate.service)}
+                      checked={selectedRateId === rate.rateId}
+                      onChange={() => {
+                        setSelectedRateId(rate.rateId);
+                        setSelectedService(rate.service);
+                      }}
+                      className="shrink-0"
                     />
-                    {rate.carrier} — {rate.service} ({rate.etaDays} days)
+                    <span className="text-sm truncate">
+                      {formatRateLabel(rate)}
+                      {rate.source === "mock" ? (
+                        <span className="text-xs text-muted-foreground ml-1">est.</span>
+                      ) : null}
+                    </span>
                   </span>
-                  <span className="font-semibold">${rate.price.toFixed(2)}</span>
                 </label>
               ))}
             </CardContent>

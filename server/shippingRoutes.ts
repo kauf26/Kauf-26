@@ -5,17 +5,39 @@ import { eq } from "drizzle-orm";
 import {
   createShippingLabelRecord,
   listShippingLabels,
-  mockShippingRates,
   type AddressJson,
   type PackageDetailsJson,
 } from "./services/shippingLabelService";
+import {
+  defaultFromAddress,
+  getShippingRates,
+} from "./services/shippingRatesService";
 
 const router = express.Router();
 
-router.post("/rates", (req, res) => {
-  const weightLbs = Number(req.body?.weightLbs ?? req.body?.weight ?? 1);
-  const weight = Number.isFinite(weightLbs) && weightLbs > 0 ? weightLbs : 1;
-  return res.status(200).json({ rates: mockShippingRates(weight) });
+router.post("/rates", async (req, res) => {
+  try {
+    const {
+      fromAddress,
+      toAddress,
+      packageDetails,
+      weightLbs,
+      weightOz,
+    } = req.body ?? {};
+
+    const result = await getShippingRates({
+      fromAddress: fromAddress as AddressJson | undefined,
+      toAddress: toAddress as AddressJson | undefined,
+      packageDetails: packageDetails as PackageDetailsJson | undefined,
+      weightLbs,
+      weightOz,
+    });
+
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("[KAUF26] Error fetching shipping rates:", error);
+    return res.status(500).json({ error: "Failed to fetch shipping rates" });
+  }
 });
 
 router.post("/label", async (req, res) => {
@@ -47,14 +69,7 @@ router.post("/label", async (req, res) => {
       return res.status(404).json({ error: "Sale not found" });
     }
 
-    const defaultFrom: AddressJson = {
-      name: process.env.SHIPPING_FROM_NAME ?? "KAUF26 Seller",
-      line1: process.env.SHIPPING_FROM_LINE1 ?? "123 Warehouse Rd",
-      city: process.env.SHIPPING_FROM_CITY ?? "Los Angeles",
-      state: process.env.SHIPPING_FROM_STATE ?? "CA",
-      postalCode: process.env.SHIPPING_FROM_ZIP ?? "90001",
-      country: "US",
-    };
+    const defaultFrom = defaultFromAddress();
 
     const pkg: PackageDetailsJson = {
       weightLbs: Number(packageDetails?.weightLbs ?? packageDetails?.weight ?? 1),
