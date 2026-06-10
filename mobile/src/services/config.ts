@@ -1,6 +1,33 @@
-// API configuration for the mobile app
-// UPDATE THIS URL before building for production!
-// For development with physical device, use your computer's LAN IP (e.g., 'http://192.168.1.100:2626')
+/**
+ * API base URL for the mobile app.
+ * Production builds require EXPO_PUBLIC_API_URL (validated at EAS build time in app.config.js).
+ */
 
-export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL ?? 'https://global-marketplace-lister.replit.app';
+function stripTrailingSlash(url: string): string {
+  return url.replace(/\/$/, "");
+}
+
+function devFallbackUrl(): string {
+  // LAN IP for physical devices — override via EXPO_PUBLIC_API_URL in mobile/.env
+  return "http://localhost:2626";
+}
+
+function resolveApiBaseUrl(): string {
+  const fromEnv = process.env.EXPO_PUBLIC_API_URL?.trim();
+  if (fromEnv) {
+    return stripTrailingSlash(fromEnv);
+  }
+
+  // @ts-expect-error __DEV__ is injected by React Native / Metro
+  const isDev = typeof __DEV__ !== "undefined" ? __DEV__ : process.env.NODE_ENV !== "production";
+
+  if (isDev) {
+    return devFallbackUrl();
+  }
+
+  throw new Error(
+    "EXPO_PUBLIC_API_URL is not configured. Set it in mobile/.env for local dev or in EAS Secrets for production builds."
+  );
+}
+
+export const API_BASE_URL = resolveApiBaseUrl();

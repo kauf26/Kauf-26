@@ -8,8 +8,7 @@ import {
   env,
   hasEnv,
 } from "./adapterUtils";
-
-const LWA_TOKEN_URL = "https://api.amazon.com/auth/o2/token";
+import { getValidAccessToken } from "../oauthService";
 
 export function formatAmazonListing(draft: DraftPublishPayload): FormattedListing {
   const a = draft.attributes ?? {};
@@ -57,37 +56,13 @@ export function formatAmazonListing(draft: DraftPublishPayload): FormattedListin
 }
 
 export function isAmazonConfigured(): boolean {
-  return hasEnv(
-    "AMAZON_CLIENT_ID",
-    "AMAZON_CLIENT_SECRET",
-    "AMAZON_REFRESH_TOKEN",
-    "AMAZON_SELLER_ID"
-  );
-}
-
-async function getAmazonAccessToken(
-  fetchImpl: FetchFn = fetch
-): Promise<string> {
-  const res = await fetchImpl(LWA_TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "refresh_token",
-      refresh_token: env("AMAZON_REFRESH_TOKEN"),
-      client_id: env("AMAZON_CLIENT_ID"),
-      client_secret: env("AMAZON_CLIENT_SECRET"),
-    }),
-  });
-  if (!res.ok) {
-    throw new Error(`Amazon LWA failed (${res.status}): ${await res.text()}`);
-  }
-  const data = (await res.json()) as { access_token: string };
-  return data.access_token;
+  return hasEnv("AMAZON_CLIENT_ID", "AMAZON_CLIENT_SECRET", "AMAZON_SELLER_ID");
 }
 
 export async function publishToAmazon(
   formatted: FormattedListing,
-  fetchImpl: FetchFn = fetch
+  fetchImpl: FetchFn = fetch,
+  userId: number | null = null
 ): Promise<AdapterPublishResult> {
   if (!isAmazonConfigured()) {
     return dryRunResult(
@@ -97,6 +72,11 @@ export async function publishToAmazon(
     );
   }
 
+  const token = await getValidAccessToken(userId, "amazon");
+  if (!token) {
+    throw new Error("Amazon account not connected. Please connect in Settings.");
+  }
+
   const sellerId = env("AMAZON_SELLER_ID");
   const sku = String(formatted.sku);
   const host =
@@ -104,7 +84,6 @@ export async function publishToAmazon(
       ? "sandbox.sellingpartnerapi-na.amazon.com"
       : "sellingpartnerapi-na.amazon.com";
 
-  const token = await getAmazonAccessToken(fetchImpl);
   const url = `https://${host}/listings/2021-08-01/items/${sellerId}/${encodeURIComponent(sku)}`;
 
   const res = await fetchImpl(url, {

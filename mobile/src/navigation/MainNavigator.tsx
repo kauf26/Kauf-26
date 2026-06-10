@@ -6,6 +6,7 @@ import ListingsScreen from '../screens/ListingsScreen';
 import SoldProductsScreen from '../screens/SoldProductsScreen';
 import SalesScreen from '../screens/SalesScreen';
 import ConnectionsScreen from '../screens/ConnectionsScreen';
+import SettingsScreen from '../screens/SettingsScreen';
 import ToolsScreen from '../screens/ToolsScreen';
 
 const Tab = createBottomTabNavigator();
@@ -27,6 +28,8 @@ export default function MainNavigator() {
             iconName = focused ? 'cash' : 'cash-outline';
           } else if (route.name === 'Connections') {
             iconName = focused ? 'link' : 'link-outline';
+          } else if (route.name === 'Settings') {
+            iconName = focused ? 'settings' : 'settings-outline';
           } else if (route.name === 'Tools') {
             iconName = focused ? 'construct' : 'construct-outline';
           } else {
@@ -78,6 +81,11 @@ export default function MainNavigator() {
         name="Connections"
         component={ConnectionsScreen}
         options={{ title: 'Connections' }}
+      />
+      <Tab.Screen
+        name="Settings"
+        component={SettingsScreen}
+        options={{ title: 'Settings' }}
       />
       <Tab.Screen 
         name="Tools" 

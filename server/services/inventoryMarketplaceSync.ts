@@ -2,7 +2,7 @@
  * Push central inventory quantity to each marketplace listing API.
  */
 import type { InventoryMarketplaceListing } from "../../shared/schema";
-import { isEtsyConfigured } from "./etsyApi";
+import { isEtsyConfigured, syncEtsyListingInventory } from "./etsyApi";
 import { isEbayConfigured } from "./ebayApi";
 import { isShopifyConfigured } from "./shopifyApi";
 
@@ -56,11 +56,15 @@ async function updateEbayInventory(
       message: `eBay inventory dry-run: ${quantity} (reviseInventoryItem)`,
     };
   }
-  // Live: PUT /sell/inventory/v1/inventory_item/{sku}
+  // TODO: implement live eBay inventory sync via PUT /sell/inventory/v1/inventory_item/{sku}
+  console.warn(
+    `[Inventory][eBay] live sync not implemented — stub only (sku=${sku}, listing=${listingId}, qty=${quantity})`
+  );
   return {
     marketplaceId: "ebay",
     success: true,
-    message: `eBay inventory set to ${quantity} for ${sku || listingId}`,
+    dryRun: true,
+    message: `eBay inventory stub: ${quantity} for ${sku || listingId} (TODO: reviseInventoryItem)`,
   };
 }
 
@@ -79,10 +83,15 @@ async function updateShopifyInventory(
       message: `Shopify inventory dry-run: ${quantity}`,
     };
   }
+  // TODO: implement live Shopify inventory sync via inventoryLevelsSet GraphQL mutation
+  console.warn(
+    `[Inventory][Shopify] live sync not implemented — stub only (variant=${variantId}, qty=${quantity})`
+  );
   return {
     marketplaceId: "shopify",
     success: true,
-    message: `Shopify inventoryLevelsSet → ${quantity}`,
+    dryRun: true,
+    message: `Shopify inventory stub → ${quantity} (TODO: inventoryLevelsSet)`,
   };
 }
 
@@ -90,6 +99,14 @@ async function updateEtsyInventory(
   listingId: string | null,
   quantity: number
 ): Promise<InventoryUpdateResult> {
+  if (!listingId) {
+    return {
+      marketplaceId: "etsy",
+      success: false,
+      message: "Etsy inventory sync requires a listing ID",
+    };
+  }
+
   if (!isEtsyConfigured()) {
     console.log(
       `[Inventory][Etsy] dry-run updateListing listing=${listingId} qty=${quantity}`
@@ -101,11 +118,23 @@ async function updateEtsyInventory(
       message: `Etsy inventory dry-run: ${quantity}`,
     };
   }
-  return {
-    marketplaceId: "etsy",
-    success: true,
-    message: `Etsy listing quantity → ${quantity}`,
-  };
+
+  try {
+    await syncEtsyListingInventory(listingId, quantity, null);
+    return {
+      marketplaceId: "etsy",
+      success: true,
+      message: `Etsy listing ${listingId} quantity → ${quantity}`,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[Inventory][Etsy] sync failed listing=${listingId}:`, message);
+    return {
+      marketplaceId: "etsy",
+      success: false,
+      message,
+    };
+  }
 }
 
 async function updateWooCommerceInventory(

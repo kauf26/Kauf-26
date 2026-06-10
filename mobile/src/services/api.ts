@@ -1,15 +1,13 @@
-// API configuration for the mobile app
-// UPDATE THIS URL before building for production!
-// For development with physical device, use your computer's LAN IP (e.g., 'http://192.168.1.100:5000')
-// For production, use your deployed Replit app URL
+// API configuration for the mobile app — see config.ts for API_BASE_URL resolution.
 
 import { fetchProductsWithBackoff } from './productsFetch';
 import { API_BASE_URL } from './config';
 
+export { API_BASE_URL };
+
 // @ts-ignore - __DEV__ is defined by React Native
 const isDev = typeof __DEV__ !== 'undefined' ? __DEV__ : false;
-
-export { API_BASE_URL };
+void isDev;
 
 // Helper function for API requests
 function clientTimeZoneHeader(): Record<string, string> {

@@ -12,5 +12,6 @@ node_modules
 node_modules/
 .env
 .DS_Store
-.browser-sessions/
 .env
+google-play-service-account.json
+mobile/google-play-service-account.json

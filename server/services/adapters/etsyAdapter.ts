@@ -1,10 +1,10 @@
 /**
  * Etsy adapter — thin layer over `services/etsyApi.ts`.
- * Owns listing formatting only; credential checks, OAuth, and HTTP live in the service.
  */
 import type { DraftPublishPayload } from "../../publishToMarketplaces";
 import type { AdapterPublishResult, FetchFn, FormattedListing } from "./types";
 import {
+  collectDraftImages,
   draftDescription,
   draftPrice,
   draftSku,
@@ -16,9 +16,11 @@ import {
   isEtsyConfigured as isEtsyServiceConfigured,
   publishEtsyListing,
 } from "../etsyApi";
+import { isMarketplaceConnectedForPublish } from "../listingService";
 
 export function formatEtsyListing(draft: DraftPublishPayload): FormattedListing {
   const price = draftPrice(draft);
+  const images = collectDraftImages(draft);
   return {
     marketplace: "etsy",
     shopId: getEtsyShopId(),
@@ -31,7 +33,8 @@ export function formatEtsyListing(draft: DraftPublishPayload): FormattedListing 
     when_made: "2020_2025",
     taxonomy_id: getEtsyTaxonomyId(),
     type: "physical",
-    imageCount: draft.images?.length ?? 0,
+    imageCount: images.length,
+    images,
     apiBody: {
       quantity: 1,
       title: draft.title,
@@ -61,14 +64,28 @@ export async function publishToEtsy(
     );
   }
 
+  const connected = await isMarketplaceConnectedForPublish("etsy", null);
+  if (!connected) {
+    return dryRunResult(
+      "etsy",
+      "Connect Etsy in Settings before publishing (OAuth token missing or expired).",
+      formatted
+    );
+  }
+
   const apiBody = formatted.apiBody as Record<string, unknown> | undefined;
   if (!apiBody) {
     throw new Error("Etsy formatted listing missing apiBody");
   }
 
+  const images = Array.isArray(formatted.images)
+    ? (formatted.images as string[])
+    : [];
+
   try {
     const result = await publishEtsyListing(
       apiBody as Parameters<typeof publishEtsyListing>[0],
+      { images, userId: null },
       fetchImpl
     );
     return {
@@ -79,9 +96,6 @@ export async function publishToEtsy(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    if (message.includes("Connect Etsy")) {
-      return dryRunResult("etsy", message, formatted);
-    }
-    throw error;
+    throw new Error(message);
   }
 }
