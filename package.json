@@ -19,7 +19,9 @@
   "kauft": "tsx scripts/kauft.ts",
   "test:publish": "vitest run server/services/publishEngine.test.ts",
   "test:adapters": "tsx scripts/test-adapters.ts",
-  "test:shopify": "tsx scripts/shopify-test-products.ts"
+  "test:shopify": "tsx scripts/shopify-test-products.ts",
+  "verify:store-readiness": "node scripts/verify-store-readiness.js",
+  "deploy:production": "bash scripts/deploy-production.sh"
 },
   "bin": {
     "kauft": "./scripts/kauft.ts"
