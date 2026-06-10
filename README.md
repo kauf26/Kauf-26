@@ -2,6 +2,18 @@
 
 AI-powered marketplace listing tool — identify products from photos, create drafts, and publish to connected seller accounts (Etsy, eBay, Shopify).
 
+## 🚀 Final Steps
+
+**Automated readiness checks pass.** To deploy and submit to the App Store / Google Play, follow the handoff guide:
+
+👉 **[HANDOFF_TO_USER.md](./HANDOFF_TO_USER.md)** — step-by-step commands, OAuth portal links, EAS secrets, and store submission.
+
+Quick validation on your server after deploy:
+
+```bash
+bash scripts/validate-production-env.sh
+```
+
 Monorepo layout:
 
 | Path | Purpose |
@@ -90,6 +102,7 @@ Complete [MANUAL_QA.md](./MANUAL_QA.md) — OAuth connect, publish with images, 
 | Script | Purpose |
 |--------|---------|
 | `scripts/verify-store-readiness.js` | Pre-flight validator |
+| `scripts/validate-production-env.sh` | Production server env + DB + HTTP check |
 | `scripts/deploy-production.sh` | Migrate, build, print PM2 + OAuth checklist |
 | `mobile/scripts/build-and-submit.sh` | EAS build + optional submit |
 | `mobile/scripts/validate-production-env.js` | Mobile production env gate |

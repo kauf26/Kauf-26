@@ -21,6 +21,7 @@
   "test:adapters": "tsx scripts/test-adapters.ts",
   "test:shopify": "tsx scripts/shopify-test-products.ts",
   "verify:store-readiness": "node scripts/verify-store-readiness.js",
+  "validate:production-env": "bash scripts/validate-production-env.sh",
   "deploy:production": "bash scripts/deploy-production.sh"
 },
   "bin": {
