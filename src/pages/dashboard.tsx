@@ -70,11 +70,12 @@ export default function Dashboard() {
 
   const { data: sales = [], isFetching: salesFetching } = useSales();
   const { data: listings = [], isFetching: listingsFetching } = useListings();
-  const { data: productCount = 0 } = useProductDraftCount();
+  const { data: productCount = 0, isFetching: productCountFetching } =
+    useProductDraftCount();
   const { data: savedLayout, isFetching: layoutFetching } = useDashboardLayout();
 
   const dashboardDataLoading =
-    salesFetching || listingsFetching || layoutFetching;
+    salesFetching || listingsFetching || layoutFetching || productCountFetching;
 
   const saveLayoutMutation = useSaveDashboardLayout();
 

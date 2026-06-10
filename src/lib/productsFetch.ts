@@ -1,3 +1,8 @@
+import {
+  countUniqueDraftIds,
+  dedupeDraftRowsById,
+} from "@shared/draftCount";
+
 export type ListingProduct = {
   id: number;
   imageUrl: string;
@@ -16,25 +21,13 @@ type ProductDraftRow = {
 
 const PRODUCTS_QUERY_KEY = ["products"] as const;
 export const PRODUCT_DRAFT_COUNT_QUERY_KEY = ["productDraftCount"] as const;
-export { PRODUCTS_QUERY_KEY };
+export { PRODUCTS_QUERY_KEY, countUniqueDraftIds, dedupeDraftRowsById };
 
 let inFlight: Promise<ListingProduct[]> | null = null;
 let countInFlight: Promise<number> | null = null;
 
-/** One draft row = one product, regardless of photo or marketplace count. */
-export function dedupeDraftRowsById(drafts: ProductDraftRow[]): ProductDraftRow[] {
-  const byId = new Map<number, ProductDraftRow>();
-  for (const draft of drafts) {
-    if (!Number.isInteger(draft?.id)) continue;
-    byId.set(draft.id, draft);
-  }
-  return [...byId.values()];
-}
-
 export function countUniqueProductDrafts(products: ListingProduct[]): number {
-  return new Set(
-    products.map((product) => product.id).filter((id) => Number.isInteger(id))
-  ).size;
+  return countUniqueDraftIds(products);
 }
 
 function draftToListingProduct(draft: ProductDraftRow): ListingProduct {
@@ -72,13 +65,28 @@ async function fetchDraftProductsOnce(): Promise<ListingProduct[]> {
 }
 
 async function fetchProductDraftCountOnce(): Promise<number> {
-  const res = await fetch("/api/drafts/count", { credentials: "include" });
+  try {
+    const res = await fetch("/api/drafts/count", { credentials: "include" });
+    if (res.ok) {
+      const data = (await res.json()) as { count?: unknown };
+      const parsed =
+        typeof data.count === "number" ? data.count : Number(data.count);
+      if (Number.isInteger(parsed) && parsed >= 0) {
+        return parsed;
+      }
+    }
+  } catch {
+    /* fall back to deduped draft list */
+  }
+
+  const res = await fetch("/api/drafts", { credentials: "include" });
   if (!res.ok) {
     const text = (await res.text()) || res.statusText;
     throw new Error(`${res.status}: ${text}`);
   }
-  const data = (await res.json()) as { count?: number };
-  return Number.isInteger(data.count) ? data.count! : 0;
+  const drafts = (await res.json()) as ProductDraftRow[];
+  if (!Array.isArray(drafts)) return 0;
+  return countUniqueDraftIds(drafts);
 }
 
 /** Distinct draft count for dashboard stats (one row per product). */

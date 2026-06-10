@@ -1,7 +1,7 @@
 import express from 'express';
 import { db } from './db';
 import { productDrafts, publishJobs, publishTasks } from '../shared/schema';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import { collectDraftImages } from './services/adapters/adapterUtils';
 import {
   MAX_DRAFT_IMAGES,
@@ -161,9 +161,14 @@ router.post("/drafts", async (req, res) => {
 // --- 2. FETCH ALL SAVED DRAFTS (GET) ---
 router.get("/drafts/count", async (_req, res) => {
  try {
-   const rows = await db.select({ id: productDrafts.id }).from(productDrafts);
-   const count = new Set(rows.map((row) => row.id)).size;
-   return res.status(200).json({ count });
+   const [row] = await db
+     .select({
+       count: sql<number>`cast(count(distinct ${productDrafts.id}) as int)`,
+     })
+     .from(productDrafts);
+
+   const count = Number(row?.count ?? 0);
+   return res.status(200).json({ count: Number.isFinite(count) ? count : 0 });
  } catch (error) {
    console.error("[KAUF26] Error counting product drafts:", error);
    return res.status(500).json({ error: "Internal Server Error" });
