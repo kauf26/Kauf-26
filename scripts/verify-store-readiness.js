@@ -15,7 +15,7 @@ const ROOT = path.resolve(__dirname, "..");
 const MOBILE_ROOT = path.join(ROOT, "mobile");
 
 const GREEN = "\x1b[32m";
-const RED = "\033[0;31m";
+const RED = "\x1b[31m";
 const YELLOW = "\x1b[33m";
 const DIM = "\x1b[2m";
 const RESET = "\x1b[0m";
@@ -220,8 +220,8 @@ if (failed === 0) {
   console.log("  • bash scripts/deploy-production.sh on your server");
   console.log("  • bash mobile/scripts/build-and-submit.sh (after eas login)");
   console.log("  • Complete MANUAL_QA.md and store listings");
-  process.exit(warnings > 0 ? 0 : 0);
+  process.exit(0);
 } else {
-  console.log(`${RED}NOT READY${RESET} — ${failed} failed, ${warnings} warning(s), ${passed} passed.");
+  console.log(`${RED}NOT READY${RESET} — ${failed} failed, ${warnings} warning(s), ${passed} passed.`);
   process.exit(1);
 }
