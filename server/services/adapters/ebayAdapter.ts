@@ -10,7 +10,7 @@ import {
   getEbayCategoryId,
   getEbayMarketplaceId,
   isEbayConfigured as isEbayServiceConfigured,
-  isEbaySandbox,
+  publishEbayInventoryListing,
   type EbayInventoryListing,
 } from "../ebayApi";
 
@@ -49,11 +49,37 @@ export function isEbayConfigured(): boolean {
 
 export async function publishToEbay(
   formatted: FormattedListing,
-  _fetchImpl: FetchFn = fetch
+  fetchImpl: FetchFn = fetch
 ): Promise<AdapterPublishResult> {
-  return {
-    message: "eBay publish is mobile-only — connect in the app and publish from your device",
-    dryRun: true,
-    listingId: `ebay-mobile-${Date.now()}`,
-  };
+  if (!isEbayConfigured()) {
+    console.log("[Publish][eBay] dry-run payload:", JSON.stringify(formatted));
+    return {
+      message: "eBay OAuth credentials missing — dry run only",
+      dryRun: true,
+      listingId: `ebay-dry-${Date.now()}`,
+    };
+  }
+
+  try {
+    const result = await publishEbayInventoryListing(
+      formatted as unknown as EbayInventoryListing,
+      fetchImpl
+    );
+    return {
+      listingId: result.listingId,
+      listingUrl: result.listingUrl,
+      message: result.message,
+      dryRun: false,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("Connect eBay")) {
+      return {
+        message,
+        dryRun: true,
+        listingId: `ebay-dry-${Date.now()}`,
+      };
+    }
+    throw error;
+  }
 }

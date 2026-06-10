@@ -28,6 +28,7 @@ import { SUPPORTED_MARKETPLACE_IDS } from "./publishToMarketplaces";
 import { productRoutes } from "./productsRoutes";
 import { dashboardDataRoutes } from "./dashboardDataRoutes";
 import { shippingRoutes } from "./shippingRoutes";
+import { marketplaceOAuthRoutes } from "./marketplaceOAuthRoutes";
 import { LABELS_DIR, ensureLabelsDir } from "./services/shippingLabelService";
 import marketplaceRoutes from "./marketplaceRoutes";
 import inventoryRoutes from "./inventoryRoutes";
@@ -1398,6 +1399,8 @@ const server = createServer(app);
 (async () => {
  await setupAuth(app);
  registerAuthRoutes(app);
+ // OAuth routes need session middleware (PKCE state, returnTo)
+ app.use("/api/oauth", marketplaceOAuthRoutes);
  app.use("/api/onboarding", onboardingRoutes);
 
  console.log("DEBUG: About to call registerRoutes");
@@ -1416,9 +1419,10 @@ const server = createServer(app);
    console.log(`   - POST /api/catalog/scrape (JSON { query } → masterScraper)`);
    console.log(`   - GET  /api/health`);
    console.log(`   - GET  /api/marketplaces/oauth-config (mobile OAuth metadata)`);
-   console.log(`   - GET  /api/etsy/verify (mobile-only — config check)`);
-   console.log(`   - GET  /api/shopify/verify (mobile-only — config check)`);
-   console.log(`   - GET  /api/ebay/verify (mobile-only — config check)`);
+   console.log(`   - GET  /api/oauth/connections (Etsy/eBay/Shopify server OAuth)`);
+   console.log(`   - GET  /api/etsy/verify`);
+   console.log(`   - GET  /api/shopify/verify`);
+   console.log(`   - GET  /api/ebay/verify`);
    console.log(`   - GET/POST /api/drafts (productsRoutes → PostgreSQL)`);
    console.log(`   - GET  /api/drafts/ready-for-posting`);
    console.log(`   - POST /api/drafts/:id/post-to-marketplaces`);

@@ -14,6 +14,7 @@ import {
   getEtsyShopId,
   getEtsyTaxonomyId,
   isEtsyConfigured as isEtsyServiceConfigured,
+  publishEtsyListing,
 } from "../etsyApi";
 
 export function formatEtsyListing(draft: DraftPublishPayload): FormattedListing {
@@ -50,11 +51,37 @@ export function isEtsyConfigured(): boolean {
 
 export async function publishToEtsy(
   formatted: FormattedListing,
-  _fetchImpl: FetchFn = fetch
+  fetchImpl: FetchFn = fetch
 ): Promise<AdapterPublishResult> {
-  return dryRunResult(
-    "etsy",
-    "Etsy publish is mobile-only — connect in the app and publish from your device",
-    formatted
-  );
+  if (!isEtsyConfigured()) {
+    return dryRunResult(
+      "etsy",
+      "Etsy OAuth credentials missing — dry run only",
+      formatted
+    );
+  }
+
+  const apiBody = formatted.apiBody as Record<string, unknown> | undefined;
+  if (!apiBody) {
+    throw new Error("Etsy formatted listing missing apiBody");
+  }
+
+  try {
+    const result = await publishEtsyListing(
+      apiBody as Parameters<typeof publishEtsyListing>[0],
+      fetchImpl
+    );
+    return {
+      listingId: result.listingId,
+      listingUrl: result.listingUrl,
+      message: result.message,
+      dryRun: false,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("Connect Etsy")) {
+      return dryRunResult("etsy", message, formatted);
+    }
+    throw error;
+  }
 }

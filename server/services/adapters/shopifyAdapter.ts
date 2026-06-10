@@ -9,7 +9,7 @@ import {
   draftSku,
   dryRunResult,
 } from "./adapterUtils";
-import { isShopifyConfigured as isShopifyServiceConfigured } from "../shopifyApi";
+import { isShopifyConfigured as isShopifyServiceConfigured, createShopifyProduct } from "../shopifyApi";
 
 export function formatShopifyListing(
   draft: DraftPublishPayload
@@ -46,11 +46,38 @@ export function isShopifyConfigured(): boolean {
 
 export async function publishToShopify(
   formatted: FormattedListing,
-  _fetchImpl: FetchFn = fetch
+  fetchImpl: FetchFn = fetch
 ): Promise<AdapterPublishResult> {
-  return dryRunResult(
-    "shopify",
-    "Shopify publish is mobile-only — connect in the app and publish from your device",
-    formatted
-  );
+  if (!isShopifyConfigured()) {
+    return dryRunResult(
+      "shopify",
+      "Shopify OAuth credentials missing — dry run only",
+      formatted
+    );
+  }
+
+  const apiBody = formatted.apiBody as { product?: Record<string, unknown> } | undefined;
+  if (!apiBody?.product) {
+    throw new Error("Shopify formatted listing missing apiBody.product");
+  }
+
+  try {
+    const result = await createShopifyProduct(
+      apiBody as Parameters<typeof createShopifyProduct>[0],
+      fetchImpl
+    );
+    return {
+      listingId: String(result.id),
+      listingUrl: result.listingUrl,
+      account: formatted.shopDomain ? String(formatted.shopDomain) : undefined,
+      message: "Shopify draft product created",
+      dryRun: false,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("Connect Shopify")) {
+      return dryRunResult("shopify", message, formatted);
+    }
+    throw error;
+  }
 }

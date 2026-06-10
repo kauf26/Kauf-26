@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Settings, ChevronDown, ChevronRight, CheckCircle2, Circle, ExternalLink, Save, Loader2, AlertCircle, Trash2 } from "lucide-react";
-import { MarketplaceStatusCard, type MarketplaceVerifyStatus } from "@/components/MarketplaceStatusCard";
+import ConnectedAccounts from "./settings/ConnectedAccounts";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -367,104 +367,6 @@ function MarketplaceCard({ def, savedCreds }: { def: MarketplaceDef; savedCreds:
   );
 }
 
-const VERIFIABLE_MARKETPLACES = ["shopify", "etsy", "ebay"] as const;
-
-function MarketplaceStatusSection() {
-  const [statuses, setStatuses] = useState<MarketplaceVerifyStatus[]>([]);
-  const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const connected = params.get("connected");
-    const marketplace = params.get("marketplace");
-    if (connected === "true" && marketplace) {
-      toast({
-        title: "Connected",
-        description: `${OAUTH_PLATFORM_LABELS[marketplace] ?? marketplace} account linked successfully.`,
-      });
-      window.history.replaceState({}, "", "/settings");
-    } else if (connected === "false" && marketplace) {
-      const reason = params.get("reason");
-      toast({
-        title: "Connection failed",
-        description: reason ?? `Could not connect ${marketplace}.`,
-        variant: "destructive",
-      });
-      window.history.replaceState({}, "", "/settings");
-    }
-  }, [toast]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    (async () => {
-      const results = await Promise.all(
-        VERIFIABLE_MARKETPLACES.map(async (id): Promise<MarketplaceVerifyStatus> => {
-          try {
-            const res = await fetch(`/api/${id}/verify`);
-            const json = await res.json();
-            const authorizeUrl = undefined;
-            return {
-              marketplace: json.marketplace ?? id,
-              ok: json.ok === true,
-              configured: json.configured === true,
-              status: typeof json.status === "number" ? json.status : res.status,
-              message: json.message ?? "No response from verification endpoint.",
-              hint: json.hint ?? "Use the mobile app Connections tab to connect and verify.",
-              authorizeUrl,
-              connectLabel: undefined,
-            };
-          } catch {
-            return {
-              marketplace: id,
-              ok: false,
-              configured: false,
-              status: 0,
-              message: "Could not reach the server to verify this connection.",
-              hint: "Use the mobile app Connections tab to connect and verify.",
-              authorizeUrl: undefined,
-              connectLabel: undefined,
-            };
-          }
-        })
-      );
-      if (!cancelled) {
-        setStatuses(results);
-        setLoading(false);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return (
-    <div className="mb-8">
-      <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3">
-        Marketplace Status (mobile app)
-      </h2>
-      <p className="text-sm text-muted-foreground mb-4">
-        Etsy, Shopify, eBay, and other OAuth marketplaces use one-tap connect in the mobile app (Safari / Chrome session + Keychain).
-        Tokens and profile data stay on the device — not on this server.
-      </p>
-      {loading ? (
-        <div className="flex items-center gap-2 rounded-lg border border-muted bg-muted/10 px-4 py-6 justify-center text-sm text-muted-foreground">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          Checking marketplace connections…
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {statuses.map((status) => (
-            <MarketplaceStatusCard key={status.marketplace} status={status} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function DeleteAccountSection() {
   const [confirmText, setConfirmText] = useState("");
   const [open, setOpen] = useState(false);
@@ -602,7 +504,7 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        <MarketplaceStatusSection />
+        <ConnectedAccounts />
 
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">

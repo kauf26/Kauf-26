@@ -151,6 +151,31 @@ connected: boolean("connected").notNull().default(false),
 updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
 });
 
+/** Encrypted OAuth tokens per user + marketplace (server-side connect flow). */
+export const marketplaceAuth = pgTable(
+  "marketplace_auth",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+    marketplace: text("marketplace").notNull(),
+    encryptedPayload: text("encrypted_payload").notNull(),
+    iv: text("iv").notNull(),
+    authTag: text("auth_tag").notNull(),
+    shopDomain: text("shop_domain"),
+    accountLabel: text("account_label"),
+    expiresAt: timestamp("expires_at"),
+    connected: boolean("connected").notNull().default(true),
+    createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+    updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  },
+  (table) => [
+    uniqueIndex("marketplace_auth_user_marketplace_unique").on(
+      table.userId,
+      table.marketplace
+    ),
+  ]
+);
+
 export const dashboardLayouts = pgTable("dashboard_layouts", {
 id: serial("id").primaryKey(),
 userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),

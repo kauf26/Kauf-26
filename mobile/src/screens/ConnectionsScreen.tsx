@@ -23,6 +23,12 @@ import {
 } from '../services/onboardingProfile';
 import { loadProviderRegistry, nonOAuthStatusMessage } from '../services/providerRegistry';
 import {
+  connectMarketplaceViaServer,
+  disconnectMarketplaceViaServer,
+  fetchServerOAuthConnections,
+  usesServerOAuth,
+} from '../services/serverMarketplaceOAuth';
+import {
   deletePlatformTokens,
   hasPlatformTokens,
   loadPlatformTokens,
@@ -54,6 +60,14 @@ export default function ConnectionsScreen() {
     const { providers: registry } = await loadProviderRegistry();
     setProviders(registry);
 
+    let serverConnections: Awaited<ReturnType<typeof fetchServerOAuthConnections>> = [];
+    try {
+      serverConnections = await fetchServerOAuthConnections();
+    } catch {
+      // Backend may be offline during dev startup.
+    }
+    const serverById = new Map(serverConnections.map((c) => [c.marketplace, c]));
+
     const next: Record<string, { ok: boolean; message: string }> = {};
     for (const p of registry) {
       if (!p.oauthSupported) {
@@ -63,6 +77,25 @@ export default function ConnectionsScreen() {
         };
         continue;
       }
+
+      if (usesServerOAuth(p.id)) {
+        const row = serverById.get(p.id);
+        if (!row?.configured) {
+          next[p.id] = {
+            ok: false,
+            message: 'Server OAuth not configured',
+          };
+          continue;
+        }
+        if (!row.connected) {
+          next[p.id] = { ok: false, message: 'Not connected' };
+          continue;
+        }
+        const label = row.accountLabel ?? row.shopDomain ?? 'Connected';
+        next[p.id] = { ok: true, message: label };
+        continue;
+      }
+
       const connected = await hasPlatformTokens(p.id);
       if (!connected) {
         next[p.id] = {
@@ -124,6 +157,18 @@ export default function ConnectionsScreen() {
     setOauthNotice(null);
     const fields = connectFields[p.id] ?? {};
     try {
+      if (usesServerOAuth(p.id)) {
+        const result = await connectMarketplaceViaServer(p.id, {
+          shopDomain: fields.shopDomain,
+        });
+        if (!result.ok) {
+          throw new Error(result.message);
+        }
+        Alert.alert(`${p.name} connected`, result.message);
+        await refresh();
+        return;
+      }
+
       const result = await connectPlatform(p.id, fields);
       const merged = await mergeProfileFromMarketplace(result.profile);
       setProfile(merged);
@@ -167,7 +212,11 @@ export default function ConnectionsScreen() {
   };
 
   const handleDisconnect = async (id: string) => {
-    await deletePlatformTokens(id);
+    if (usesServerOAuth(id)) {
+      await disconnectMarketplaceViaServer(id);
+    } else {
+      await deletePlatformTokens(id);
+    }
     await refresh();
   };
 
@@ -354,7 +403,11 @@ export default function ConnectionsScreen() {
                 <View style={styles.buttonInner}>
                   <Ionicons name="flash-outline" size={18} color="#fff" />
                   <Text style={styles.buttonText}>
-                    {p.configured ? `Connect ${p.name} — one tap` : 'Configure server OAuth first'}
+                    {p.configured
+                      ? usesServerOAuth(p.id)
+                        ? `Connect ${p.name}`
+                        : `Connect ${p.name} — one tap`
+                      : 'Configure server OAuth first'}
                   </Text>
                 </View>
               )}
