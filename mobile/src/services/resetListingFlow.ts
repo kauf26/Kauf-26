@@ -6,6 +6,7 @@ export type MobileListingResetState = {
   setTitle: (value: string) => void;
   setDescription: (value: string) => void;
   setBrand: (value: string) => void;
+  setCategory: (value: string) => void;
   setModelNumber: (value: string) => void;
   setColor: (value: string) => void;
   setMaterial: (value: string) => void;
@@ -27,6 +28,7 @@ export function resetMobileListingFlow(state: MobileListingResetState): void {
   state.setTitle('');
   state.setDescription('');
   state.setBrand('');
+  state.setCategory('');
   state.setModelNumber('');
   state.setColor('');
   state.setMaterial('');

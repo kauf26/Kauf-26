@@ -4,6 +4,11 @@ import {
   type OAuthProviderId,
 } from "./oauthService";
 import { hasConnection } from "./oauthConnectionStorage";
+import {
+  assertMarketplacesSupportCategory,
+  filterSupportedMarketplaces,
+  type CategoryContext,
+} from "../../shared/marketplaceCategorySupport";
 
 const OAUTH_MARKETPLACES: OAuthProviderId[] = ["etsy", "ebay", "shopify", "amazon"];
 
@@ -49,3 +54,33 @@ export async function requireAccessTokenForListingPublish(
 
 /** Alias matching universal OAuth service naming. */
 export const getValidAccessTokenForUser = getAccessTokenForListingPublish;
+
+export function extractCategoryFromDraftAttributes(
+  attributes: Record<string, unknown> | undefined | null
+): string {
+  if (!attributes || typeof attributes !== "object") return "";
+  return String(
+    attributes.category ??
+      attributes.categoryNode ??
+      attributes.productCategory ??
+      ""
+  ).trim();
+}
+
+/** Validate marketplace IDs against product category before publish. */
+export function validateMarketplacesForProductCategory(
+  marketplaceIds: readonly string[],
+  category: string | undefined | null,
+  context?: CategoryContext
+): void {
+  assertMarketplacesSupportCategory(marketplaceIds, category, context);
+}
+
+/** Keep only marketplaces that accept the product category (e.g. publish-all). */
+export function filterMarketplacesForProductCategory(
+  marketplaceIds: readonly string[],
+  category: string | undefined | null,
+  context?: CategoryContext
+): string[] {
+  return filterSupportedMarketplaces(marketplaceIds, category, context);
+}

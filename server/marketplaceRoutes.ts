@@ -59,6 +59,9 @@ router.post('/publish', async (req, res) => {
    if (message.includes('not found')) {
      return res.status(404).json({ error: message });
    }
+   if (message.includes('does not support category')) {
+     return res.status(400).json({ error: message });
+   }
    return res.status(500).json({ error: message });
  }
 });
@@ -149,6 +152,12 @@ router.post('/publish-all', async (req, res) => {
     console.error('[Marketplaces] publish-all error:', error);
     if (message.includes('not found')) {
       return res.status(404).json({ error: message });
+    }
+    if (
+      message.includes('does not support category') ||
+      message.includes('No enabled marketplaces support category')
+    ) {
+      return res.status(400).json({ error: message });
     }
     return res.status(500).json({ error: message });
   }

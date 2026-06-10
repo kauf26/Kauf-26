@@ -19,6 +19,12 @@ import {
   listingDescriptionFields,
   resolveProductDescription,
 } from "../../shared/productDescription";
+import {
+  UNKNOWN_CATEGORY_WARNING,
+  evaluateMarketplaceCategorySupport,
+  filterSupportedMarketplaces,
+  isUnknownProductCategory,
+} from "../../shared/marketplaceCategorySupport";
 
 export type Marketplace = (typeof SUPPORTED_MARKETPLACE_IDS)[number];
 
@@ -137,10 +143,46 @@ export default function SelectMarketplaces() {
     }
   }, []);
 
+  const productCategory = draft?.category ?? draft?.product.category ?? "";
+  const categoryContext = useMemo(
+    () => ({
+      title: draft?.title,
+      description: draft?.description,
+    }),
+    [draft?.title, draft?.description]
+  );
+  const unknownCategory = isUnknownProductCategory(productCategory);
+
+  useEffect(() => {
+    if (!draft) return;
+    setSelected((prev) =>
+      filterSupportedMarketplaces(prev, productCategory, categoryContext)
+    );
+  }, [draft, productCategory, categoryContext]);
+
   const toggle = (id: Marketplace) => {
+    const support = evaluateMarketplaceCategorySupport(
+      id,
+      productCategory,
+      categoryContext
+    );
+    if (!support.supported) return;
+
     setSelected((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
     );
+  };
+
+  const selectAllSupported = (markets: readonly { id: Marketplace }[]) => {
+    const supported = filterSupportedMarketplaces(
+      markets.map((m) => m.id),
+      productCategory,
+      categoryContext
+    ) as Marketplace[];
+    setSelected((prev) => {
+      const ids = new Set([...prev, ...supported]);
+      return [...ids];
+    });
   };
 
   const updateField = (
@@ -163,35 +205,89 @@ export default function SelectMarketplaces() {
       currency: string;
       region: string;
       countryCode: string;
-    }[]
+    }[],
+    sectionLabel?: string
   ) => {
     return (
       <div className="space-y-2">
+        {sectionLabel && (
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <span className="text-[10px] text-zinc-600 uppercase tracking-wide">
+              {sectionLabel}
+            </span>
+            <button
+              type="button"
+              onClick={() => selectAllSupported(markets)}
+              className="text-[10px] text-blue-400 hover:text-blue-300"
+            >
+              Select all supported
+            </button>
+          </div>
+        )}
         {markets.map((m) => {
           const isSelected = selected.includes(m.id);
+          const support = evaluateMarketplaceCategorySupport(
+            m.id,
+            productCategory,
+            categoryContext
+          );
+          const isDisabled = !support.supported;
+
           return (
             <div
               key={m.id}
-              onClick={() => toggle(m.id)}
-              className={`flex items-center justify-between gap-3 p-2 rounded-md cursor-pointer transition-colors border ${
-                isSelected
-                  ? "bg-emerald-900/20 border-emerald-500/50"
-                  : "bg-red-900/20 border-red-500/50 hover:bg-red-900/30"
+              onClick={() => !isDisabled && toggle(m.id)}
+              title={
+                isDisabled
+                  ? support.disabledReason ?? support.policyHint
+                  : undefined
+              }
+              className={`flex items-center justify-between gap-3 p-2 rounded-md transition-colors border ${
+                isDisabled
+                  ? "bg-zinc-950/80 border-zinc-800 opacity-60 cursor-not-allowed"
+                  : isSelected
+                    ? "bg-emerald-900/20 border-emerald-500/50 cursor-pointer"
+                    : "bg-red-900/20 border-red-500/50 hover:bg-red-900/30 cursor-pointer"
               }`}
             >
-              <div>
-                <div className={`text-sm font-medium ${isSelected ? "text-emerald-400" : "text-red-200"}`}>
+              <div className="min-w-0 flex-1">
+                <div
+                  className={`text-sm font-medium flex items-center gap-1.5 ${
+                    isDisabled
+                      ? "text-zinc-500 line-through"
+                      : isSelected
+                        ? "text-emerald-400"
+                        : "text-red-200"
+                  }`}
+                >
+                  {isDisabled && (
+                    <span className="text-zinc-500 no-underline" aria-hidden>
+                      🔒
+                    </span>
+                  )}
                   <span>
                     {getFlagEmoji(m.countryCode)} {m.name}
                   </span>
                 </div>
                 <div className="text-xs text-zinc-500 uppercase">{m.id}</div>
+                {isDisabled && (
+                  <p className="text-[11px] text-amber-400/90 mt-1 normal-case no-underline">
+                    {support.disabledReason ?? support.policyHint}
+                  </p>
+                )}
+                {isDisabled && support.policyHint && support.disabledReason && (
+                  <p className="text-[10px] text-zinc-500 mt-0.5 normal-case no-underline">
+                    {support.policyHint}
+                  </p>
+                )}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <span className="text-xs bg-zinc-950 border border-zinc-800 px-1.5 py-0.5 rounded text-zinc-400">
                   {m.currency}
                 </span>
-                {isSelected && <span className="text-emerald-400 text-xs font-bold">✓</span>}
+                {isSelected && !isDisabled && (
+                  <span className="text-emerald-400 text-xs font-bold">✓</span>
+                )}
               </div>
             </div>
           );
@@ -346,18 +442,24 @@ export default function SelectMarketplaces() {
         <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 space-y-6">
           <InventoryQuantityCounter draftId={draftId} initialQuantity={1} />
 
+          {unknownCategory && (
+            <p className="text-xs text-amber-400/90 rounded-md border border-amber-700/40 bg-amber-950/30 px-3 py-2">
+              {UNKNOWN_CATEGORY_WARNING}
+            </p>
+          )}
+
           <div>
             <div className="text-xs font-semibold uppercase mb-2 flex gap-1 tracking-wider text-zinc-400">
               <span>🇺🇸</span> US-Based Marketplaces
             </div>
-            {renderMarketList(US_MARKETS)}
+            {renderMarketList(US_MARKETS, "US channels")}
           </div>
 
           <div className="border-t border-zinc-800 pt-4">
             <div className="text-xs font-semibold uppercase mb-2 flex gap-1 tracking-wider text-zinc-400">
               <span>🌐</span> International Channels
             </div>
-            {renderMarketList(GLOBAL_MARKETS)}
+            {renderMarketList(GLOBAL_MARKETS, "International channels")}
           </div>
 
           <div
@@ -380,14 +482,29 @@ export default function SelectMarketplaces() {
               setPublishError(null);
               setPublishJobId(null);
               saveListingSession(draft);
-              sessionStorage.setItem("selectedMarkets", JSON.stringify(selected));
+              const supportedSelected = filterSupportedMarketplaces(
+                selected,
+                productCategory,
+                categoryContext
+              ) as Marketplace[];
+              if (supportedSelected.length === 0) {
+                setPublishError(
+                  "No supported marketplaces selected for this product category."
+                );
+                setIsPublishing(false);
+                return;
+              }
+              sessionStorage.setItem(
+                "selectedMarkets",
+                JSON.stringify(supportedSelected)
+              );
               try {
                 const res = await fetch("/api/marketplaces/publish", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
                     draftId,
-                    marketplaceIds: selected,
+                    marketplaceIds: supportedSelected,
                     // Publish synchronously so we get listing IDs/URLs back
                     // for the confirmation page.
                     sync: true,

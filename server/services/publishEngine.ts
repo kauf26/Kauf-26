@@ -17,6 +17,11 @@ import {
 import { publishOne } from "./adapters";
 import type { FetchFn } from "./adapters/types";
 import { registerMarketplaceListing } from "./inventoryService";
+import {
+  extractCategoryFromDraftAttributes,
+  filterMarketplacesForProductCategory,
+  validateMarketplacesForProductCategory,
+} from "./listingService";
 
 export type MarketplaceOutcome = {
   marketplace: string;
@@ -148,11 +153,33 @@ export async function publishDraft(
   }
 
   const payload = draftToPublishPayload(draft);
-  const marketplaces = resolveMarketplaceTargets(marketplaceNames);
+  let marketplaces = resolveMarketplaceTargets(marketplaceNames);
+
+  const category = extractCategoryFromDraftAttributes(payload.attributes);
+  const categoryContext = {
+    title: payload.title,
+    description: String(payload.attributes.description ?? ""),
+  };
+
+  if (marketplaceNames == null) {
+    marketplaces = filterMarketplacesForProductCategory(
+      marketplaces,
+      category,
+      categoryContext
+    );
+  } else {
+    validateMarketplacesForProductCategory(
+      marketplaces,
+      category,
+      categoryContext
+    );
+  }
 
   if (marketplaces.length === 0) {
     throw new Error(
-      `No enabled marketplaces to publish. Enabled: ${getEnabledMarketplaceIds().join(", ")}`
+      marketplaceNames == null
+        ? `No enabled marketplaces support category "${category || "unknown"}".`
+        : `No enabled marketplaces to publish. Enabled: ${getEnabledMarketplaceIds().join(", ")}`
     );
   }
 

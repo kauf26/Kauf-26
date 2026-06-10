@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -33,6 +33,12 @@ import {
   formatScrapedMarketAverage,
   resolveProductDescription,
 } from '../../../shared/productDescription';
+import {
+  UNKNOWN_CATEGORY_WARNING,
+  evaluateMarketplaceCategorySupport,
+  filterSupportedMarketplaces,
+  isUnknownProductCategory,
+} from '../../../shared/marketplaceCategorySupport';
 
 const MOBILE_PUBLISH_PLATFORMS = new Set(['etsy', 'shopify', 'ebay']);
 
@@ -84,6 +90,7 @@ export default function HomeScreen() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [brand, setBrand] = useState('');
+  const [category, setCategory] = useState('');
   const [modelNumber, setModelNumber] = useState('');
   const [color, setColor] = useState('');
   const [material, setMaterial] = useState('');
@@ -111,6 +118,7 @@ export default function HomeScreen() {
       setTitle,
       setDescription,
       setBrand,
+      setCategory,
       setModelNumber,
       setColor,
       setMaterial,
@@ -198,9 +206,22 @@ export default function HomeScreen() {
     return id;
   };
 
+  const categoryContext = useMemo(
+    () => ({ title, description }),
+    [title, description]
+  );
+  const unknownCategory = isUnknownProductCategory(category);
+
+  useEffect(() => {
+    setSelectedMarketplaces((prev) =>
+      filterSupportedMarketplaces(prev, category, categoryContext)
+    );
+  }, [category, categoryContext]);
+
   const applyAnalyzeResult = (data: Record<string, unknown>) => {
     const nextTitle = String(data.title ?? data.modelName ?? '').trim();
     const nextBrand = String(data.brand ?? '').trim();
+    const nextCategory = String(data.category ?? data.categoryNode ?? '').trim();
     const nextModel = String(data.modelNumber ?? data.refNumber ?? '').trim();
     const nextColor = String(data.color ?? '').trim();
     const nextMaterial = String(data.material ?? '').trim();
@@ -211,6 +232,7 @@ export default function HomeScreen() {
 
     setTitle(nextTitle);
     setBrand(nextBrand);
+    setCategory(nextCategory);
     setModelNumber(nextModel);
     setColor(nextColor);
     setMaterial(nextMaterial);
@@ -310,16 +332,99 @@ export default function HomeScreen() {
   };
 
   const toggleMarketplace = (id: string) => {
+    const support = evaluateMarketplaceCategorySupport(
+      id,
+      category,
+      categoryContext
+    );
+    if (!support.supported) {
+      Alert.alert(
+        'Not supported',
+        [support.disabledReason, support.policyHint].filter(Boolean).join('\n\n')
+      );
+      return;
+    }
+
     setSelectedMarketplaces((prev) =>
-      prev.includes(id)
-        ? prev.filter((m) => m !== id)
-        : [...prev, id]
+      prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]
     );
   };
 
+  const selectAllSupported = (marketplaces: typeof MARKETPLACES) => {
+    const supported = filterSupportedMarketplaces(
+      marketplaces.map((m) => m.id),
+      category,
+      categoryContext
+    );
+    setSelectedMarketplaces((prev) => [...new Set([...prev, ...supported])]);
+  };
+
+  const renderMarketplaceChip = (
+    marketplace: (typeof MARKETPLACES)[number]
+  ) => {
+    const isSelected = selectedMarketplaces.includes(marketplace.id);
+    const support = evaluateMarketplaceCategorySupport(
+      marketplace.id,
+      category,
+      categoryContext
+    );
+    const isDisabled = !support.supported;
+
+    return (
+      <TouchableOpacity
+        key={marketplace.id}
+        style={[
+          styles.marketplaceChip,
+          isDisabled && styles.marketplaceChipDisabled,
+          isSelected &&
+            !isDisabled && {
+              backgroundColor: marketplace.color,
+              borderColor: marketplace.color,
+            },
+        ]}
+        onPress={() => toggleMarketplace(marketplace.id)}
+        disabled={isDisabled}
+      >
+        <Ionicons
+          name={(isDisabled ? 'lock-closed' : marketplace.icon) as any}
+          size={16}
+          color={isDisabled ? '#6b7280' : isSelected ? '#ffffff' : '#9ca3af'}
+        />
+        <Text
+          style={[
+            styles.marketplaceText,
+            isDisabled && styles.marketplaceTextDisabled,
+            isSelected && !isDisabled && styles.marketplaceTextSelected,
+          ]}
+        >
+          {marketplace.name}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
+  const supportedMarketplaceCount = useMemo(
+    () =>
+      filterSupportedMarketplaces(
+        selectedMarketplaces,
+        category,
+        categoryContext
+      ).length,
+    [selectedMarketplaces, category, categoryContext]
+  );
+
   const handleCreateListing = async () => {
-    if (!title || !price || selectedMarketplaces.length === 0) {
-      Alert.alert('Missing Information', 'Please fill in title, price, and select at least one marketplace.');
+    const supportedSelected = filterSupportedMarketplaces(
+      selectedMarketplaces,
+      category,
+      categoryContext
+    );
+
+    if (!title || !price || supportedSelected.length === 0) {
+      Alert.alert(
+        'Missing Information',
+        'Please fill in title, price, and select at least one supported marketplace.'
+      );
       return;
     }
 
@@ -328,7 +433,7 @@ export default function HomeScreen() {
     const errors: string[] = [];
 
     try {
-      for (const marketplace of selectedMarketplaces) {
+      for (const marketplace of supportedSelected) {
         if (MOBILE_PUBLISH_PLATFORMS.has(marketplace)) {
           const connected = await hasPlatformTokens(marketplace);
           if (!connected) {
@@ -577,66 +682,30 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          <Text style={styles.sectionLabel}>Local Marketplaces</Text>
+          {unknownCategory && (
+            <View style={styles.disclaimerBox}>
+              <Text style={styles.disclaimerText}>{UNKNOWN_CATEGORY_WARNING}</Text>
+            </View>
+          )}
+
+          <View style={styles.marketplaceSectionHeader}>
+            <Text style={styles.sectionLabel}>Local Marketplaces</Text>
+            <TouchableOpacity onPress={() => selectAllSupported(LOCAL_MARKETPLACES)}>
+              <Text style={styles.selectSupportedLink}>Select all supported</Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.marketplaces}>
-            {LOCAL_MARKETPLACES.map((marketplace) => {
-              const isSelected = selectedMarketplaces.includes(marketplace.id);
-              return (
-                <TouchableOpacity
-                  key={marketplace.id}
-                  style={[
-                    styles.marketplaceChip,
-                    isSelected && { backgroundColor: marketplace.color, borderColor: marketplace.color },
-                  ]}
-                  onPress={() => toggleMarketplace(marketplace.id)}
-                >
-                  <Ionicons
-                    name={marketplace.icon as any}
-                    size={16}
-                    color={isSelected ? '#ffffff' : '#9ca3af'}
-                  />
-                  <Text
-                    style={[
-                      styles.marketplaceText,
-                      isSelected && styles.marketplaceTextSelected,
-                    ]}
-                  >
-                    {marketplace.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+            {LOCAL_MARKETPLACES.map((marketplace) => renderMarketplaceChip(marketplace))}
           </View>
 
-          <Text style={styles.sectionLabel}>Global Marketplaces</Text>
+          <View style={styles.marketplaceSectionHeader}>
+            <Text style={styles.sectionLabel}>Global Marketplaces</Text>
+            <TouchableOpacity onPress={() => selectAllSupported(GLOBAL_MARKETPLACES)}>
+              <Text style={styles.selectSupportedLink}>Select all supported</Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.marketplaces}>
-            {GLOBAL_MARKETPLACES.map((marketplace) => {
-              const isSelected = selectedMarketplaces.includes(marketplace.id);
-              return (
-                <TouchableOpacity
-                  key={marketplace.id}
-                  style={[
-                    styles.marketplaceChip,
-                    isSelected && { backgroundColor: marketplace.color, borderColor: marketplace.color },
-                  ]}
-                  onPress={() => toggleMarketplace(marketplace.id)}
-                >
-                  <Ionicons
-                    name={marketplace.icon as any}
-                    size={16}
-                    color={isSelected ? '#ffffff' : '#9ca3af'}
-                  />
-                  <Text
-                    style={[
-                      styles.marketplaceText,
-                      isSelected && styles.marketplaceTextSelected,
-                    ]}
-                  >
-                    {marketplace.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+            {GLOBAL_MARKETPLACES.map((marketplace) => renderMarketplaceChip(marketplace))}
           </View>
         </View>
 
@@ -645,9 +714,15 @@ export default function HomeScreen() {
         </View>
 
         <TouchableOpacity
-          style={[styles.createButton, (!title || !price || selectedMarketplaces.length === 0) && styles.createButtonDisabled]}
+          style={[
+            styles.createButton,
+            (!title || !price || supportedMarketplaceCount === 0) &&
+              styles.createButtonDisabled,
+          ]}
           onPress={handleCreateListing}
-          disabled={!title || !price || selectedMarketplaces.length === 0 || isListing}
+          disabled={
+            !title || !price || supportedMarketplaceCount === 0 || isListing
+          }
         >
           {isListing ? (
             <ActivityIndicator color="#ffffff" />
@@ -871,8 +946,18 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     fontSize: 13,
     fontWeight: '600',
+  },
+  marketplaceSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 8,
     marginTop: 8,
+  },
+  selectSupportedLink: {
+    color: '#60a5fa',
+    fontSize: 11,
+    fontWeight: '600',
   },
   input: {
     backgroundColor: '#111827',
@@ -904,6 +989,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#374151',
   },
+  marketplaceChipDisabled: {
+    opacity: 0.45,
+    backgroundColor: '#111827',
+  },
   marketplaceChipSelected: {
     backgroundColor: '#3b82f6',
     borderColor: '#3b82f6',
@@ -911,6 +1000,10 @@ const styles = StyleSheet.create({
   marketplaceText: {
     color: '#9ca3af',
     fontSize: 13,
+  },
+  marketplaceTextDisabled: {
+    color: '#6b7280',
+    textDecorationLine: 'line-through',
   },
   marketplaceTextSelected: {
     color: '#ffffff',
