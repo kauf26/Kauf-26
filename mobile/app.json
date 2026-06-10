@@ -60,8 +60,7 @@
     "plugins": [
       "expo-camera",
       "expo-image-picker",
-      "expo-secure-store",
-      "expo-web-browser"
+      "expo-secure-store"
     ]
   }
 }
