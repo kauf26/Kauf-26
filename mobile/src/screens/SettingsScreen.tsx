@@ -30,9 +30,10 @@ export default function SettingsScreen() {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.subtitle}>
-          App preferences and legal information. Update legal URLs in{' '}
-          <Text style={styles.mono}>mobile/src/config/legal.ts</Text> after your backend is
-          deployed.
+          App preferences and legal information. Set{' '}
+          <Text style={styles.mono}>EXPO_PUBLIC_WEB_BASE_URL</Text> (or{' '}
+          <Text style={styles.mono}>EXPO_PUBLIC_PRIVACY_URL</Text> /{' '}
+          <Text style={styles.mono}>EXPO_PUBLIC_TERMS_URL</Text>) before production EAS builds.
         </Text>
 
         <Text style={styles.sectionHeader}>Legal</Text>

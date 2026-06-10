@@ -19,6 +19,19 @@ if (isProductionBuild() && !process.env.EXPO_PUBLIC_API_URL?.trim()) {
   );
 }
 
+const webBase = process.env.EXPO_PUBLIC_WEB_BASE_URL?.trim();
+const privacyUrl = process.env.EXPO_PUBLIC_PRIVACY_URL?.trim();
+const termsUrl = process.env.EXPO_PUBLIC_TERMS_URL?.trim();
+const hasLegalUrls = Boolean(webBase) || (Boolean(privacyUrl) && Boolean(termsUrl));
+
+if (isProductionBuild() && !hasLegalUrls) {
+  throw new Error(
+    "[Kauf26] Legal URLs are required for production builds. " +
+      "Set EXPO_PUBLIC_WEB_BASE_URL or both EXPO_PUBLIC_PRIVACY_URL and EXPO_PUBLIC_TERMS_URL. " +
+      "See mobile/MOBILE_SUBMISSION.md."
+  );
+}
+
 /** @type {import('expo/config').ExpoConfig} */
 module.exports = {
   expo: {

@@ -52,7 +52,17 @@ EXPO_PUBLIC_API_URL=https://api.yourdomain.com
 ```bash
 cd mobile
 eas secret:create --name EXPO_PUBLIC_API_URL --value https://api.yourdomain.com --type string
+eas secret:create --name EXPO_PUBLIC_WEB_BASE_URL --value https://yourdomain.com --type string
 ```
+
+**Legal URLs (required for production builds):** Set `EXPO_PUBLIC_WEB_BASE_URL` so in-app Settings links resolve to your deployed Privacy Policy and Terms pages (`/privacy`, `/terms`). Alternatively set both:
+
+```bash
+eas secret:create --name EXPO_PUBLIC_PRIVACY_URL --value https://yourdomain.com/privacy --type string
+eas secret:create --name EXPO_PUBLIC_TERMS_URL --value https://yourdomain.com/terms --type string
+```
+
+Deploy the web app first so those URLs return HTTP 200 before submitting to the stores.
 
 Optional on-device OAuth secrets (only if using legacy device token exchange):
 
@@ -64,8 +74,12 @@ eas secret:create --name EXPO_PUBLIC_SHOPIFY_CLIENT_SECRET --value YOUR_SHOPIFY_
 Validate before building:
 
 ```bash
-EXPO_PUBLIC_API_URL=https://api.yourdomain.com npm run validate:production-env
+EXPO_PUBLIC_API_URL=https://api.yourdomain.com \
+EXPO_PUBLIC_WEB_BASE_URL=https://yourdomain.com \
+npm run validate:production-env
 ```
+
+Both `EXPO_PUBLIC_API_URL` and legal URL config are enforced for production builds (`app.config.js` + `scripts/validate-production-env.js`).
 
 ## 4. Build for stores
 
@@ -131,12 +145,13 @@ Use `"track": "production"` only after internal/testing sign-off.
 
 ## 6. Store listing checklist
 
-- [ ] Privacy Policy URL (web: `https://yourdomain.com/privacy`)
-- [ ] Terms of Service URL (`https://yourdomain.com/terms`)
-- [ ] OAuth redirect: `kauf26://oauth/{etsy|ebay|shopify|amazon}` registered on server
+- [ ] Privacy Policy URL live (`EXPO_PUBLIC_WEB_BASE_URL` + `/privacy` or `EXPO_PUBLIC_PRIVACY_URL`)
+- [ ] Terms of Service URL live (`/terms` or `EXPO_PUBLIC_TERMS_URL`)
+- [ ] Set legal URL env vars **before** `eas build --profile production` (build fails if missing)
+- [ ] OAuth redirect: `kauf26://oauth/{etsy|ebay|shopify|amazon}` handled by native app
 - [ ] Server OAuth callback: `https://api.yourdomain.com/api/auth/callback`
-- [ ] App description matches **live** marketplaces (Etsy, eBay, Shopify — not all 26 unless implemented)
-- [ ] iOS Privacy Manifest (`PrivacyInfo.xcprivacy`) — separate P0 task
+- [ ] App description matches **live** marketplaces (Etsy, eBay, Shopify — see `STORE_LISTING_IOS.md` / `STORE_LISTING_ANDROID.md`)
+- [ ] iOS Privacy Manifest (`PrivacyInfo.xcprivacy`) included via prebuild plugin
 - [ ] Screenshots from production build (not Expo Go)
 
 ## 7. OAuth testing note
@@ -148,12 +163,16 @@ OAuth **requires a development or production native build** with the `kauf26://`
 | Issue | Fix |
 |-------|-----|
 | Build fails: `EXPO_PUBLIC_API_URL is required` | Set EAS secret or `.env` before `eas build --profile production` |
+| Build fails: Legal URLs required | Set `EXPO_PUBLIC_WEB_BASE_URL` or both `EXPO_PUBLIC_PRIVACY_URL` and `EXPO_PUBLIC_TERMS_URL` |
 | App hits wrong API | Rebuild after setting `EXPO_PUBLIC_API_URL`; clear app data |
 | OAuth redirect fails | Confirm `APP_BASE_URL` on server and marketplace developer redirect URIs |
 | `eas init` needs login | Run `eas login` or set `EXPO_TOKEN` |
 
 ## Related files
 
+- `DEPLOY_BACKEND.md` — production server deploy guide
+- `MANUAL_QA.md` — pre-submission test plan
+- `STORE_LISTING_IOS.md` / `STORE_LISTING_ANDROID.md` — store copy drafts
 - `mobile/app.config.js` — production env validation at build time
 - `mobile/eas.json` — build profiles (Android AAB for production)
 - `mobile/.env.example` — required env vars
