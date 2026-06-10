@@ -50,7 +50,7 @@ export default function Sales() {
   const totalFees = sales.reduce((sum, sale) => sum + parseFloat(sale.ourFee), 0);
   const netProceeds = totalRevenue - totalFees;
 
-  if (isLoading) {
+  if (isLoading || (isFetching && sales.length === 0)) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <Loader2 className="w-8 h-8 animate-spin text-primary" />

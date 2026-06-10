@@ -68,10 +68,13 @@ export default function Dashboard() {
   const [hasChanges, setHasChanges] = useState(false);
   const layoutHydratedRef = useRef(false);
 
-  const { data: sales = [] } = useSales();
-  const { data: listings = [] } = useListings();
+  const { data: sales = [], isFetching: salesFetching } = useSales();
+  const { data: listings = [], isFetching: listingsFetching } = useListings();
   const { data: productCount = 0 } = useProductDraftCount();
   const { data: savedLayout, isFetching: layoutFetching } = useDashboardLayout();
+
+  const dashboardDataLoading =
+    salesFetching || listingsFetching || layoutFetching;
 
   const saveLayoutMutation = useSaveDashboardLayout();
 
@@ -79,7 +82,7 @@ export default function Dashboard() {
     if (layoutHydratedRef.current || savedLayout === undefined) return;
     layoutHydratedRef.current = true;
 
-    if (savedLayout?.layout) {
+    if (savedLayout.layout) {
       try {
         const parsed = JSON.parse(savedLayout.layout) as LayoutItem[];
         setLayout(parsed);
@@ -87,7 +90,7 @@ export default function Dashboard() {
         setLayout(defaultLayout);
       }
     }
-  }, [savedLayout]);
+  }, [savedLayout?.layout]);
 
   const handleLayoutChange = useCallback((newLayout: LayoutItem[]) => {
     setLayout((prev) => {
@@ -246,7 +249,7 @@ export default function Dashboard() {
             </Button>
             <Button
               onClick={handleSave}
-              disabled={!hasChanges || saveLayoutMutation.isPending || layoutFetching}
+              disabled={!hasChanges || saveLayoutMutation.isPending || dashboardDataLoading}
               data-testid="button-save-layout"
             >
               <Save className="w-4 h-4 mr-2" />

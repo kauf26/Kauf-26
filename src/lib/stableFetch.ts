@@ -1,6 +1,7 @@
 /** Shared fetch dedupe + React Query defaults for dashboard data endpoints. */
 
 const inFlight = new Map<string, Promise<unknown>>();
+const resolvedCache = new Map<string, unknown>();
 
 export function fetchRetryDelay(attemptIndex: number): number {
   return Math.min(1000 * 2 ** attemptIndex, 8000);
@@ -13,16 +14,25 @@ export function shouldRetryFetch(failureCount: number, error: unknown): boolean 
   return true;
 }
 
+/** React Query options: fetch once per session, no polling, no refetch storms. */
 export const STABLE_QUERY_OPTIONS = {
-  staleTime: 5 * 60 * 1000,
-  gcTime: 10 * 60 * 1000,
-  retry: shouldRetryFetch,
+  staleTime: Infinity,
+  gcTime: Infinity,
+  retry: false,
   retryDelay: fetchRetryDelay,
   retryOnMount: false,
   refetchOnMount: false,
   refetchOnWindowFocus: false,
   refetchOnReconnect: false,
+  refetchInterval: false,
+  refetchIntervalInBackground: false,
 } as const;
+
+function isOptionalEndpointFallbackError(error: unknown): boolean {
+  if (error instanceof TypeError) return true;
+  if (!(error instanceof Error)) return false;
+  return /^(404|502|503|504):/.test(error.message);
+}
 
 async function fetchJsonOnce<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, { credentials: "include", ...init });
@@ -52,19 +62,45 @@ export async function fetchJsonDeduped<T>(
   return promise;
 }
 
-/** Returns fallback on 404 so missing routes do not trigger retry loops. */
+/**
+ * Optional dashboard endpoints (listings, sales, layout): return fallback when
+ * route is missing or backend/proxy is unavailable — never retry-loop.
+ */
+export async function fetchOptionalEndpoint<T>(
+  cacheKey: string,
+  url: string,
+  fallback: T,
+  init?: RequestInit
+): Promise<T> {
+  if (resolvedCache.has(cacheKey)) {
+    return resolvedCache.get(cacheKey) as T;
+  }
+
+  try {
+    const data = await fetchJsonDeduped<T>(cacheKey, url, init);
+    resolvedCache.set(cacheKey, data);
+    return data;
+  } catch (error) {
+    if (isOptionalEndpointFallbackError(error)) {
+      resolvedCache.set(cacheKey, fallback);
+      return fallback;
+    }
+    throw error;
+  }
+}
+
+/** @deprecated Prefer fetchOptionalEndpoint for dashboard optional routes. */
 export async function fetchJsonOrDefault<T>(
   cacheKey: string,
   url: string,
   fallback: T,
   init?: RequestInit
 ): Promise<T> {
-  try {
-    return await fetchJsonDeduped<T>(cacheKey, url, init);
-  } catch (error) {
-    if (error instanceof Error && /^404:/.test(error.message)) {
-      return fallback;
-    }
-    throw error;
-  }
+  return fetchOptionalEndpoint(cacheKey, url, fallback, init);
+}
+
+/** Clear session cache (tests only). */
+export function clearStableFetchCacheForTests(): void {
+  inFlight.clear();
+  resolvedCache.clear();
 }

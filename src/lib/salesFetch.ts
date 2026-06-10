@@ -1,4 +1,4 @@
-import { fetchJsonOrDefault } from "./stableFetch";
+import { fetchOptionalEndpoint } from "./stableFetch";
 
 export type DashboardSale = {
   id: number;
@@ -16,5 +16,5 @@ export type DashboardSale = {
 export const SALES_QUERY_KEY = ["sales"] as const;
 
 export function fetchSales(): Promise<DashboardSale[]> {
-  return fetchJsonOrDefault(SALES_QUERY_KEY.join("/"), "/api/sales", []);
+  return fetchOptionalEndpoint(SALES_QUERY_KEY.join("/"), "/api/sales", []);
 }

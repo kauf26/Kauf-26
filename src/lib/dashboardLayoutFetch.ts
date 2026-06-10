@@ -1,4 +1,4 @@
-import { fetchJsonDeduped, fetchJsonOrDefault } from "./stableFetch";
+import { fetchJsonDeduped, fetchOptionalEndpoint } from "./stableFetch";
 
 export type DashboardLayoutRecord = {
   layout: string | null;
@@ -6,11 +6,13 @@ export type DashboardLayoutRecord = {
 
 export const DASHBOARD_LAYOUT_QUERY_KEY = ["dashboardLayout"] as const;
 
+const EMPTY_LAYOUT: DashboardLayoutRecord = { layout: null };
+
 export function fetchDashboardLayout(): Promise<DashboardLayoutRecord> {
-  return fetchJsonOrDefault(
+  return fetchOptionalEndpoint(
     DASHBOARD_LAYOUT_QUERY_KEY.join("/"),
     "/api/dashboard/layout",
-    { layout: null }
+    EMPTY_LAYOUT
   );
 }
 
