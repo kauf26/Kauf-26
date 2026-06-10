@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import {
   loadListingSession,
   saveListingSession,
+  PRODUCT_LISTING_DATA_KEY,
   type ListingSession,
 } from "@/lib/pendingAnalysis";
 import InventoryQuantityCounter from "@/components/InventoryQuantityCounter";
@@ -10,6 +11,14 @@ import {
   MASTER_MARKETPLACES,
   SUPPORTED_MARKETPLACE_IDS,
 } from "@/masterMarketplaces";
+import {
+  AUTO_DESCRIPTION_DISCLAIMER,
+  LISTING_LIABILITY_DISCLAIMER,
+  PRICE_RESPONSIBILITY_HINT,
+  formatScrapedMarketAverage,
+  listingDescriptionFields,
+  resolveProductDescription,
+} from "../../shared/productDescription";
 
 export type Marketplace = (typeof SUPPORTED_MARKETPLACE_IDS)[number];
 
@@ -60,6 +69,30 @@ const MARKETPLACES = SUPPORTED_MARKETPLACE_IDS.map((id) => {
   };
 });
 
+function readListingExtras(): { modelNumber?: string } {
+  try {
+    const raw = sessionStorage.getItem(PRODUCT_LISTING_DATA_KEY);
+    if (!raw) return {};
+    const data = JSON.parse(raw) as Record<string, unknown>;
+    const modelNumber = String(data.refNumber ?? data.modelNumber ?? "").trim();
+    return modelNumber ? { modelNumber } : {};
+  } catch {
+    return {};
+  }
+}
+
+function withResolvedDescription(session: ListingSession): ListingSession {
+  const description = resolveProductDescription(
+    session.description,
+    listingDescriptionFields(session, readListingExtras())
+  );
+  return {
+    ...session,
+    description,
+    product: { ...session.product, description },
+  };
+}
+
 function getFlagEmoji(countryCode: string): string {
   if (countryCode === "GL") return "🌍";
   const iso = countryCode === "UK" ? "GB" : countryCode;
@@ -96,8 +129,9 @@ export default function SelectMarketplaces() {
   useEffect(() => {
     const loaded = loadListingSession();
     if (loaded) {
-      setDraft(loaded);
-      console.log("[SelectMarketplaces] Loaded listing:", loaded);
+      const next = withResolvedDescription(loaded);
+      setDraft(next);
+      console.log("[SelectMarketplaces] Loaded listing:", next);
     } else {
       console.warn("[SelectMarketplaces] No listing in sessionStorage");
     }
@@ -218,11 +252,32 @@ export default function SelectMarketplaces() {
         <div className="lg:col-span-2 bg-zinc-900 border border-zinc-800 rounded-lg p-6 space-y-4">
           <h2 className="text-lg font-semibold text-zinc-200">Edit Listing Details</h2>
 
-          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-zinc-400 mb-2">
-            <div>
-              <dt className="text-zinc-500">Brand</dt>
-              <dd>{draft.brand.trim() || "Not available"}</dd>
+          <div className="rounded-md border border-zinc-700 bg-zinc-950 px-3 py-2">
+            <p className="text-[11px] uppercase tracking-wide text-zinc-500">Brand</p>
+            <p className="text-base font-semibold text-zinc-100">
+              {draft.brand.trim() || "Not available"}
+            </p>
+          </div>
+
+          <div className="bg-zinc-950 border border-zinc-800 rounded p-4 space-y-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-zinc-400">
+              Scraped Valuations
+            </h3>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-zinc-500">eBay Market Avg</span>
+              <span className="font-medium text-zinc-300">
+                {formatScrapedMarketAverage(draft.product.ebayAvg)}
+              </span>
             </div>
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-zinc-500">Allegro Market Avg</span>
+              <span className="font-medium text-zinc-300">
+                {formatScrapedMarketAverage(draft.product.allegroAvg)}
+              </span>
+            </div>
+          </div>
+
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-zinc-400 mb-2">
             <div>
               <dt className="text-zinc-500">Category</dt>
               <dd>{draft.category.trim() || "Not available"}</dd>
@@ -230,22 +285,6 @@ export default function SelectMarketplaces() {
             <div>
               <dt className="text-zinc-500">Condition</dt>
               <dd>{draft.condition.trim() || "Not available"}</dd>
-            </div>
-            <div>
-              <dt className="text-zinc-500">eBay avg</dt>
-              <dd>
-                {parseFloat(draft.product.ebayAvg || "0") > 0
-                  ? `$${draft.product.ebayAvg}`
-                  : "Not available"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-zinc-500">Allegro avg</dt>
-              <dd>
-                {parseFloat(draft.product.allegroAvg || "0") > 0
-                  ? `$${draft.product.allegroAvg}`
-                  : "Not available"}
-              </dd>
             </div>
             <div className="col-span-2">
               <dt className="text-zinc-500">Exact match</dt>
@@ -264,7 +303,7 @@ export default function SelectMarketplaces() {
           </div>
 
           <div className="space-y-1">
-            <label className="text-xs text-zinc-500">Your Price (USD)</label>
+            <label className="text-xs text-zinc-500">Set Your Price (USD)</label>
             <input
               type="text"
               value={
@@ -278,6 +317,7 @@ export default function SelectMarketplaces() {
               }
               className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-700"
             />
+            <p className="text-[11px] text-zinc-500">{PRICE_RESPONSIBILITY_HINT}</p>
             {parseFloat(draft.price || "0") <= 0 && (
               <p className="text-xs text-amber-400/90">
                 Price not available — enter a price before publishing.
@@ -287,11 +327,17 @@ export default function SelectMarketplaces() {
 
           <div className="space-y-1">
             <label className="text-xs text-zinc-500">Description</label>
+            <div
+              className="rounded-md border border-amber-700/50 bg-amber-950/40 px-3 py-2 text-xs text-amber-200/90"
+              role="note"
+            >
+              {AUTO_DESCRIPTION_DISCLAIMER}
+            </div>
             <textarea
               rows={6}
               value={draft.description || ""}
               onChange={(e) => updateField("description", e.target.value)}
-              placeholder="Description from identification (exact or generic)…"
+              placeholder="Auto-generated description — review and edit before publishing"
               className="w-full bg-zinc-950 border border-zinc-800 rounded px-3 py-2 text-sm text-zinc-200 focus:outline-none focus:border-zinc-700 resize-none"
             />
           </div>
@@ -312,6 +358,13 @@ export default function SelectMarketplaces() {
               <span>🌐</span> International Channels
             </div>
             {renderMarketList(GLOBAL_MARKETS)}
+          </div>
+
+          <div
+            className="rounded-md border border-amber-700/50 bg-amber-950/40 px-3 py-2 text-xs text-amber-200/90"
+            role="note"
+          >
+            {LISTING_LIABILITY_DISCLAIMER}
           </div>
 
           <button

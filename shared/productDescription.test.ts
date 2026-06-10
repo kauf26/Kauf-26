@@ -1,8 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   AUTO_DESCRIPTION_DISCLAIMER,
+  LISTING_LIABILITY_DISCLAIMER,
   buildAutoProductDescription,
+  formatScrapedMarketAverage,
   isPlaceholderOrEmptyDescription,
+  listingDescriptionFields,
   resolveProductDescription,
 } from "./productDescription";
 
@@ -23,7 +26,31 @@ describe("productDescription", () => {
     expect(text).toContain("Model: Submariner 116610");
     expect(text).toContain("Color: black/silver");
     expect(text).toContain("Material: stainless steel");
-    expect(text).toContain("Please review and edit for accuracy.");
+    expect(text).toContain("Auto-generated – please review and edit for accuracy.");
+  });
+
+  it("formatScrapedMarketAverage formats or shows Not available", () => {
+    expect(formatScrapedMarketAverage("12.5")).toBe("$12.50");
+    expect(formatScrapedMarketAverage("0")).toBe("Not available");
+  });
+
+  it("listingDescriptionFields merges draft and extras", () => {
+    const fields = listingDescriptionFields(
+      {
+        brand: "Rolex",
+        condition: "Used",
+        material: "steel",
+        product: { color: "black" },
+      },
+      { modelNumber: "116610" }
+    );
+    expect(fields.brand).toBe("Rolex");
+    expect(fields.modelNumber).toBe("116610");
+    expect(fields.color).toBe("black");
+  });
+
+  it("LISTING_LIABILITY_DISCLAIMER is defined", () => {
+    expect(LISTING_LIABILITY_DISCLAIMER).toContain("your responsibility");
   });
 
   it("resolveProductDescription keeps non-empty scrape text", () => {

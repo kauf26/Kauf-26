@@ -1,6 +1,12 @@
 export const AUTO_DESCRIPTION_DISCLAIMER =
   "⚠️ Auto-generated description – please review carefully. You are solely responsible for the accuracy of all listing information.";
 
+export const LISTING_LIABILITY_DISCLAIMER =
+  "⚠️ All listing information, including price, description, and images, is your responsibility. Please verify accuracy before publishing. We are not liable for errors in auto-generated content.";
+
+export const PRICE_RESPONSIBILITY_HINT =
+  "You are responsible for setting the final price.";
+
 export type ProductDescriptionFields = {
   brand?: string;
   modelNumber?: string;
@@ -50,10 +56,10 @@ export function buildAutoProductDescription(
   }
 
   if (segments.length === 0) {
-    return "Please review and edit this listing description for accuracy.";
+    return "Auto-generated – please review and edit for accuracy.";
   }
 
-  return `${segments.join(" | ")}. Please review and edit for accuracy.`;
+  return `${segments.join(" | ")}. Auto-generated – please review and edit for accuracy.`;
 }
 
 /** Keep user/scrape text when present; otherwise synthesize from attributes. */
@@ -65,4 +71,45 @@ export function resolveProductDescription(
     return String(existing).trim();
   }
   return buildAutoProductDescription(fields);
+}
+
+/** Format scraped marketplace average for display. */
+export function formatScrapedMarketAverage(
+  value: string | number | undefined | null
+): string {
+  const n = typeof value === "number" ? value : parseFloat(String(value ?? "0"));
+  return Number.isFinite(n) && n > 0 ? `$${n.toFixed(2)}` : "Not available";
+}
+
+export type ListingDraftLike = {
+  brand?: string;
+  condition?: string;
+  title?: string;
+  description?: string;
+  material?: string;
+  color?: string;
+  product?: {
+    brand?: string;
+    condition?: string;
+    material?: string;
+    color?: string;
+    ebayAvg?: string;
+    allegroAvg?: string;
+  };
+};
+
+/** Build description field inputs from a listing session / draft object. */
+export function listingDescriptionFields(
+  draft: ListingDraftLike,
+  extras?: { modelNumber?: string }
+): ProductDescriptionFields {
+  return {
+    brand: draft.brand ?? draft.product?.brand,
+    modelNumber: extras?.modelNumber,
+    color: draft.color ?? draft.product?.color,
+    material: draft.material ?? draft.product?.material,
+    condition: draft.condition ?? draft.product?.condition,
+    title: draft.title,
+    existingDescription: draft.description,
+  };
 }

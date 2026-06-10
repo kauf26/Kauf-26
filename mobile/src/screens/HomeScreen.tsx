@@ -28,6 +28,9 @@ import {
 import { resetMobileListingFlow } from '../services/resetListingFlow';
 import {
   AUTO_DESCRIPTION_DISCLAIMER,
+  LISTING_LIABILITY_DISCLAIMER,
+  PRICE_RESPONSIBILITY_HINT,
+  formatScrapedMarketAverage,
   resolveProductDescription,
 } from '../../../shared/productDescription';
 
@@ -85,6 +88,8 @@ export default function HomeScreen() {
   const [color, setColor] = useState('');
   const [material, setMaterial] = useState('');
   const [price, setPrice] = useState('');
+  const [ebayAverage, setEbayAverage] = useState('');
+  const [allegroAverage, setAllegroAverage] = useState('');
   const [condition, setCondition] = useState<'new' | 'used'>('new');
   const [selectedMarketplaces, setSelectedMarketplaces] = useState<string[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -110,6 +115,8 @@ export default function HomeScreen() {
       setColor,
       setMaterial,
       setPrice,
+      setEbayAverage,
+      setAllegroAverage,
       setCondition,
       setSelectedMarketplaces,
       setIsAnalyzing,
@@ -224,6 +231,14 @@ export default function HomeScreen() {
     if (suggested != null && String(suggested).trim() !== '') {
       setPrice(String(suggested));
     }
+
+    const marketPrices = data.marketPrices as Record<string, unknown> | undefined;
+    const ebay =
+      data.ebayAvg ?? data.ebayAverage ?? marketPrices?.ebayAvg;
+    const allegro =
+      data.allegroAvg ?? data.allegroAverage ?? marketPrices?.allegroAvg;
+    setEbayAverage(ebay != null ? String(ebay) : '');
+    setAllegroAverage(allegro != null ? String(allegro) : '');
   };
 
   const analyzeImage = async (base64: string) => {
@@ -437,21 +452,35 @@ export default function HomeScreen() {
         )}
 
         <View style={styles.form}>
+          <Text style={styles.sectionHeading}>Edit Listing Details</Text>
+
+          <View style={styles.brandDisplay}>
+            <Text style={styles.brandLabel}>Brand</Text>
+            <Text style={styles.brandValue}>{brand.trim() || 'Not available'}</Text>
+          </View>
+
+          <View style={styles.valuationsBox}>
+            <Text style={styles.valuationsTitle}>Scraped Valuations</Text>
+            <View style={styles.valuationRow}>
+              <Text style={styles.valuationLabel}>eBay Market Avg</Text>
+              <Text style={styles.valuationValue}>
+                {formatScrapedMarketAverage(ebayAverage)}
+              </Text>
+            </View>
+            <View style={styles.valuationRow}>
+              <Text style={styles.valuationLabel}>Allegro Market Avg</Text>
+              <Text style={styles.valuationValue}>
+                {formatScrapedMarketAverage(allegroAverage)}
+              </Text>
+            </View>
+          </View>
+
           <Text style={styles.label}>Product Title</Text>
           <TextInput
             style={styles.input}
             value={title}
             onChangeText={setTitle}
             placeholder="Enter product title"
-            placeholderTextColor="#6b7280"
-          />
-
-          <Text style={styles.label}>Brand</Text>
-          <TextInput
-            style={styles.input}
-            value={brand}
-            onChangeText={setBrand}
-            placeholder="e.g. Rolex, Nike"
             placeholderTextColor="#6b7280"
           />
 
@@ -501,7 +530,7 @@ export default function HomeScreen() {
             numberOfLines={4}
           />
 
-          <Text style={styles.label}>Your Price (USD)</Text>
+          <Text style={styles.label}>Set Your Price (USD)</Text>
           <TextInput
             style={styles.input}
             value={price}
@@ -510,6 +539,7 @@ export default function HomeScreen() {
             placeholderTextColor="#6b7280"
             keyboardType="decimal-pad"
           />
+          <Text style={styles.helperText}>{PRICE_RESPONSIBILITY_HINT}</Text>
 
           <Text style={styles.label}>Condition</Text>
           <View style={styles.conditionContainer}>
@@ -608,6 +638,10 @@ export default function HomeScreen() {
               );
             })}
           </View>
+        </View>
+
+        <View style={styles.disclaimerBox}>
+          <Text style={styles.disclaimerText}>{LISTING_LIABILITY_DISCLAIMER}</Text>
         </View>
 
         <TouchableOpacity
@@ -742,6 +776,70 @@ const styles = StyleSheet.create({
   },
   form: {
     marginBottom: 20,
+  },
+  sectionHeading: {
+    color: '#e5e7eb',
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  brandDisplay: {
+    backgroundColor: '#030712',
+    borderWidth: 1,
+    borderColor: '#374151',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+  brandLabel: {
+    color: '#6b7280',
+    fontSize: 11,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  brandValue: {
+    color: '#f3f4f6',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  valuationsBox: {
+    backgroundColor: '#030712',
+    borderWidth: 1,
+    borderColor: '#1f2937',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+    gap: 8,
+  },
+  valuationsTitle: {
+    color: '#9ca3af',
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  valuationRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  valuationLabel: {
+    color: '#6b7280',
+    fontSize: 14,
+  },
+  valuationValue: {
+    color: '#d1d5db',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  helperText: {
+    color: '#6b7280',
+    fontSize: 11,
+    marginTop: -8,
+    marginBottom: 16,
   },
   label: {
     color: '#ffffff',

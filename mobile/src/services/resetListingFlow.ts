@@ -10,6 +10,8 @@ export type MobileListingResetState = {
   setColor: (value: string) => void;
   setMaterial: (value: string) => void;
   setPrice: (value: string) => void;
+  setEbayAverage: (value: string) => void;
+  setAllegroAverage: (value: string) => void;
   setCondition: (value: 'new' | 'used') => void;
   setSelectedMarketplaces: (value: string[]) => void;
   setIsAnalyzing: (value: boolean) => void;
@@ -29,6 +31,8 @@ export function resetMobileListingFlow(state: MobileListingResetState): void {
   state.setColor('');
   state.setMaterial('');
   state.setPrice('');
+  state.setEbayAverage('');
+  state.setAllegroAverage('');
   state.setCondition('new');
   state.setSelectedMarketplaces([]);
   state.setIsAnalyzing(false);
