@@ -9,7 +9,7 @@ import Welcome from "./Welcome";
 import ProductDraftPage from "./pages/ProductDraft";
 import SelectMarketPlaces from "./SelectMarketPlaces";
 import Dashboard from "./pages/dashboard";
-import Inventory from "./pages/inventory";
+import SoldProductsPage from "./pages/sold-products";
 import Listings from "./pages/listings";
 import Sales from "./pages/sales";
 import Tools from "./pages/tools";
@@ -45,8 +45,8 @@ function App() {
               <Route path="/identification-results" component={IdentificationResultsPage} />
               <Route path="/dashboard" component={Dashboard} />
               <Route path="/dashboard/shipping" component={ShippingLabelsPage} />
+              <Route path="/sold-products" component={SoldProductsPage} />
               <Route path="/analytics/depop" component={DepopAnalyticsPage} />
-              <Route path="/inventory" component={Inventory} />
               <Route path="/listings" component={Listings} />
               <Route path="/sales" component={Sales} />
               <Route path="/tools" component={Tools} />

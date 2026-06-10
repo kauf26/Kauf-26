@@ -1,4 +1,4 @@
-import { fetchLiveEndpoint, fetchOptionalEndpoint } from "./stableFetch";
+import { fetchLiveEndpoint, fetchOptionalEndpoint, waitForBackendReady } from "./stableFetch";
 import type {
   FulfillmentStatus,
   PaymentStatus,
@@ -87,6 +87,13 @@ export async function updateSaleStatus(
   return data;
 }
 
+export {
+  getPrintLabelBlockReason,
+  getShippingRatesBlockReason,
+  isShippingAddressComplete,
+  isShippingWeightValid,
+} from "../../shared/shippingValidation";
+
 export type ShippingAddress = {
   name?: string;
   line1?: string;
@@ -153,6 +160,7 @@ export type ShippingRateRequest = {
 export async function fetchShippingRates(
   input: ShippingRateRequest
 ): Promise<ShippingRatesResponse> {
+  await waitForBackendReady();
   const res = await fetch("/api/shipping/rates", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -168,12 +176,14 @@ export async function fetchShippingRates(
 }
 
 export async function generateShippingLabel(input: {
-  saleId: number;
+  saleId?: number;
   fromAddress: ShippingAddress;
   toAddress: ShippingAddress;
   packageDetails: { weightLbs: number; lengthIn: number; widthIn: number; heightIn: number };
   service: string;
-}): Promise<{ labelPdfUrl: string; trackingNumber: string }> {
+  rateId?: string;
+}): Promise<{ labelPdfUrl: string; labelUrl: string; trackingNumber: string }> {
+  await waitForBackendReady();
   const res = await fetch("/api/shipping/label", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -182,12 +192,15 @@ export async function generateShippingLabel(input: {
   });
   const data = (await res.json()) as {
     labelPdfUrl?: string;
+    labelUrl?: string;
     trackingNumber?: string;
     error?: string;
   };
   if (!res.ok) throw new Error(data.error ?? "Failed to generate label");
+  const url = data.labelPdfUrl ?? data.labelUrl ?? "";
   return {
-    labelPdfUrl: data.labelPdfUrl ?? "",
+    labelPdfUrl: url,
+    labelUrl: url,
     trackingNumber: data.trackingNumber ?? "1Z9999999999",
   };
 }

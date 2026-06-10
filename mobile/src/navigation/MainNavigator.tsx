@@ -3,6 +3,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import HomeScreen from '../screens/HomeScreen';
 import ListingsScreen from '../screens/ListingsScreen';
+import SoldProductsScreen from '../screens/SoldProductsScreen';
 import SalesScreen from '../screens/SalesScreen';
 import ConnectionsScreen from '../screens/ConnectionsScreen';
 import ToolsScreen from '../screens/ToolsScreen';
@@ -20,6 +21,8 @@ export default function MainNavigator() {
             iconName = focused ? 'home' : 'home-outline';
           } else if (route.name === 'Listings') {
             iconName = focused ? 'list' : 'list-outline';
+          } else if (route.name === 'SoldProducts') {
+            iconName = focused ? 'cube' : 'cube-outline';
           } else if (route.name === 'Sales') {
             iconName = focused ? 'cash' : 'cash-outline';
           } else if (route.name === 'Connections') {
@@ -60,6 +63,11 @@ export default function MainNavigator() {
         name="Listings" 
         component={ListingsScreen}
         options={{ title: 'My Listings' }}
+      />
+      <Tab.Screen
+        name="SoldProducts"
+        component={SoldProductsScreen}
+        options={{ title: 'Sold Products' }}
       />
       <Tab.Screen 
         name="Sales" 

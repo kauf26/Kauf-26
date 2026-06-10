@@ -21,6 +21,7 @@ import {
   type SaleStatusFilter,
   type SaleTimelineFilter,
 } from "../../shared/saleStatus";
+import AppTabNav from "@/components/AppTabNav";
 import {
   Loader2,
   DollarSign,
@@ -127,6 +128,8 @@ export default function Sales() {
   return (
     <div className="min-h-screen bg-background">
       <div className="container max-w-6xl mx-auto py-8 px-4">
+        <AppTabNav />
+
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
             <DollarSign className="w-8 h-8 text-primary" />

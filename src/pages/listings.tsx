@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import AppTabNav from "@/components/AppTabNav";
 import { useProducts } from "@/hooks/use-products";
 import type { ListingProduct } from "@/lib/productsFetch";
 import { Loader2, Package, AlertCircle } from "lucide-react";
@@ -57,6 +58,7 @@ export default function Listings() {
 
   return (
     <div className="container mx-auto py-8">
+      <AppTabNav />
       <h1 className="text-3xl font-bold mb-8">Your Listings</h1>
       <div className="grid gap-6">
         {products.length === 0 ? (

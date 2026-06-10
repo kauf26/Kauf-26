@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,8 @@ import {
   fetchShippingRates,
   formatRateLabel,
   generateShippingLabel,
+  getPrintLabelBlockReason,
+  getShippingRatesBlockReason,
   markShippingLabelCreated,
   parseBuyerAddress,
   type MobileSale,
@@ -52,8 +54,42 @@ export default function ShippingLabelScreen({ sale, onClose, onComplete }: Props
     setToAddress(parseBuyerAddress(sale.buyerInfo));
   }, [sale.id, sale.buyerInfo]);
 
+  const ratesBlockReason = useMemo(
+    () =>
+      getShippingRatesBlockReason({
+        fromAddress,
+        toAddress,
+        weightLbs,
+        weightOz,
+      }),
+    [fromAddress, toAddress, weightLbs, weightOz]
+  );
+
+  const printBlockReason = useMemo(
+    () =>
+      getPrintLabelBlockReason({
+        fromAddress,
+        toAddress,
+        weightLbs,
+        weightOz,
+        selectedRateId,
+        selectedService,
+      }),
+    [fromAddress, toAddress, weightLbs, weightOz, selectedRateId, selectedService]
+  );
+
+  const canGetRates = ratesBlockReason == null;
+  const canPrintLabel = printBlockReason == null;
+
   const handleGetRates = async () => {
+    if (ratesBlockReason) {
+      Alert.alert('Missing details', ratesBlockReason);
+      return;
+    }
     setLoadingRates(true);
+    setRates([]);
+    setSelectedRateId('');
+    setSelectedService('');
     try {
       const result = await fetchShippingRates({
         fromAddress,
@@ -81,8 +117,8 @@ export default function ShippingLabelScreen({ sale, onClose, onComplete }: Props
   };
 
   const handleGenerate = async () => {
-    if (!selectedService) {
-      Alert.alert('Select a service', 'Get rates and choose a shipping option.');
+    if (printBlockReason) {
+      Alert.alert('Cannot print label', printBlockReason);
       return;
     }
     setGenerating(true);
@@ -98,9 +134,14 @@ export default function ShippingLabelScreen({ sale, onClose, onComplete }: Props
           heightIn: parseFloat(heightIn) || 10,
         },
         service: selectedService || rates.find((r) => r.rateId === selectedRateId)?.service || '',
+        rateId: selectedRateId,
       });
-      await markShippingLabelCreated(sale.id);
-      setLabelUrl(result.labelPdfUrl);
+      try {
+        await markShippingLabelCreated(sale.id);
+      } catch {
+        /* label still generated in mock-only mode */
+      }
+      setLabelUrl(result.labelUrl);
       setTrackingNumber(result.trackingNumber);
       Alert.alert('Label ready', `Tracking ${result.trackingNumber}`);
       onComplete();
@@ -114,6 +155,8 @@ export default function ShippingLabelScreen({ sale, onClose, onComplete }: Props
   const updateTo = (key: keyof ShippingAddress, value: string) => {
     setToAddress((prev) => ({ ...prev, [key]: value }));
   };
+
+  const helperText = printBlockReason ?? ratesBlockReason;
 
   return (
     <View style={styles.container}>
@@ -143,7 +186,13 @@ export default function ShippingLabelScreen({ sale, onClose, onComplete }: Props
           <TextInput style={[styles.input, styles.weightInput]} value={heightIn} onChangeText={setHeightIn} keyboardType="decimal-pad" placeholder="H" placeholderTextColor="#6b7280" />
         </View>
 
-        <TouchableOpacity style={styles.secondaryButton} onPress={handleGetRates} disabled={loadingRates}>
+        {helperText ? <Text style={styles.helperText}>{helperText}</Text> : null}
+
+        <TouchableOpacity
+          style={[styles.secondaryButton, (!canGetRates || loadingRates) && styles.buttonDisabled]}
+          onPress={handleGetRates}
+          disabled={loadingRates || !canGetRates}
+        >
           {loadingRates ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Get Rates</Text>}
         </TouchableOpacity>
 
@@ -171,7 +220,11 @@ export default function ShippingLabelScreen({ sale, onClose, onComplete }: Props
           </TouchableOpacity>
         ))}
 
-        <TouchableOpacity style={styles.primaryButton} onPress={handleGenerate} disabled={generating}>
+        <TouchableOpacity
+          style={[styles.primaryButton, (!canPrintLabel || generating) && styles.buttonDisabled]}
+          onPress={handleGenerate}
+          disabled={generating || !canPrintLabel}
+        >
           {generating ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Print Label</Text>}
         </TouchableOpacity>
 
@@ -217,7 +270,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8,
   },
+  buttonDisabled: { opacity: 0.45 },
   buttonText: { color: '#fff', fontWeight: '600' },
+  helperText: { color: '#fbbf24', fontSize: 13, lineHeight: 18 },
   shipDateNote: { color: '#93c5fd', fontSize: 13, marginTop: 4 },
   deliveryDisclaimer: { color: '#6b7280', fontSize: 11, lineHeight: 16 },
   rateRow: {

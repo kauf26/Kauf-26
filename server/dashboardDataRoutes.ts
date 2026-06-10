@@ -12,9 +12,25 @@ import {
   type FulfillmentStatus,
   type PaymentStatus,
 } from "../shared/saleStatus";
-import { desc, eq } from "drizzle-orm";
+import type { SoldProductsResponse } from "../shared/soldProducts";
+import { desc, eq, ne, or, sql } from "drizzle-orm";
 
 const router = express.Router();
+
+/** Sales that count as sold: payment completed or any fulfillment progress. */
+const soldSalesFilter = or(
+  eq(sales.paymentStatus, "completed"),
+  ne(sales.fulfillmentStatus, "not_shipped")
+);
+
+function productThumbnail(
+  imageUrl: string | null | undefined,
+  additionalImages: string[] | null | undefined
+): string | null {
+  if (imageUrl?.trim()) return imageUrl.trim();
+  const first = additionalImages?.find((url) => typeof url === "string" && url.trim());
+  return first?.trim() ?? null;
+}
 
 function serializeSale(row: {
   id: number;
@@ -121,6 +137,69 @@ router.get("/sales", async (_req, res) => {
   } catch (error) {
     console.error("[KAUF26] Error fetching sales:", error);
     return res.status(500).json({ error: "Failed to fetch sales" });
+  }
+});
+
+router.get("/sales/products", async (req, res) => {
+  try {
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
+    const offset = (page - 1) * limit;
+
+    const [countRow] = await db
+      .select({
+        total: sql<number>`cast(count(distinct ${products.id}) as int)`,
+      })
+      .from(sales)
+      .innerJoin(listings, eq(sales.listingId, listings.id))
+      .innerJoin(products, eq(listings.productId, products.id))
+      .where(soldSalesFilter);
+
+    const rows = await db
+      .select({
+        id: products.id,
+        title: products.name,
+        imageUrl: products.imageUrl,
+        additionalImages: products.additionalImages,
+        totalQuantitySold: sql<number>`cast(count(${sales.id}) as int)`,
+        totalRevenue: sql<string>`cast(coalesce(sum(${sales.saleAmount}), 0) as text)`,
+        mostRecentSaleDate: sql<Date>`max(${sales.saleDate})`,
+      })
+      .from(sales)
+      .innerJoin(listings, eq(sales.listingId, listings.id))
+      .innerJoin(products, eq(listings.productId, products.id))
+      .where(soldSalesFilter)
+      .groupBy(
+        products.id,
+        products.name,
+        products.imageUrl,
+        products.additionalImages
+      )
+      .orderBy(desc(sql`max(${sales.saleDate})`))
+      .limit(limit)
+      .offset(offset);
+
+    const totalSoldProducts = Number(countRow?.total ?? 0);
+    const payload: SoldProductsResponse = {
+      totalSoldProducts: Number.isFinite(totalSoldProducts) ? totalSoldProducts : 0,
+      products: rows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        thumbnail: productThumbnail(row.imageUrl, row.additionalImages),
+        total_quantity_sold: Number(row.totalQuantitySold ?? 0),
+        total_revenue: String(row.totalRevenue ?? "0"),
+        most_recent_sale_date:
+          row.mostRecentSaleDate?.toString?.() ?? String(row.mostRecentSaleDate ?? ""),
+      })),
+      page,
+      limit,
+      hasMore: offset + rows.length < totalSoldProducts,
+    };
+
+    return res.status(200).json(payload);
+  } catch (error) {
+    console.error("[KAUF26] Error fetching sold products:", error);
+    return res.status(500).json({ error: "Failed to fetch sold products" });
   }
 });
 

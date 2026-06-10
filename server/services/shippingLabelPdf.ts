@@ -27,12 +27,7 @@ export async function ensureLabelsDir(): Promise<void> {
 }
 
 export function publicLabelUrl(filename: string): string {
-  const base = (
-    process.env.APP_BASE_URL ||
-    process.env.CLIENT_URL ||
-    `http://localhost:${process.env.PORT ?? 3000}`
-  ).replace(/\/$/, "");
-  return `${base}/uploads/labels/${filename}`;
+  return `/uploads/labels/${filename}`;
 }
 
 export { mockShippingRates } from "./shippingRatesService";

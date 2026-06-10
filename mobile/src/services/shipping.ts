@@ -1,10 +1,17 @@
 import { API_BASE_URL } from './config';
-
-import { API_BASE_URL } from './config';
 import type {
   FulfillmentStatus,
   PaymentStatus,
 } from '../../../shared/saleStatus';
+import {
+  getPrintLabelBlockReason,
+  getShippingRatesBlockReason,
+} from '../../../shared/shippingValidation';
+
+export {
+  getPrintLabelBlockReason,
+  getShippingRatesBlockReason,
+} from '../../../shared/shippingValidation';
 
 export type MobileSale = {
   id: number;
@@ -146,12 +153,13 @@ export async function fetchShippingRates(
 }
 
 export async function generateShippingLabel(input: {
-  saleId: number;
+  saleId?: number;
   fromAddress: ShippingAddress;
   toAddress: ShippingAddress;
   packageDetails: { weightLbs: number; lengthIn: number; widthIn: number; heightIn: number };
   service: string;
-}): Promise<{ labelPdfUrl: string; trackingNumber: string }> {
+  rateId?: string;
+}): Promise<{ labelPdfUrl: string; labelUrl: string; trackingNumber: string }> {
   const res = await fetch(`${API_BASE_URL}/api/shipping/label`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -159,12 +167,15 @@ export async function generateShippingLabel(input: {
   });
   const data = (await res.json()) as {
     labelPdfUrl?: string;
+    labelUrl?: string;
     trackingNumber?: string;
     error?: string;
   };
   if (!res.ok) throw new Error(data.error ?? 'Failed to generate label');
+  const url = data.labelPdfUrl ?? data.labelUrl ?? '';
   return {
-    labelPdfUrl: data.labelPdfUrl ?? '',
+    labelPdfUrl: url.startsWith('http') ? url : `${API_BASE_URL}${url}`,
+    labelUrl: url.startsWith('http') ? url : `${API_BASE_URL}${url}`,
     trackingNumber: data.trackingNumber ?? '1Z9999999999',
   };
 }

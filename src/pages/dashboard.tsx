@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { useProductDraft } from "@/ProductDraftContext";
 import { resetListingFlow } from "@/lib/resetListingFlow";
-import { useProductDraftCount } from "@/hooks/use-product-draft-count";
 import { useSales } from "@/hooks/use-sales";
 import { useListings } from "@/hooks/use-listings";
+import AppTabNav from "@/components/AppTabNav";
 import {
   useDashboardLayout,
   useSaveDashboardLayout,
@@ -20,7 +20,6 @@ import {
   TrendingUp,
   Clock,
   CheckCircle2,
-  Package,
   Globe,
   Save,
   RotateCcw
@@ -42,19 +41,23 @@ const defaultLayout: LayoutItem[] = [
   { i: "revenue", x: 0, y: 0, w: 4, h: 2, minW: 2, minH: 2 },
   { i: "sales", x: 4, y: 0, w: 4, h: 2, minW: 2, minH: 2 },
   { i: "fees", x: 8, y: 0, w: 4, h: 2, minW: 2, minH: 2 },
-  { i: "netproceeds", x: 0, y: 2, w: 4, h: 2, minW: 2, minH: 2 },
-  { i: "products", x: 4, y: 2, w: 4, h: 2, minW: 2, minH: 2 },
-  { i: "listings", x: 8, y: 2, w: 4, h: 2, minW: 2, minH: 2 },
+  { i: "netproceeds", x: 0, y: 2, w: 6, h: 2, minW: 2, minH: 2 },
+  { i: "listings", x: 6, y: 2, w: 6, h: 2, minW: 2, minH: 2 },
   { i: "marketplaces", x: 0, y: 4, w: 6, h: 3, minW: 3, minH: 2 },
   { i: "recent", x: 6, y: 4, w: 6, h: 3, minW: 3, minH: 2 },
 ];
+
+const REMOVED_WIDGETS = new Set(["products"]);
+
+function sanitizeDashboardLayout(layout: LayoutItem[]): LayoutItem[] {
+  return layout.filter((item) => !REMOVED_WIDGETS.has(item.i));
+}
 
 const widgetInfo: Record<string, { title: string; icon: React.ReactNode; color: string }> = {
   revenue: { title: "Gross Sales", icon: <DollarSign className="w-5 h-5" />, color: "text-blue-500" },
   sales: { title: "Total Sales", icon: <ShoppingBag className="w-5 h-5" />, color: "text-purple-500" },
   fees: { title: "Service Fees (2%)", icon: <TrendingUp className="w-5 h-5" />, color: "text-orange-500" },
   netproceeds: { title: "Net Proceeds", icon: <CheckCircle2 className="w-5 h-5" />, color: "text-green-500" },
-  products: { title: "Products", icon: <Package className="w-5 h-5" />, color: "text-cyan-500" },
   listings: { title: "Active Listings", icon: <Globe className="w-5 h-5" />, color: "text-indigo-500" },
   marketplaces: { title: "Marketplace Breakdown", icon: <Globe className="w-5 h-5" />, color: "text-primary" },
   recent: { title: "Recent Activity", icon: <Clock className="w-5 h-5" />, color: "text-primary" },
@@ -74,12 +77,10 @@ export default function Dashboard() {
 
   const { data: sales = [], isFetching: salesFetching } = useSales();
   const { data: listings = [], isFetching: listingsFetching } = useListings();
-  const { data: productCount = 0, isFetching: productCountFetching } =
-    useProductDraftCount();
   const { data: savedLayout, isFetching: layoutFetching } = useDashboardLayout();
 
   const dashboardDataLoading =
-    salesFetching || listingsFetching || layoutFetching || productCountFetching;
+    salesFetching || listingsFetching || layoutFetching;
 
   const saveLayoutMutation = useSaveDashboardLayout();
 
@@ -89,8 +90,10 @@ export default function Dashboard() {
 
     if (savedLayout.layout) {
       try {
-        const parsed = JSON.parse(savedLayout.layout) as LayoutItem[];
-        setLayout(parsed);
+        const parsed = sanitizeDashboardLayout(
+          JSON.parse(savedLayout.layout) as LayoutItem[]
+        );
+        setLayout(parsed.length > 0 ? parsed : defaultLayout);
       } catch {
         setLayout(defaultLayout);
       }
@@ -175,15 +178,6 @@ export default function Dashboard() {
             <p className="text-sm text-muted-foreground mt-2">Your earnings</p>
           </div>
         );
-      case "products":
-        return (
-          <div className="text-center">
-            <div className={`text-4xl font-bold ${info.color}`}>
-              {productCountFetching ? "…" : productCount}
-            </div>
-            <p className="text-sm text-muted-foreground mt-2">Unique product drafts</p>
-          </div>
-        );
       case "listings":
         return (
           <div className="text-center">
@@ -235,6 +229,8 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-background">
       <div className="container max-w-7xl mx-auto py-8 px-4">
+        <AppTabNav />
+
         <div className="flex items-center justify-between mb-8">
           <div>
             <div className="flex items-center gap-3 mb-2">

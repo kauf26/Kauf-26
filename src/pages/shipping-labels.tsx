@@ -11,6 +11,8 @@ import {
   fetchShippingRates,
   formatRateLabel,
   generateShippingLabel,
+  getPrintLabelBlockReason,
+  getShippingRatesBlockReason,
   markShippingLabelCreated,
   parseBuyerAddress,
   type ShippingAddress,
@@ -111,7 +113,38 @@ export default function ShippingLabelsPage() {
     setToAddress(parseBuyerAddress(selectedSale.buyerInfo));
   }, [selectedSale?.id, selectedSale?.buyerInfo]);
 
+  const ratesBlockReason = useMemo(
+    () =>
+      getShippingRatesBlockReason({
+        fromAddress,
+        toAddress,
+        weightLbs,
+        weightOz,
+      }),
+    [fromAddress, toAddress, weightLbs, weightOz]
+  );
+
+  const printBlockReason = useMemo(
+    () =>
+      getPrintLabelBlockReason({
+        fromAddress,
+        toAddress,
+        weightLbs,
+        weightOz,
+        selectedRateId,
+        selectedService,
+      }),
+    [fromAddress, toAddress, weightLbs, weightOz, selectedRateId, selectedService]
+  );
+
+  const canGetRates = ratesBlockReason == null;
+  const canPrintLabel = printBlockReason == null;
+
   const handleGetRates = async () => {
+    if (ratesBlockReason) {
+      toast({ title: "Missing details", description: ratesBlockReason, variant: "destructive" });
+      return;
+    }
     setIsLoadingRates(true);
     setRates([]);
     setRatesMeta(null);
@@ -151,20 +184,18 @@ export default function ShippingLabelsPage() {
   };
 
   const handleGenerate = async () => {
+    if (printBlockReason) {
+      toast({ title: "Cannot print label", description: printBlockReason, variant: "destructive" });
+      return;
+    }
+
     const saleId = Number(selectedSaleId);
-    if (!Number.isFinite(saleId)) {
-      toast({ title: "Select a sale", variant: "destructive" });
-      return;
-    }
-    if (!selectedService) {
-      toast({ title: "Select a shipping service", variant: "destructive" });
-      return;
-    }
+    const hasSale = Number.isFinite(saleId) && saleId > 0;
 
     setIsGenerating(true);
     try {
       const result = await generateShippingLabel({
-        saleId,
+        ...(hasSale ? { saleId } : {}),
         fromAddress,
         toAddress,
         packageDetails: {
@@ -174,8 +205,11 @@ export default function ShippingLabelsPage() {
           heightIn: parseFloat(heightIn) || 10,
         },
         service: selectedService || rates.find((r) => r.rateId === selectedRateId)?.service || "",
+        rateId: selectedRateId,
       });
-      await markShippingLabelCreated(saleId);
+      if (hasSale) {
+        await markShippingLabelCreated(saleId);
+      }
       setLabelUrl(result.labelPdfUrl);
       setTrackingNumber(result.trackingNumber);
       toast({ title: "Label generated", description: `Tracking ${result.trackingNumber}` });
@@ -279,15 +313,28 @@ export default function ShippingLabelsPage() {
           </CardContent>
         </Card>
 
-        <div className="flex flex-wrap gap-3">
-          <Button onClick={handleGetRates} disabled={isLoadingRates}>
+        <div className="flex flex-wrap gap-3 items-center">
+          <Button
+            onClick={handleGetRates}
+            disabled={isLoadingRates || !canGetRates}
+            title={ratesBlockReason ?? undefined}
+          >
             {isLoadingRates ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
             Get Rates
           </Button>
-          <Button onClick={handleGenerate} disabled={isGenerating || !selectedSaleId}>
+          <Button
+            onClick={handleGenerate}
+            disabled={isGenerating || !canPrintLabel}
+            title={printBlockReason ?? undefined}
+          >
             {isGenerating ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Printer className="w-4 h-4 mr-2" />}
             Print Label
           </Button>
+          {ratesBlockReason ? (
+            <p className="text-sm text-muted-foreground">{ratesBlockReason}</p>
+          ) : printBlockReason ? (
+            <p className="text-sm text-muted-foreground">{printBlockReason}</p>
+          ) : null}
         </div>
 
         {rates.length > 0 && (
@@ -359,9 +406,21 @@ export default function ShippingLabelsPage() {
                   Tracking: <span className="font-mono text-foreground">{trackingNumber}</span>
                 </p>
               )}
+              <div className="rounded-md border overflow-hidden bg-muted/30">
+                <object
+                  data={labelUrl}
+                  type="application/pdf"
+                  className="w-full h-[420px]"
+                  aria-label="Shipping label preview"
+                >
+                  <p className="p-4 text-sm text-muted-foreground">
+                    PDF preview unavailable in this browser.
+                  </p>
+                </object>
+              </div>
               <div className="flex gap-3">
                 <Button asChild>
-                  <a href={labelUrl} target="_blank" rel="noopener noreferrer">
+                  <a href={labelUrl} target="_blank" rel="noopener noreferrer" download>
                     Download PDF
                   </a>
                 </Button>
