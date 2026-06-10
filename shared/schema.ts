@@ -176,6 +176,33 @@ export const marketplaceAuth = pgTable(
   ]
 );
 
+/** Universal OAuth connections — encrypted tokens per user + provider. */
+export const marketplaceConnections = pgTable(
+  "marketplace_connections",
+  {
+    id: serial("id").primaryKey(),
+    userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    encryptedPayload: text("encrypted_payload").notNull(),
+    iv: text("iv").notNull(),
+    authTag: text("auth_tag").notNull(),
+    tokenExpiresAt: timestamp("token_expires_at"),
+    scope: text("scope"),
+    marketplaceShopId: text("marketplace_shop_id"),
+    shopDomain: text("shop_domain"),
+    accountLabel: text("account_label"),
+    connected: boolean("connected").notNull().default(true),
+    createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+    updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  },
+  (table) => [
+    uniqueIndex("marketplace_connections_user_provider_unique").on(
+      table.userId,
+      table.provider
+    ),
+  ]
+);
+
 export const dashboardLayouts = pgTable("dashboard_layouts", {
 id: serial("id").primaryKey(),
 userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),

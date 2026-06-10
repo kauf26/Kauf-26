@@ -1,26 +1,26 @@
 /**
- * Server-side OAuth connect for Etsy, eBay, and Shopify.
- * Opens the backend authorize URL; tokens are encrypted in marketplace_auth.
+ * Server-side universal OAuth connect for Etsy, eBay, Shopify, and Amazon.
  */
 import * as WebBrowser from 'expo-web-browser';
 import { API_BASE_URL } from './config';
 
 export type ServerOAuthConnection = {
   marketplace: string;
+  provider?: string;
   configured: boolean;
   connected: boolean;
   accountLabel: string | null;
   shopDomain: string | null;
 };
 
-const SERVER_OAUTH_IDS = new Set(['etsy', 'ebay', 'shopify']);
+const SERVER_OAUTH_IDS = new Set(['etsy', 'ebay', 'shopify', 'amazon']);
 
 export function usesServerOAuth(marketplaceId: string): boolean {
   return SERVER_OAUTH_IDS.has(marketplaceId);
 }
 
 export async function fetchServerOAuthConnections(): Promise<ServerOAuthConnection[]> {
-  const res = await fetch(`${API_BASE_URL}/api/oauth/connections`);
+  const res = await fetch(`${API_BASE_URL}/api/auth/connections`);
   if (!res.ok) {
     throw new Error('Failed to load server OAuth connections');
   }
@@ -36,12 +36,12 @@ export async function connectMarketplaceViaServer(
     throw new Error(`${marketplaceId} does not use server OAuth`);
   }
 
-  const params = new URLSearchParams({ returnTo: 'mobile' });
+  const params = new URLSearchParams({ returnTo: 'mobile', redirect: '1' });
   if (options?.shopDomain?.trim()) {
     params.set('shop', options.shopDomain.trim());
   }
 
-  const authUrl = `${API_BASE_URL}/api/oauth/${marketplaceId}/authorize?${params.toString()}`;
+  const authUrl = `${API_BASE_URL}/api/auth/${marketplaceId}/url?${params.toString()}`;
   const redirectUrl = `kauf26://oauth/${marketplaceId}`;
 
   const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
@@ -64,8 +64,8 @@ export async function connectMarketplaceViaServer(
 }
 
 export async function disconnectMarketplaceViaServer(marketplaceId: string): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/api/oauth/${marketplaceId}`, {
-    method: 'DELETE',
+  const res = await fetch(`${API_BASE_URL}/api/auth/${marketplaceId}/revoke`, {
+    method: 'POST',
   });
   if (!res.ok) {
     throw new Error('Failed to disconnect');

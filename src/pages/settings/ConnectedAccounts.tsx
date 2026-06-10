@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 
 type OAuthConnection = {
   marketplace: string;
+  provider?: string;
   configured: boolean;
   connected: boolean;
   accountLabel: string | null;
@@ -18,12 +19,14 @@ const PLATFORM_LABELS: Record<string, string> = {
   etsy: "Etsy",
   ebay: "eBay",
   shopify: "Shopify",
+  amazon: "Amazon",
 };
 
 const PLATFORM_COLORS: Record<string, string> = {
   etsy: "text-orange-300",
   ebay: "text-yellow-400",
   shopify: "text-green-400",
+  amazon: "text-amber-400",
 };
 
 export default function ConnectedAccounts() {
@@ -32,14 +35,19 @@ export default function ConnectedAccounts() {
   const [loading, setLoading] = useState(true);
   const [shopDomain, setShopDomain] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [mockMode, setMockMode] = useState(false);
 
   const loadConnections = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/oauth/connections", { credentials: "include" });
+      const res = await fetch("/api/auth/connections", { credentials: "include" });
       if (!res.ok) throw new Error("Failed to load connections");
-      const data = (await res.json()) as { connections?: OAuthConnection[] };
+      const data = (await res.json()) as {
+        connections?: OAuthConnection[];
+        mockMode?: boolean;
+      };
       setConnections(data.connections ?? []);
+      setMockMode(Boolean(data.mockMode));
     } catch (error) {
       toast({
         title: "Could not load connections",
@@ -86,19 +94,16 @@ export default function ConnectedAccounts() {
       return;
     }
 
-    const params = new URLSearchParams({ returnTo: "web" });
+    const params = new URLSearchParams({ returnTo: "web", redirect: "1" });
     if (marketplace === "shopify") {
       params.set("shop", shopDomain.trim());
     }
 
-    const popup = window.open(
-      `/api/oauth/${marketplace}/authorize?${params.toString()}`,
-      `${marketplace}-oauth`,
-      "width=520,height=720"
-    );
+    const authStartUrl = `/api/auth/${marketplace}/url?${params.toString()}`;
+    const popup = window.open(authStartUrl, `${marketplace}-oauth`, "width=520,height=720");
 
     if (!popup) {
-      window.location.href = `/api/oauth/${marketplace}/authorize?${params.toString()}`;
+      window.location.href = authStartUrl;
       return;
     }
 
@@ -113,12 +118,15 @@ export default function ConnectedAccounts() {
   const disconnect = async (marketplace: string) => {
     setBusy(marketplace);
     try {
-      const res = await fetch(`/api/oauth/${marketplace}`, {
-        method: "DELETE",
+      const res = await fetch(`/api/auth/${marketplace}/revoke`, {
+        method: "POST",
         credentials: "include",
       });
       if (!res.ok) throw new Error("Disconnect failed");
-      toast({ title: "Disconnected", description: `${PLATFORM_LABELS[marketplace] ?? marketplace} unlinked.` });
+      toast({
+        title: "Disconnected",
+        description: `${PLATFORM_LABELS[marketplace] ?? marketplace} unlinked.`,
+      });
       await loadConnections();
     } catch (error) {
       toast({
@@ -144,10 +152,12 @@ export default function ConnectedAccounts() {
     <div className="mb-8 space-y-4">
       <div>
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-1">
-          OAuth Connections
+          Connected Accounts
         </h2>
         <p className="text-sm text-muted-foreground">
-          Connect Etsy, eBay, and Shopify with one click. Tokens are encrypted on the server and never shown in the UI.
+          Connect Etsy, eBay, Shopify, and Amazon. Tokens are encrypted on the server and never
+          shown in the UI.
+          {mockMode ? " Mock OAuth mode is enabled for development." : null}
         </p>
       </div>
 
@@ -161,7 +171,8 @@ export default function ConnectedAccounts() {
           <CardContent className="space-y-3">
             {!conn.configured ? (
               <p className="text-sm text-muted-foreground">
-                Server OAuth is not configured. Add client credentials to `.env` and restart the backend.
+                Server OAuth is not configured. Add client credentials to `.env` and restart the
+                backend.
               </p>
             ) : conn.connected ? (
               <p className="text-sm text-muted-foreground">
@@ -186,7 +197,7 @@ export default function ConnectedAccounts() {
 
             <div className="flex flex-wrap gap-2">
               <Button
-                onClick={() => openConnect(conn.marketplace)}
+                onClick={() => void openConnect(conn.marketplace)}
                 disabled={!conn.configured || conn.connected || busy === conn.marketplace}
               >
                 <Link2 className="w-4 h-4 mr-2" />

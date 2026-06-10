@@ -29,6 +29,7 @@ import { productRoutes } from "./productsRoutes";
 import { dashboardDataRoutes } from "./dashboardDataRoutes";
 import { shippingRoutes } from "./shippingRoutes";
 import { marketplaceOAuthRoutes } from "./marketplaceOAuthRoutes";
+import { registerMarketplaceAuthRoutes } from "./authMarketplaceRoutes";
 import { LABELS_DIR, ensureLabelsDir } from "./services/shippingLabelService";
 import marketplaceRoutes from "./marketplaceRoutes";
 import inventoryRoutes from "./inventoryRoutes";
@@ -1399,7 +1400,9 @@ const server = createServer(app);
 (async () => {
  await setupAuth(app);
  registerAuthRoutes(app);
- // OAuth routes need session middleware (PKCE state, returnTo)
+ // Universal marketplace OAuth (Etsy, eBay, Shopify, Amazon)
+ registerMarketplaceAuthRoutes(app);
+ // Legacy /api/oauth/* routes (backward compatible)
  app.use("/api/oauth", marketplaceOAuthRoutes);
  app.use("/api/onboarding", onboardingRoutes);
 
@@ -1419,7 +1422,10 @@ const server = createServer(app);
    console.log(`   - POST /api/catalog/scrape (JSON { query } → masterScraper)`);
    console.log(`   - GET  /api/health`);
    console.log(`   - GET  /api/marketplaces/oauth-config (mobile OAuth metadata)`);
-   console.log(`   - GET  /api/oauth/connections (Etsy/eBay/Shopify server OAuth)`);
+   console.log(`   - GET  /api/auth/:provider/url (universal OAuth)`);
+   console.log(`   - GET  /api/auth/callback (unified OAuth callback)`);
+   console.log(`   - POST /api/auth/:provider/revoke`);
+   console.log(`   - GET  /api/oauth/connections (legacy)`);
    console.log(`   - GET  /api/etsy/verify`);
    console.log(`   - GET  /api/shopify/verify`);
    console.log(`   - GET  /api/ebay/verify`);
