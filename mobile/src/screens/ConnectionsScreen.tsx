@@ -22,7 +22,7 @@ import {
   saveOnboardingProfile,
   type OnboardingProfile,
 } from '../services/onboardingProfile';
-import { loadProviderRegistry, nonOAuthStatusMessage } from '../services/providerRegistry';
+import { loadProviderRegistry, nonOAuthStatusMessage, authMethodLabel, MARKETPLACE_COUNT } from '../services/providerRegistry';
 import {
   connectMarketplaceViaServer,
   disconnectMarketplaceViaServer,
@@ -231,11 +231,10 @@ export default function ConnectionsScreen() {
     await refresh();
   };
 
-  const oauthProviders = providers.filter((p) => p.oauthSupported);
-  const otherProviders = providers.filter((p) => !p.oauthSupported);
+  const configuredCount = providers.filter((p) => p.configured).length;
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.hero}>
           <Ionicons name="flash" size={22} color="#3b82f6" />
@@ -313,17 +312,10 @@ export default function ConnectionsScreen() {
           )}
         </View>
 
-        <Text style={styles.groupTitle}>OAuth marketplaces ({oauthProviders.length})</Text>
-        {oauthProviders.map((p) => renderProviderCard(p))}
-
-        {otherProviders.length > 0 && (
-          <>
-            <Text style={[styles.groupTitle, { marginTop: 8 }]}>
-              Partnership / API key ({otherProviders.length})
-            </Text>
-            {otherProviders.map((p) => renderProviderCard(p))}
-          </>
-        )}
+        <Text style={styles.groupTitle}>
+          Marketplaces ({providers.length || MARKETPLACE_COUNT}) · {configuredCount} configured
+        </Text>
+        {providers.map((p) => renderProviderCard(p))}
 
         <Text style={styles.footerNote}>
           {Platform.OS === 'ios'
@@ -344,16 +336,26 @@ export default function ConnectionsScreen() {
     return (
       <View key={p.id} style={styles.card}>
         <View style={styles.cardHeader}>
-          <Text style={[styles.cardTitle, { color: p.color }]}>{p.name}</Text>
-          <Text style={isConnected ? styles.badgeOk : styles.badgeOff}>
-            {!p.oauthSupported
-              ? 'N/A'
-              : isConnected
-                ? 'Connected'
-                : p.configured
-                  ? 'Not connected'
-                  : 'Not configured'}
-          </Text>
+          <View style={styles.cardTitleWrap}>
+            <Text style={[styles.cardTitle, { color: p.color }]}>{p.name}</Text>
+            {p.country ? (
+              <Text style={styles.cardCountry}>{p.country}</Text>
+            ) : null}
+          </View>
+          <View style={styles.badgeColumn}>
+            <Text style={styles.authTypeBadge}>{authMethodLabel(p.authMethod)}</Text>
+            <Text style={isConnected ? styles.badgeOk : styles.badgeOff}>
+              {!p.oauthSupported
+                ? p.configured
+                  ? 'Configured'
+                  : 'Not configured'
+                : isConnected
+                  ? 'Connected'
+                  : p.configured
+                    ? 'Not connected'
+                    : 'Not configured'}
+            </Text>
+          </View>
         </View>
         {st?.message ? <Text style={styles.message}>{st.message}</Text> : null}
 
@@ -446,7 +448,7 @@ export default function ConnectionsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0a0f' },
-  content: { padding: 16, paddingBottom: 32 },
+  content: { padding: 16, paddingBottom: 24 },
   hero: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   heroTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
   subtitle: { color: '#9ca3af', fontSize: 14, lineHeight: 20, marginBottom: 16 },
@@ -490,8 +492,22 @@ const styles = StyleSheet.create({
     borderColor: '#1f2937',
     marginBottom: 12,
   },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  cardTitle: { fontSize: 16, fontWeight: '700', flex: 1, marginRight: 8 },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  cardTitleWrap: { flex: 1, marginRight: 8 },
+  cardTitle: { fontSize: 16, fontWeight: '700' },
+  cardCountry: { color: '#6b7280', fontSize: 11, marginTop: 2 },
+  badgeColumn: { alignItems: 'flex-end', gap: 4 },
+  authTypeBadge: {
+    color: '#9ca3af',
+    fontSize: 10,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
   badgeOk: { color: '#10b981', fontSize: 11, fontWeight: '600' },
   badgeOff: { color: '#f87171', fontSize: 11, fontWeight: '600' },
   message: { color: '#d1d5db', fontSize: 12, marginTop: 6 },

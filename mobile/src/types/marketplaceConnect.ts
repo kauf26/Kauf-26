@@ -24,9 +24,12 @@ export type ProviderDisplayMeta = {
   color: string;
   oauthSupported: boolean;
   oauthFlow?: MarketplaceOAuthFlow;
+  /** How this marketplace authenticates — matches web MASTER_MARKETPLACES.apiMethod */
+  authMethod: 'oauth' | 'api_key' | 'partnership';
   configured: boolean;
   requiresShopDomain?: boolean;
   requiresSiteUrl?: boolean;
   requiresBaseUrl?: boolean;
   notes?: string;
+  country?: string;
 };

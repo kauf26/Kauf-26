@@ -116,7 +116,7 @@ export default function SettingsScreen() {
         <View style={styles.card}>
           <TouchableOpacity
             style={styles.linkRow}
-            onPress={() => navigation.getParent()?.navigate('Login')}
+            onPress={() => navigation.getParent()?.getParent()?.navigate('Login')}
           >
             <Ionicons name="log-in-outline" size={20} color="#3b82f6" />
             <View style={styles.linkTextWrap}>
@@ -169,16 +169,72 @@ export default function SettingsScreen() {
           </View>
         </View>
 
-        <Text style={styles.sectionHeader}>Inventory</Text>
+        <Text style={styles.sectionHeader}>Inventory & tools</Text>
         <View style={styles.card}>
           <TouchableOpacity
             style={styles.linkRow}
-            onPress={() => navigation.navigate('Inventory')}
+            onPress={() => navigation.getParent()?.navigate('Inventory')}
           >
             <Ionicons name="layers-outline" size={20} color="#3b82f6" />
             <View style={styles.linkTextWrap}>
               <Text style={styles.linkTitle}>Manage inventory</Text>
               <Text style={styles.linkHint}>View and update draft stock quantities</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#6b7280" />
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
+          <TouchableOpacity
+            style={styles.linkRow}
+            onPress={() => navigation.navigate('Tools')}
+          >
+            <Ionicons name="construct-outline" size={20} color="#3b82f6" />
+            <View style={styles.linkTextWrap}>
+              <Text style={styles.linkTitle}>Tools</Text>
+              <Text style={styles.linkHint}>Currency converter, shipping calculator, and more</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#6b7280" />
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
+          <TouchableOpacity
+            style={styles.linkRow}
+            onPress={() => navigation.navigate('UploadProduct')}
+          >
+            <Ionicons name="cloud-upload-outline" size={20} color="#3b82f6" />
+            <View style={styles.linkTextWrap}>
+              <Text style={styles.linkTitle}>Upload product</Text>
+              <Text style={styles.linkHint}>Manual product upload flow</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#6b7280" />
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
+          <TouchableOpacity
+            style={styles.linkRow}
+            onPress={() => navigation.navigate('Sales')}
+          >
+            <Ionicons name="cash-outline" size={20} color="#3b82f6" />
+            <View style={styles.linkTextWrap}>
+              <Text style={styles.linkTitle}>Sales & fees</Text>
+              <Text style={styles.linkHint}>Track sales and marketplace fees</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#6b7280" />
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
+          <TouchableOpacity
+            style={styles.linkRow}
+            onPress={() => navigation.navigate('SoldProducts')}
+          >
+            <Ionicons name="cube-outline" size={20} color="#3b82f6" />
+            <View style={styles.linkTextWrap}>
+              <Text style={styles.linkTitle}>Sold products</Text>
+              <Text style={styles.linkHint}>View completed sales history</Text>
             </View>
             <Ionicons name="chevron-forward" size={18} color="#6b7280" />
           </TouchableOpacity>

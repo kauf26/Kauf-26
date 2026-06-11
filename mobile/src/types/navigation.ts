@@ -31,6 +31,14 @@ export type HomeStackParamList = {
   Inventory: { draftId?: number };
 };
 
+export type SettingsStackParamList = {
+  SettingsMain: undefined;
+  Tools: undefined;
+  Sales: undefined;
+  SoldProducts: undefined;
+  UploadProduct: undefined;
+};
+
 export type RootStackParamList = {
   Main: NavigatorScreenParams<MainTabParamList>;
   Login: undefined;
@@ -38,12 +46,8 @@ export type RootStackParamList = {
 
 export type MainTabParamList = {
   Home: NavigatorScreenParams<HomeStackParamList>;
-  Upload: undefined;
+  Connections: undefined;
   Listings: undefined;
   Inventory: { draftId?: number } | undefined;
-  SoldProducts: undefined;
-  Sales: undefined;
-  Connections: undefined;
-  Settings: undefined;
-  Tools: undefined;
+  Settings: NavigatorScreenParams<SettingsStackParamList>;
 };

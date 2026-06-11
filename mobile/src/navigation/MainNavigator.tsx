@@ -2,47 +2,32 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import HomeStackNavigator from './HomeStackNavigator';
-import HomeScreen from '../screens/HomeScreen';
 import ListingsScreen from '../screens/ListingsScreen';
 import InventoryScreen from '../screens/InventoryScreen';
-import SoldProductsScreen from '../screens/SoldProductsScreen';
-import SalesScreen from '../screens/SalesScreen';
 import ConnectionsScreen from '../screens/ConnectionsScreen';
-import SettingsScreen from '../screens/SettingsScreen';
-import ToolsScreen from '../screens/ToolsScreen';
+import SettingsStackNavigator from './SettingsStackNavigator';
 import type { MainTabParamList } from '../types/navigation';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
+type TabIconName = keyof typeof Ionicons.glyphMap;
+
+const TAB_ICONS: Record<keyof MainTabParamList, { focused: TabIconName; default: TabIconName }> = {
+  Home: { focused: 'home', default: 'home-outline' },
+  Connections: { focused: 'link', default: 'link-outline' },
+  Listings: { focused: 'list', default: 'list-outline' },
+  Inventory: { focused: 'layers', default: 'layers-outline' },
+  Settings: { focused: 'settings', default: 'settings-outline' },
+};
+
 export default function MainNavigator() {
   return (
     <Tab.Navigator
+      initialRouteName="Home"
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
-          let iconName: keyof typeof Ionicons.glyphMap;
-
-          if (route.name === 'Home') {
-            iconName = focused ? 'camera' : 'camera-outline';
-          } else if (route.name === 'Upload') {
-            iconName = focused ? 'cloud-upload' : 'cloud-upload-outline';
-          } else if (route.name === 'Listings') {
-            iconName = focused ? 'list' : 'list-outline';
-          } else if (route.name === 'Inventory') {
-            iconName = focused ? 'layers' : 'layers-outline';
-          } else if (route.name === 'SoldProducts') {
-            iconName = focused ? 'cube' : 'cube-outline';
-          } else if (route.name === 'Sales') {
-            iconName = focused ? 'cash' : 'cash-outline';
-          } else if (route.name === 'Connections') {
-            iconName = focused ? 'link' : 'link-outline';
-          } else if (route.name === 'Settings') {
-            iconName = focused ? 'settings' : 'settings-outline';
-          } else if (route.name === 'Tools') {
-            iconName = focused ? 'construct' : 'construct-outline';
-          } else {
-            iconName = 'ellipse';
-          }
-
+          const icons = TAB_ICONS[route.name as keyof MainTabParamList];
+          const iconName = focused ? icons.focused : icons.default;
           return <Ionicons name={iconName} size={size} color={color} />;
         },
         tabBarActiveTintColor: '#3b82f6',
@@ -53,6 +38,10 @@ export default function MainNavigator() {
           paddingBottom: 5,
           paddingTop: 5,
           height: 60,
+        },
+        tabBarLabelStyle: {
+          fontSize: 11,
+          fontWeight: '600',
         },
         headerStyle: {
           backgroundColor: '#111827',
@@ -67,32 +56,7 @@ export default function MainNavigator() {
       <Tab.Screen
         name="Home"
         component={HomeStackNavigator}
-        options={{ title: 'Identify', headerShown: false }}
-      />
-      <Tab.Screen
-        name="Upload"
-        component={HomeScreen}
-        options={{ title: 'Upload Product' }}
-      />
-      <Tab.Screen 
-        name="Listings" 
-        component={ListingsScreen}
-        options={{ title: 'My Listings' }}
-      />
-      <Tab.Screen
-        name="Inventory"
-        component={InventoryScreen}
-        options={{ title: 'Inventory' }}
-      />
-      <Tab.Screen
-        name="SoldProducts"
-        component={SoldProductsScreen}
-        options={{ title: 'Sold Products' }}
-      />
-      <Tab.Screen 
-        name="Sales" 
-        component={SalesScreen}
-        options={{ title: 'Sales & Fees' }}
+        options={{ title: 'Home', headerShown: false }}
       />
       <Tab.Screen
         name="Connections"
@@ -100,14 +64,19 @@ export default function MainNavigator() {
         options={{ title: 'Connections' }}
       />
       <Tab.Screen
-        name="Settings"
-        component={SettingsScreen}
-        options={{ title: 'Settings' }}
+        name="Listings"
+        component={ListingsScreen}
+        options={{ title: 'Listings' }}
       />
-      <Tab.Screen 
-        name="Tools" 
-        component={ToolsScreen}
-        options={{ title: 'Tools' }}
+      <Tab.Screen
+        name="Inventory"
+        component={InventoryScreen}
+        options={{ title: 'Inventory' }}
+      />
+      <Tab.Screen
+        name="Settings"
+        component={SettingsStackNavigator}
+        options={{ title: 'Settings', headerShown: false }}
       />
     </Tab.Navigator>
   );

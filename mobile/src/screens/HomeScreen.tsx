@@ -144,8 +144,7 @@ export default function HomeScreen() {
 
   const startFreshListing = useCallback(() => {
     resetListingForm();
-    navigation.navigate('Upload');
-  }, [navigation, resetListingForm]);
+  }, [resetListingForm]);
 
   useFocusEffect(
     useCallback(() => {
