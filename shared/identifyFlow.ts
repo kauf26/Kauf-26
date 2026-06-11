@@ -19,6 +19,8 @@ export type IdentifyFlowResponse = {
   matchType?: string;
   priceReliable?: boolean;
   product?: IdentifyFlowProduct;
+  message?: string;
+  verificationWarning?: string | null;
 };
 
 export function isExactMatchResult(result: IdentifyFlowResponse): boolean {
@@ -48,7 +50,7 @@ export function shouldProceedToDraft(result: IdentifyFlowResponse): boolean {
 }
 
 export function resolveVerificationMessage(
-  result: IdentifyFlowResponse & { message?: string; verificationWarning?: string | null }
+  result: IdentifyFlowResponse
 ): string | null {
   if (result.verificationWarning?.trim()) return result.verificationWarning.trim();
   if (result.requiresManualReview && result.message?.trim()) return result.message.trim();

@@ -22,6 +22,11 @@ import {
   filterMarketplacesForProductCategory,
   validateMarketplacesForProductCategory,
 } from "./listingService";
+import { isInternationalChannelMarketplace } from "../../shared/marketplaceChannels";
+import {
+  getMarketplaceListingLanguage,
+  translateListingTextFields,
+} from "./translationService";
 
 export type MarketplaceOutcome = {
   marketplace: string;
@@ -52,7 +57,43 @@ export type PublishDraftOptions = {
   sync?: boolean;
   createJob?: boolean;
   fetchImpl?: FetchFn;
+  /** When true (default), translate title/description for international channel marketplaces. */
+  translateInternational?: boolean;
 };
+
+async function buildTranslatedPayloadForMarketplace(
+  base: DraftPublishPayload,
+  marketplaceId: string
+): Promise<DraftPublishPayload> {
+  if (!isInternationalChannelMarketplace(marketplaceId)) return base;
+
+  const targetLang = getMarketplaceListingLanguage(marketplaceId);
+  if (!targetLang || targetLang === "en") return base;
+
+  const description = String(
+    base.attributes.aiDescription ?? base.attributes.description ?? ""
+  ).trim();
+
+  const translated = await translateListingTextFields(
+    { title: base.title, description },
+    { targetLang }
+  );
+
+  if (!translated.applied) return base;
+
+  const nextDescription =
+    translated.listing.description ?? description;
+
+  return {
+    ...base,
+    title: translated.listing.title ?? base.title,
+    attributes: {
+      ...base.attributes,
+      aiDescription: nextDescription,
+      description: nextDescription,
+    },
+  };
+}
 
 async function loadDraft(draftId: number) {
   const [draft] = await db
@@ -65,11 +106,17 @@ async function loadDraft(draftId: number) {
 export async function publishToMarketplacesParallel(
   draft: DraftPublishPayload,
   marketplaceIds: string[],
-  fetchImpl?: FetchFn
+  fetchImpl?: FetchFn,
+  options?: Pick<PublishDraftOptions, "translateInternational">
 ): Promise<MarketplaceOutcome[]> {
+  const translateInternational = options?.translateInternational !== false;
   const settled = await Promise.allSettled(
     marketplaceIds.map(async (marketplace) => {
-      const result = await publishOne(marketplace, draft, fetchImpl);
+      const payload =
+        translateInternational
+          ? await buildTranslatedPayloadForMarketplace(draft, marketplace)
+          : draft;
+      const result = await publishOne(marketplace, payload, fetchImpl);
       return {
         marketplace,
         success: result.success,
@@ -194,7 +241,8 @@ export async function publishDraft(
     outcomes = await publishToMarketplacesParallel(
       payload,
       marketplaces,
-      options.fetchImpl
+      options.fetchImpl,
+      { translateInternational: options.translateInternational }
     );
 
     if (jobId != null) {

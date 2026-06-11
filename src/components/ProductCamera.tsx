@@ -759,6 +759,7 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
         checked={autoTranslate}
         onCheckedChange={onToggleAutoTranslate}
         disabled={isLoading}
+        className="border-t-2 border-[#1F2937] pt-4"
       />
 
       <canvas ref={canvasRef} className="hidden" />

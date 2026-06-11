@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -7,36 +7,80 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Alert,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { HomeStackParamList } from '../types/identify';
 import { API_BASE_URL } from '../services/config';
 import { DEFAULT_IDENTIFY_MARKETPLACES } from '../services/identifyApi';
+import {
+  getTranslateInternationalEnabled,
+  setTranslateInternationalEnabled,
+} from '../services/translationPrefs';
+import {
+  isUsChannelMarketplace,
+  MARKETPLACE_CHANNEL_REGION,
+} from '../../../shared/marketplaceChannels';
 
 type Props = StackScreenProps<HomeStackParamList, 'SelectMarketplaces'>;
 
-const MARKETPLACE_OPTIONS = [
-  { id: 'ebay', label: 'eBay' },
-  { id: 'etsy', label: 'Etsy' },
-  { id: 'amazon', label: 'Amazon' },
-  { id: 'shopify', label: 'Shopify' },
-  { id: 'depop', label: 'Depop' },
-  { id: 'poshmark', label: 'Poshmark' },
-] as const;
+function formatMarketplaceLabel(id: string): string {
+  return id
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
+const ALL_MARKETPLACE_IDS = Object.keys(MARKETPLACE_CHANNEL_REGION);
+const US_MARKETS = ALL_MARKETPLACE_IDS.filter((id) => isUsChannelMarketplace(id)).map((id) => ({
+  id,
+  label: formatMarketplaceLabel(id),
+}));
+const GLOBAL_MARKETS = ALL_MARKETPLACE_IDS.filter(
+  (id) => !isUsChannelMarketplace(id)
+).map((id) => ({
+  id,
+  label: formatMarketplaceLabel(id),
+}));
 
 export default function SelectMarketplacesScreen({ route, navigation }: Props) {
   const { draftId, listing } = route.params;
   const [selected, setSelected] = useState<string[]>([...DEFAULT_IDENTIFY_MARKETPLACES]);
+  const [translateInternational, setTranslateInternational] = useState(true);
   const [publishing, setPublishing] = useState(false);
 
+  useEffect(() => {
+    void getTranslateInternationalEnabled().then(setTranslateInternational);
+  }, []);
+
   const selectedSet = useMemo(() => new Set(selected), [selected]);
+
+  const onToggleTranslateInternational = (value: boolean) => {
+    setTranslateInternational(value);
+    void setTranslateInternationalEnabled(value);
+  };
 
   const toggleMarketplace = (id: string) => {
     setSelected((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
     );
   };
+
+  const renderMarketList = (markets: { id: string; label: string }[]) =>
+    markets.map((marketplace) => {
+      const active = selectedSet.has(marketplace.id);
+      return (
+        <TouchableOpacity
+          key={marketplace.id}
+          style={[styles.row, active && styles.rowActive]}
+          onPress={() => toggleMarketplace(marketplace.id)}
+        >
+          <Text style={styles.rowLabel}>{marketplace.label}</Text>
+          <Text style={styles.rowState}>{active ? 'Selected' : 'Tap to select'}</Text>
+        </TouchableOpacity>
+      );
+    });
 
   const handlePublish = async () => {
     if (selected.length === 0) {
@@ -54,7 +98,8 @@ export default function SelectMarketplacesScreen({ route, navigation }: Props) {
         },
         body: JSON.stringify({
           draftId,
-          marketplaces: selected,
+          marketplaceIds: selected,
+          translateInternational,
           listing,
         }),
       });
@@ -89,20 +134,27 @@ export default function SelectMarketplacesScreen({ route, navigation }: Props) {
           Choose where to publish &quot;{listing.title || 'your product'}&quot;.
         </Text>
 
-        <View style={styles.card}>
-          {MARKETPLACE_OPTIONS.map((marketplace) => {
-            const active = selectedSet.has(marketplace.id);
-            return (
-              <TouchableOpacity
-                key={marketplace.id}
-                style={[styles.row, active && styles.rowActive]}
-                onPress={() => toggleMarketplace(marketplace.id)}
-              >
-                <Text style={styles.rowLabel}>{marketplace.label}</Text>
-                <Text style={styles.rowState}>{active ? 'Selected' : 'Tap to select'}</Text>
-              </TouchableOpacity>
-            );
-          })}
+        <View style={styles.section}>
+          <Text style={styles.sectionHeader}>🇺🇸 US-Based Marketplaces</Text>
+          <View style={styles.card}>{renderMarketList(US_MARKETS)}</View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionHeader}>🌐 International Channels</Text>
+          <View style={styles.translateRow}>
+            <Text style={styles.translateLabel}>Auto-translate for international channels</Text>
+            <View style={styles.switchWrap}>
+              <Switch
+                value={translateInternational}
+                onValueChange={onToggleTranslateInternational}
+                trackColor={{ false: '#FCA5A5', true: '#86EFAC' }}
+                thumbColor={translateInternational ? '#22C55E' : '#EF4444'}
+                ios_backgroundColor="#FCA5A5"
+                disabled={publishing}
+              />
+            </View>
+          </View>
+          <View style={styles.card}>{renderMarketList(GLOBAL_MARKETS)}</View>
         </View>
 
         <TouchableOpacity
@@ -126,6 +178,37 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 16 },
   title: { fontSize: 24, fontWeight: '700', color: '#111827' },
   subtitle: { fontSize: 14, color: '#6B7280', lineHeight: 20 },
+  section: { gap: 8 },
+  sectionHeader: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#6B7280',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  translateRow: {
+    width: '100%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    minHeight: 48,
+    paddingHorizontal: 4,
+    marginBottom: 4,
+  },
+  translateLabel: {
+    flex: 1,
+    flexShrink: 1,
+    color: '#6B7280',
+    fontSize: 15,
+    fontWeight: '700',
+    marginRight: 12,
+  },
+  switchWrap: {
+    marginLeft: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    transform: [{ scaleX: 1.15 }, { scaleY: 1.15 }],
+  },
   card: {
     borderWidth: 1,
     borderColor: '#E5E7EB',

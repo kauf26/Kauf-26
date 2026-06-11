@@ -7,6 +7,8 @@ type AutoTranslateRowProps = {
   onCheckedChange: (value: boolean) => void;
   disabled?: boolean;
   className?: string;
+  label?: string;
+  labelClassName?: string;
 };
 
 /** Matches mobile IdentifyScreen auto-translate row (label left, switch right, green/red colors). */
@@ -15,16 +17,23 @@ export function AutoTranslateRow({
   onCheckedChange,
   disabled = false,
   className,
+  label = "Auto-translate listings",
+  labelClassName,
 }: AutoTranslateRowProps) {
   return (
     <div
       className={cn(
-        "flex w-full flex-row items-center justify-between gap-3 border-t-2 border-[#1F2937] pt-4 min-h-[48px]",
+        "flex w-full flex-row items-center justify-between gap-3 min-h-[48px]",
         className
       )}
     >
-      <span className="flex-1 text-[15px] font-semibold text-[#1F2937]">
-        Auto-translate listings
+      <span
+        className={cn(
+          "flex-1 text-[15px] font-semibold text-[#1F2937]",
+          labelClassName
+        )}
+      >
+        {label}
       </span>
       <Switch
         checked={checked}

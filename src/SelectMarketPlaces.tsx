@@ -25,6 +25,11 @@ import {
   filterSupportedMarketplaces,
   isUnknownProductCategory,
 } from "@shared/marketplaceCategorySupport";
+import { AutoTranslateRow } from "@/components/AutoTranslateRow";
+import {
+  getTranslateInternationalEnabled,
+  setTranslateInternationalEnabled,
+} from "@/lib/translationPrefs";
 
 export type Marketplace = (typeof SUPPORTED_MARKETPLACE_IDS)[number];
 
@@ -123,6 +128,7 @@ export default function SelectMarketplaces() {
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishError, setPublishError] = useState<string | null>(null);
   const [publishJobId, setPublishJobId] = useState<number | null>(null);
+  const [translateInternational, setTranslateInternational] = useState(true);
 
   const draftId = useMemo(() => {
     const raw =
@@ -131,6 +137,15 @@ export default function SelectMarketplaces() {
     const n = raw ? Number(raw) : NaN;
     return Number.isFinite(n) ? n : null;
   }, []);
+
+  useEffect(() => {
+    setTranslateInternational(getTranslateInternationalEnabled());
+  }, []);
+
+  const onToggleTranslateInternational = (value: boolean) => {
+    setTranslateInternational(value);
+    setTranslateInternationalEnabled(value);
+  };
 
   useEffect(() => {
     const loaded = loadListingSession();
@@ -455,10 +470,18 @@ export default function SelectMarketplaces() {
             {renderMarketList(US_MARKETS, "US channels")}
           </div>
 
-          <div className="border-t border-zinc-800 pt-4">
+          <div className="border-t border-zinc-800 pt-4 space-y-3">
             <div className="text-xs font-semibold uppercase mb-2 flex gap-1 tracking-wider text-zinc-400">
               <span>🌐</span> International Channels
             </div>
+            <AutoTranslateRow
+              checked={translateInternational}
+              onCheckedChange={onToggleTranslateInternational}
+              disabled={isPublishing}
+              label="Auto-translate for international channels"
+              labelClassName="text-zinc-400"
+              className="px-1 pb-2 border-b border-zinc-800"
+            />
             {renderMarketList(GLOBAL_MARKETS, "International channels")}
           </div>
 
@@ -505,6 +528,7 @@ export default function SelectMarketplaces() {
                   body: JSON.stringify({
                     draftId,
                     marketplaceIds: supportedSelected,
+                    translateInternational,
                     // Publish synchronously so we get listing IDs/URLs back
                     // for the confirmation page.
                     sync: true,

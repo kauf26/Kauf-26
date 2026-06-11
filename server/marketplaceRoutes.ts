@@ -15,7 +15,7 @@ const router = express.Router();
 // POST /api/marketplaces/publish
 // Body: { draftId, marketplaces?: string[], marketplaceIds?: string[], sync?: boolean }
 router.post('/publish', async (req, res) => {
- const { draftId, marketplaces, marketplaceIds, sync } = req.body;
+ const { draftId, marketplaces, marketplaceIds, sync, translateInternational } = req.body;
 
  if (draftId == null || Number.isNaN(Number(draftId))) {
    return res.status(400).json({ error: 'draftId is required.' });
@@ -38,6 +38,7 @@ router.post('/publish', async (req, res) => {
    const report = await publishDraft(Number(draftId), targets, {
      sync: sync === true,
      createJob: true,
+     translateInternational: translateInternational !== false,
    });
 
    return res.status(202).json({
