@@ -29,6 +29,7 @@ import {
 } from '../../../shared/identifyFlow';
 
 const LOGO_IMAGE = require('../../assets/icon.png');
+const LOGO_SIZE = 96 * 2;
 import {
   getAutoTranslateEnabled,
   setAutoTranslateEnabled,
@@ -66,11 +67,20 @@ export default function IdentifyScreen() {
   const [autoTranslate, setAutoTranslate] = useState(true);
   const [showSuccess, setShowSuccess] = useState(false);
   const [shutterPressed, setShutterPressed] = useState(false);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
 
   useEffect(() => {
     void getAutoTranslateEnabled().then(setAutoTranslate);
     return () => clearProgressTimer();
   }, []);
+
+  useEffect(() => {
+    if (!showCamera) {
+      setCameraReady(false);
+      setIsCapturing(false);
+    }
+  }, [showCamera]);
 
   const clearProgressTimer = () => {
     if (progressTimerRef.current) {
@@ -101,8 +111,15 @@ export default function IdentifyScreen() {
   };
 
   const capturePhoto = async () => {
+    if (!cameraRef.current || !cameraReady || isCapturing || isIdentifying) {
+      return;
+    }
+
+    setIsCapturing(true);
+    setError(null);
+
     try {
-      const photo = await cameraRef.current?.takePictureAsync({
+      const photo = await cameraRef.current.takePictureAsync({
         quality: 0.85,
         skipProcessing: false,
       });
@@ -117,7 +134,7 @@ export default function IdentifyScreen() {
           {
             uri: photo.uri,
             mimeType: 'image/jpeg',
-            fileName: `capture-${Date.now()}.jpg`,
+            fileName: `angle-${prev.length + 1}.jpg`,
           },
         ];
       });
@@ -126,6 +143,8 @@ export default function IdentifyScreen() {
       setError(null);
     } catch {
       setError('Something went wrong while taking the photo.');
+    } finally {
+      setIsCapturing(false);
     }
   };
 
@@ -213,23 +232,37 @@ export default function IdentifyScreen() {
     showCamera || (capturedImages.length === 0 && !isIdentifying);
 
   if (showCamera && permission?.granted) {
+    const shutterDisabled = !cameraReady || isCapturing || isIdentifying;
+
     return (
       <View style={styles.cameraContainer}>
-        <CameraView ref={cameraRef} style={styles.camera} facing="back">
-          <SafeAreaView style={styles.cameraOverlay} edges={['top', 'bottom']}>
-            <View style={styles.cameraTopRow}>
+        <CameraView
+          ref={cameraRef}
+          style={styles.camera}
+          facing="back"
+          mode="picture"
+          onCameraReady={() => setCameraReady(true)}
+        >
+          <View style={styles.cameraHud} pointerEvents="box-none">
+            <SafeAreaView style={styles.cameraTopBar} edges={['top']}>
               <TouchableOpacity
                 style={styles.cameraCloseButton}
                 onPress={() => {
                   setShowCamera(false);
                   setIsCapturingMore(false);
                 }}
+                accessibilityLabel="Close camera"
               >
                 <Ionicons name="close" size={28} color="#fff" />
               </TouchableOpacity>
-            </View>
+            </SafeAreaView>
 
-            <View style={styles.cameraControls}>
+            <SafeAreaView style={styles.cameraBottomBar} edges={['bottom']}>
+              <Text style={styles.captureHint}>
+                {capturedImages.length === 0
+                  ? 'Point at your product and tap the button to capture a photo.'
+                  : `Capture your ${angleLabel} angle (${capturedImages.length + 1}/${MAX_IMAGES}).`}
+              </Text>
               <Text style={styles.captureLabel}>{captureLabel}</Text>
 
               <TouchableOpacity
@@ -237,15 +270,20 @@ export default function IdentifyScreen() {
                 onPressIn={() => setShutterPressed(true)}
                 onPressOut={() => setShutterPressed(false)}
                 onPress={() => void capturePhoto()}
-                disabled={isIdentifying}
+                disabled={shutterDisabled}
+                accessibilityLabel={captureLabel}
                 style={[
                   styles.shutterOuter,
                   shutterPressed && styles.shutterPressed,
-                  isIdentifying && styles.buttonDisabled,
+                  shutterDisabled && styles.buttonDisabled,
                 ]}
               >
                 <View style={styles.shutterInner}>
-                  <Ionicons name="camera" size={32} color="#fff" />
+                  {isCapturing ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Ionicons name="camera" size={32} color="#fff" />
+                  )}
                 </View>
               </TouchableOpacity>
 
@@ -259,8 +297,8 @@ export default function IdentifyScreen() {
                   <Text style={styles.doneAnglesText}>Done adding angles</Text>
                 </TouchableOpacity>
               )}
-            </View>
-          </SafeAreaView>
+            </SafeAreaView>
+          </View>
         </CameraView>
       </View>
     );
@@ -275,12 +313,11 @@ export default function IdentifyScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.contentColumn}>
-          <View style={styles.logoWrap}>
+          <View style={styles.logoCircle} accessibilityLabel="Kauf-AI logo">
             <Image
               source={LOGO_IMAGE}
               style={styles.logoImage}
               resizeMode="contain"
-              accessibilityLabel="Kauf-AI logo"
             />
           </View>
 
@@ -302,7 +339,7 @@ export default function IdentifyScreen() {
             </View>
           </View>
 
-          <View style={styles.scannerCard}>
+          <View style={styles.cameraCard}>
             {error ? (
               <View style={[styles.errorBanner, styles.sectionSpacing]}>
                 <Text style={styles.errorText}>{error}</Text>
@@ -463,17 +500,20 @@ const styles = StyleSheet.create({
     maxWidth: 480,
     alignItems: 'center',
   },
-  logoWrap: {
-    width: '100%',
-    alignSelf: 'center',
+  logoCircle: {
+    width: LOGO_SIZE,
+    height: LOGO_SIZE,
+    borderRadius: LOGO_SIZE / 2,
+    overflow: 'hidden',
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'center',
     marginTop: 20,
     marginBottom: 20,
   },
   logoImage: {
-    width: 96,
-    height: 96,
+    width: LOGO_SIZE,
+    height: LOGO_SIZE,
     alignSelf: 'center',
   },
   sectionSpacing: {
@@ -523,7 +563,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: PALETTE.purple,
   },
-  scannerCard: {
+  cameraCard: {
     width: '100%',
     alignItems: 'center',
     backgroundColor: '#F8FAFC',
@@ -724,8 +764,11 @@ const styles = StyleSheet.create({
   buttonDisabled: { opacity: 0.4 },
   cameraContainer: { flex: 1, backgroundColor: '#000' },
   camera: { flex: 1 },
-  cameraOverlay: { flex: 1 },
-  cameraTopRow: {
+  cameraHud: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'space-between',
+  },
+  cameraTopBar: {
     width: '100%',
     alignItems: 'center',
     padding: 16,
@@ -735,15 +778,21 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 8,
   },
-  cameraControls: {
-    flex: 1,
-    justifyContent: 'center',
+  cameraBottomBar: {
+    width: '100%',
     alignItems: 'center',
     gap: 14,
-    width: '100%',
     paddingHorizontal: 16,
-    paddingVertical: 24,
+    paddingTop: 48,
+    paddingBottom: 24,
     backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  captureHint: {
+    color: T.textMuted,
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+    paddingHorizontal: 8,
   },
   captureLabel: {
     color: '#fff',

@@ -20,7 +20,7 @@ export default function MainNavigator() {
           let iconName: keyof typeof Ionicons.glyphMap;
 
           if (route.name === 'Home') {
-            iconName = focused ? 'scan' : 'scan-outline';
+            iconName = focused ? 'camera' : 'camera-outline';
           } else if (route.name === 'Upload') {
             iconName = focused ? 'cloud-upload' : 'cloud-upload-outline';
           } else if (route.name === 'Listings') {
