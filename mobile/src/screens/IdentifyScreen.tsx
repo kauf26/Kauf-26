@@ -477,8 +477,8 @@ export default function IdentifyScreen() {
 
           <View style={styles.promoFooter}>
             <Text style={styles.promoTrial}>Free 14 day trial</Text>
-            <Text style={styles.promoTagline}>The only way to sell online</Text>
-            <Text style={styles.promoSold}>sold with KAUF</Text>
+            <Text style={styles.promoTagline}>selling online made easy</Text>
+            <Text style={styles.promoSold}>sold with KAUF – AI</Text>
           </View>
         </View>
       </ScrollView>
