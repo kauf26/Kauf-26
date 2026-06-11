@@ -14,23 +14,23 @@ Quick validation on your server after deploy:
 bash scripts/validate-production-env.sh
 ```
 
-Monorepo layout:
+Monorepo layout (npm workspaces — see [docs/MONOREPO.md](./docs/MONOREPO.md)):
 
-| Path | Purpose |
-|------|---------|
-| `server/` | Express API, OAuth, publish queue |
-| `src/` | Vite web app |
-| `mobile/` | Expo React Native app |
-| `shared/` | Drizzle schema |
+| Path | Package | Purpose |
+|------|---------|---------|
+| `server/` | (root) | Express API, OAuth, publish queue |
+| `src/` | (root) | Vite web app |
+| `mobile/` | `global-marketplace-lister` | Expo React Native app |
+| `shared/` | `@kauf26/shared` | Drizzle schema + shared logic |
 
 ## Development
 
 ```bash
-npm install
+npm install                   # root + mobile + shared (workspaces)
 cp .env.example .env          # configure DATABASE_URL, keys, etc.
 npm run server                # API on :2626
 npm run dev                   # web on :5173
-cd mobile && npm install && npm start
+npm run mobile:start          # Expo Metro (or npm run dev:all for everything)
 ```
 
 ## Store Submission Checklist

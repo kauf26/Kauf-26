@@ -1,0 +1,10 @@
+{
+  "name": "@kauf26/shared",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cross-platform types, Drizzle schema, and business logic for Kauf26 web, server, and mobile.",
+  "exports": {
+    "./*": "./*"
+  }
+}
