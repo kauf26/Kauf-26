@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import type { StackNavigationProp } from '@react-navigation/stack';
 import { useNavigation } from '@react-navigation/native';
@@ -63,7 +62,6 @@ export default function IdentifyScreen() {
   const [analyzeStep, setAnalyzeStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [autoTranslate, setAutoTranslate] = useState(true);
-  const [showCameraPanel, setShowCameraPanel] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [shutterPressed, setShutterPressed] = useState(false);
 
@@ -71,12 +69,6 @@ export default function IdentifyScreen() {
     void getAutoTranslateEnabled().then(setAutoTranslate);
     return () => clearProgressTimer();
   }, []);
-
-  useEffect(() => {
-    if (capturedImages.length > 0) {
-      setShowCameraPanel(true);
-    }
-  }, [capturedImages.length]);
 
   const clearProgressTimer = () => {
     if (progressTimerRef.current) {
@@ -135,38 +127,6 @@ export default function IdentifyScreen() {
     }
   };
 
-  const pickFromGallery = async () => {
-    const libraryPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!libraryPermission.granted) {
-      setError('Allow photo library access to choose a product image.');
-      return;
-    }
-
-    const remaining = MAX_IMAGES - capturedImages.length;
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: false,
-      allowsMultipleSelection: remaining > 1,
-      quality: 0.85,
-      selectionLimit: remaining,
-    });
-
-    if (result.canceled || !result.assets?.length) return;
-
-    const newImages: IdentifyImageInput[] = result.assets
-      .filter((asset) => Boolean(asset.uri))
-      .map((asset, i) => ({
-        uri: asset.uri,
-        mimeType: asset.mimeType ?? 'image/jpeg',
-        fileName: asset.fileName ?? `product-${Date.now()}-${i}.jpg`,
-      }));
-
-    setCapturedImages((prev) => [...prev, ...newImages].slice(0, MAX_IMAGES));
-    setShowCamera(false);
-    setIsCapturingMore(false);
-    setError(null);
-  };
-
   const removeImage = (index: number) => {
     setCapturedImages((prev) => prev.filter((_, i) => i !== index));
   };
@@ -202,7 +162,7 @@ export default function IdentifyScreen() {
 
   const runIdentify = async () => {
     if (capturedImages.length === 0) {
-      setError('Take a photo or pick one from your gallery first.');
+      setError('Take a photo with the camera first.');
       return;
     }
 
@@ -247,8 +207,8 @@ export default function IdentifyScreen() {
   const captureLabel =
     capturedImages.length === 0 ? 'Take Photo' : `Take ${angleLabel} photo`;
 
-  const showScannerContent =
-    showCameraPanel || capturedImages.length > 0 || isIdentifying;
+  const showCameraView =
+    showCamera || (capturedImages.length === 0 && !isIdentifying);
 
   if (showCamera && permission?.granted) {
     return (
@@ -287,15 +247,6 @@ export default function IdentifyScreen() {
                 </View>
               </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.galleryPill, isIdentifying && styles.buttonDisabled]}
-                onPress={() => void pickFromGallery()}
-                disabled={isIdentifying}
-              >
-                <Ionicons name="images-outline" size={20} color="#fff" />
-                <Text style={styles.galleryPillText}>Upload from gallery</Text>
-              </TouchableOpacity>
-
               {capturedImages.length > 0 && (
                 <TouchableOpacity
                   onPress={() => {
@@ -322,6 +273,15 @@ export default function IdentifyScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.contentColumn}>
+          <View style={styles.logoWrap}>
+            <Image
+              source={require('../../assets/icon.png')}
+              style={styles.logo}
+              resizeMode="cover"
+              accessibilityLabel="Kauf-AI logo"
+            />
+          </View>
+
           <View style={[styles.welcomeHeader, styles.sectionSpacing]}>
             <Text
               style={styles.brandTitle}
@@ -338,29 +298,9 @@ export default function IdentifyScreen() {
               <Text style={styles.taglineDot}> · </Text>
               <Text style={styles.taglinePink}>SELL</Text>
             </View>
-            <Text style={styles.welcomeDescription}>
-              For best results, take up to 5 photos: front, back, label/tag, and details.
-            </Text>
           </View>
 
-          <View style={styles.mainInteraction}>
-            {!showScannerContent ? (
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => setShowCameraPanel(true)}
-                accessibilityLabel="Open Kauf-AI scanner"
-                style={styles.logoPressable}
-              >
-                <Image
-                  source={require('../../assets/icon.png')}
-                  style={styles.logoHero}
-                  resizeMode="contain"
-                  accessibilityLabel="Kauf-AI logo"
-                />
-              </TouchableOpacity>
-            ) : (
-              <View style={styles.scannerCardShell}>
-                <View style={styles.scannerCard}>
+          <View style={styles.scannerCard}>
             {error ? (
               <View style={[styles.errorBanner, styles.sectionSpacing]}>
                 <Text style={styles.errorText}>{error}</Text>
@@ -380,7 +320,7 @@ export default function IdentifyScreen() {
               </Animated.View>
             ) : null}
 
-            {capturedImages.length === 0 && !isIdentifying ? (
+            {showCameraView && capturedImages.length === 0 ? (
               <View style={styles.startActions}>
                 <TouchableOpacity
                   style={[
@@ -392,18 +332,6 @@ export default function IdentifyScreen() {
                   disabled={isIdentifying}
                 >
                   <Text style={styles.startCameraText}>Start Camera</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.uploadOutlineButton,
-                    styles.sectionSpacing,
-                    isIdentifying && styles.buttonDisabled,
-                  ]}
-                  onPress={() => void pickFromGallery()}
-                  disabled={isIdentifying}
-                >
-                  <Ionicons name="camera-outline" size={22} color={PALETTE.body} />
-                  <Text style={styles.uploadOutlineText}>Upload photo</Text>
                 </TouchableOpacity>
               </View>
             ) : (
@@ -504,13 +432,13 @@ export default function IdentifyScreen() {
                 />
               </View>
             </View>
-                </View>
-              </View>
-            )}
           </View>
 
-          <Text style={styles.trialFooter}>14 DAY FREE TRIAL</Text>
-          <Text style={styles.appFooter}>Sold with KAUF</Text>
+          <View style={styles.promoFooter}>
+            <Text style={styles.promoTrial}>Free 14 day trial</Text>
+            <Text style={styles.promoTagline}>selling online made easy</Text>
+            <Text style={styles.promoSold}>sold with KAUF – AI</Text>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -522,17 +450,29 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   pageContent: {
     flexGrow: 1,
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 24,
+    paddingVertical: 30,
     width: '100%',
-    minHeight: '100%',
   },
   contentColumn: {
     width: '100%',
     maxWidth: 480,
     alignItems: 'center',
+  },
+  logoWrap: {
+    width: '100%',
+    alignSelf: 'center',
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 20,
+  },
+  logo: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignSelf: 'center',
   },
   sectionSpacing: {
     marginBottom: 20,
@@ -540,48 +480,6 @@ const styles = StyleSheet.create({
   welcomeHeader: {
     alignItems: 'center',
     width: '100%',
-  },
-  welcomeDescription: {
-    marginTop: 12,
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#6B7280',
-    textAlign: 'center',
-    maxWidth: 360,
-    paddingHorizontal: 8,
-  },
-  mainInteraction: {
-    width: '100%',
-    flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: 280,
-  },
-  logoPressable: {
-    width: '100%',
-    maxWidth: 360,
-    alignItems: 'center',
-  },
-  logoHero: {
-    width: '100%',
-    height: 220,
-    borderRadius: 24,
-  },
-  scannerCardShell: {
-    width: '100%',
-    borderRadius: 24,
-    borderWidth: 4,
-    borderColor: '#F3F4F6',
-    overflow: 'hidden',
-    ...Platform.select({
-      ios: {
-        shadowColor: T.shadow,
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.12,
-        shadowRadius: 16,
-      },
-      android: { elevation: 8 },
-    }),
   },
   brandTitle: {
     fontSize: 48,
@@ -676,19 +574,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   startCameraText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  uploadOutlineButton: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: PALETTE.secondary,
-    borderRadius: 12,
-    paddingVertical: 14,
-  },
-  uploadOutlineText: { color: PALETTE.body, fontSize: 16, fontWeight: '700' },
   reviewSection: { width: '100%', alignItems: 'center' },
   imageGrid: {
     width: '100%',
@@ -807,24 +692,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     transform: [{ scaleX: 1.15 }, { scaleY: 1.15 }],
   },
-  trialFooter: {
+  promoFooter: {
     width: '100%',
-    fontSize: 14,
+    alignItems: 'center',
+    marginTop: 30,
+    paddingHorizontal: 12,
+    paddingBottom: 10,
+  },
+  promoTrial: {
+    fontSize: 16,
     fontWeight: '700',
     color: '#1F2937',
     textAlign: 'center',
-    letterSpacing: 3,
-    textTransform: 'uppercase',
-    marginTop: 16,
   },
-  appFooter: {
-    width: '100%',
+  promoTagline: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#C084FC',
+    fontWeight: '400',
+    color: PALETTE.body,
+    textAlign: 'center',
+    marginTop: 6,
+  },
+  promoSold: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: PALETTE.purple,
     textAlign: 'center',
     marginTop: 12,
-    marginBottom: 8,
   },
   buttonDisabled: { opacity: 0.4 },
   cameraContainer: { flex: 1, backgroundColor: '#000' },
@@ -871,18 +764,6 @@ const styles = StyleSheet.create({
   },
   shutterPressed: { transform: [{ scale: 0.95 }], backgroundColor: T.emeraldDark },
   shutterInner: { alignItems: 'center', justifyContent: 'center' },
-  galleryPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(39,39,42,0.9)',
-    borderWidth: 1,
-    borderColor: T.surfaceBorder,
-    borderRadius: 999,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-  },
-  galleryPillText: { color: '#fff', fontSize: 13, fontWeight: '600' },
   doneAnglesText: {
     color: T.textMuted,
     fontSize: 13,
