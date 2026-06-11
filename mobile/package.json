@@ -9,6 +9,7 @@
     "ios": "expo run:ios",
     "dev:ios": "expo run:ios --device",
     "dev:android": "expo run:android --device",
+    "postinstall": "node scripts/patch-expo-dev-menu.js",
     "web": "expo start --web",
     "validate:production-env": "node scripts/validate-production-env.js --production",
     "build:ios": "npm run validate:production-env && eas build --platform ios --profile production",
