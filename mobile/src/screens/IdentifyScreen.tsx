@@ -30,6 +30,16 @@ import {
 } from '../services/translationPrefs';
 import { IdentifyTheme as T } from '../theme/identifyTheme';
 
+const PALETTE = {
+  purple: '#8B5CF6',
+  blue: '#3B82F6',
+  pink: '#EC4899',
+  accent: '#2563EB',
+  secondary: '#F59E0B',
+  body: '#1F2937',
+  muted: '#9CA3AF',
+} as const;
+
 const MAX_IMAGES = 5;
 const ANGLE_ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth'] as const;
 
@@ -48,7 +58,7 @@ export default function IdentifyScreen() {
   const [isIdentifying, setIsIdentifying] = useState(false);
   const [analyzeStep, setAnalyzeStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [autoTranslate, setAutoTranslate] = useState(false);
+  const [autoTranslate, setAutoTranslate] = useState(true);
   const [showSuccess, setShowSuccess] = useState(false);
   const [shutterPressed, setShutterPressed] = useState(false);
 
@@ -302,15 +312,35 @@ export default function IdentifyScreen() {
       >
         <View style={styles.contentColumn}>
           <View style={[styles.welcomeHeader, styles.sectionSpacing]}>
-            <Text style={styles.brandTitle}>KAUF-AI</Text>
-            <Text style={styles.brandTagline}>PICTURE · POST · SELL</Text>
+            <Text
+              style={styles.brandTitle}
+              adjustsFontSizeToFit
+              numberOfLines={1}
+              minimumFontScale={0.6}
+            >
+              KAUF-AI
+            </Text>
+            <View style={styles.brandTaglineRow}>
+              <Text style={styles.taglinePurple}>PICTURE</Text>
+              <Text style={styles.taglineDot}> · </Text>
+              <Text style={styles.taglineBlue}>POST</Text>
+              <Text style={styles.taglineDot}> · </Text>
+              <Text style={styles.taglinePink}>SELL</Text>
+            </View>
             <Text style={styles.welcomeHint}>
               For best results, take up to 5 photos: front, back, label/tag, and details.
             </Text>
           </View>
 
           <View style={styles.scannerCard}>
-            <Text style={[styles.scannerTitle, styles.sectionSpacing]}>KAUF26 Scanner</Text>
+            <Text
+              style={[styles.scannerTitle, styles.sectionSpacing]}
+              adjustsFontSizeToFit
+              numberOfLines={1}
+              minimumFontScale={0.65}
+            >
+              KAUF26 Scanner
+            </Text>
             <Text style={[styles.scannerSubtitle, styles.sectionSpacing]}>
               For best results, take up to 5 photos: front, back, label/tag, and details.
             </Text>
@@ -356,7 +386,7 @@ export default function IdentifyScreen() {
                   onPress={() => void pickFromGallery()}
                   disabled={isIdentifying}
                 >
-                  <Ionicons name="camera-outline" size={22} color="#fff" />
+                  <Ionicons name="camera-outline" size={22} color={PALETTE.body} />
                   <Text style={styles.uploadOutlineText}>Upload photo</Text>
                 </TouchableOpacity>
               </View>
@@ -409,7 +439,7 @@ export default function IdentifyScreen() {
 
                   {isIdentifying && (
                     <View style={[styles.loadingRow, styles.sectionSpacing]}>
-                      <ActivityIndicator color={T.textMuted} size="small" />
+                      <ActivityIndicator color={PALETTE.accent} size="small" />
                       <Text style={styles.loadingText}>
                         Analyzing image {Math.min(analyzeStep || 1, capturedImages.length)}/
                         {capturedImages.length}… this may take up to a minute.
@@ -446,18 +476,14 @@ export default function IdentifyScreen() {
               )}
 
             <View style={styles.translateRow}>
-              <View style={styles.translateTextWrap}>
-                <Text style={styles.translateTitle}>Auto-translate listings</Text>
-                <Text style={styles.translateHint}>
-                  Translate title and description after identification.
-                </Text>
-              </View>
+              <Text style={styles.translateLabel}>Auto-translate listings</Text>
               <View style={styles.switchWrap}>
                 <Switch
                   value={autoTranslate}
                   onValueChange={onToggleAutoTranslate}
-                  trackColor={{ false: T.surfaceBorder, true: T.primary }}
-                  thumbColor="#fff"
+                  trackColor={{ false: '#FCA5A5', true: '#86EFAC' }}
+                  thumbColor={autoTranslate ? '#22C55E' : '#EF4444'}
+                  ios_backgroundColor="#FCA5A5"
                   disabled={isIdentifying}
                 />
               </View>
@@ -467,6 +493,7 @@ export default function IdentifyScreen() {
           <View style={styles.promoFooter}>
             <Text style={styles.promoTrial}>Free 14 day trial</Text>
             <Text style={styles.promoTagline}>The only way to sell online</Text>
+            <Text style={styles.promoSold}>sold with KAUF</Text>
           </View>
         </View>
       </ScrollView>
@@ -498,24 +525,48 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   brandTitle: {
-    fontSize: 24,
+    fontSize: 48,
     fontWeight: '700',
-    color: '#000',
+    color: PALETTE.purple,
     letterSpacing: -0.5,
     textAlign: 'center',
     fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
+    width: '100%',
+    marginBottom: 8,
   },
-  brandTagline: {
+  brandTaglineRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  taglinePurple: {
     fontSize: 14,
     fontWeight: '800',
     letterSpacing: 2,
-    color: T.primary,
-    textAlign: 'center',
-    marginTop: 4,
+    color: PALETTE.purple,
+  },
+  taglineBlue: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 2,
+    color: PALETTE.blue,
+  },
+  taglinePink: {
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 2,
+    color: PALETTE.pink,
+  },
+  taglineDot: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: PALETTE.muted,
   },
   welcomeHint: {
     fontSize: 16,
-    color: '#4b5563',
+    color: PALETTE.body,
     textAlign: 'center',
     lineHeight: 22,
     marginTop: 8,
@@ -523,9 +574,9 @@ const styles = StyleSheet.create({
   scannerCard: {
     width: '100%',
     alignItems: 'center',
-    backgroundColor: T.cardBg,
-    borderWidth: 1,
-    borderColor: T.cardBorder,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 2,
+    borderColor: PALETTE.secondary,
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 18,
@@ -540,14 +591,14 @@ const styles = StyleSheet.create({
     }),
   },
   scannerTitle: {
-    color: T.text,
-    fontSize: 20,
+    color: PALETTE.body,
+    fontSize: 40,
     fontWeight: '700',
     textAlign: 'center',
     width: '100%',
   },
   scannerSubtitle: {
-    color: T.textMuted,
+    color: PALETTE.body,
     fontSize: 16,
     lineHeight: 22,
     textAlign: 'center',
@@ -581,7 +632,7 @@ const styles = StyleSheet.create({
   startActions: { width: '100%', alignItems: 'center' },
   startCameraButton: {
     width: '100%',
-    backgroundColor: T.primary,
+    backgroundColor: PALETTE.accent,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
@@ -593,11 +644,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: T.cardBorder,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: PALETTE.secondary,
     borderRadius: 12,
     paddingVertical: 14,
   },
-  uploadOutlineText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  uploadOutlineText: { color: PALETTE.body, fontSize: 16, fontWeight: '700' },
   reviewSection: { width: '100%', alignItems: 'center' },
   imageGrid: {
     width: '100%',
@@ -617,11 +670,11 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: T.surfaceBorder,
+    borderColor: PALETTE.secondary,
   },
   thumb: { width: '100%', height: '100%' },
   thumbBadgeText: {
-    color: T.textMuted,
+    color: PALETTE.body,
     fontSize: 10,
     fontWeight: '600',
     textAlign: 'center',
@@ -633,7 +686,7 @@ const styles = StyleSheet.create({
   },
   thumbActionBtn: {
     flex: 1,
-    backgroundColor: T.cardBorder,
+    backgroundColor: PALETTE.accent,
     borderRadius: 4,
     paddingVertical: 4,
     alignItems: 'center',
@@ -642,14 +695,19 @@ const styles = StyleSheet.create({
   thumbActionText: { color: '#fff', fontSize: 9, fontWeight: '600' },
   addAngleButton: {
     width: '100%',
-    borderWidth: 1,
+    borderWidth: 2,
     borderStyle: 'dashed',
-    borderColor: T.surfaceBorder,
+    borderColor: PALETTE.secondary,
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: 'center',
   },
-  addAngleText: { color: T.textMuted, fontSize: 14, fontWeight: '600', textAlign: 'center' },
+  addAngleText: {
+    color: PALETTE.body,
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
   loadingRow: {
     width: '100%',
     flexDirection: 'row',
@@ -657,20 +715,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
   },
-  loadingText: { color: T.textMuted, fontSize: 14, textAlign: 'center', lineHeight: 20, flexShrink: 1 },
+  loadingText: {
+    color: PALETTE.body,
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+    flexShrink: 1,
+  },
   actionRow: { width: '100%', flexDirection: 'row', gap: 12 },
   secondaryAction: {
     flex: 1,
-    backgroundColor: T.cardBorder,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: PALETTE.secondary,
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: 'center',
   },
-  secondaryActionText: { color: T.text, fontSize: 14, fontWeight: '600' },
+  secondaryActionText: { color: PALETTE.body, fontSize: 14, fontWeight: '600' },
   primaryAction: {
     flex: 1,
     flexDirection: 'row',
-    backgroundColor: T.primary,
+    backgroundColor: PALETTE.accent,
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: 'center',
@@ -683,22 +749,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: T.cardBorder,
+    borderTopWidth: 2,
+    borderTopColor: PALETTE.secondary,
     paddingTop: 16,
     marginTop: 4,
+    minHeight: 48,
   },
-  translateTextWrap: {
+  translateLabel: {
     flex: 1,
     flexShrink: 1,
+    color: PALETTE.body,
+    fontSize: 15,
+    fontWeight: '600',
     marginRight: 12,
   },
-  translateTitle: { color: T.text, fontSize: 15, fontWeight: '600' },
-  translateHint: { color: T.textSubtle, fontSize: 13, lineHeight: 18, marginTop: 4 },
   switchWrap: {
     marginLeft: 8,
-    marginRight: 4,
-    paddingLeft: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    transform: [{ scaleX: 1.15 }, { scaleY: 1.15 }],
   },
   promoFooter: {
     width: '100%',
@@ -710,15 +779,22 @@ const styles = StyleSheet.create({
   promoTrial: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#007AFF',
+    color: PALETTE.purple,
     textAlign: 'center',
   },
   promoTagline: {
     fontSize: 14,
     fontWeight: '400',
-    color: '#666666',
+    color: PALETTE.body,
     textAlign: 'center',
     marginTop: 6,
+  },
+  promoSold: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: PALETTE.purple,
+    textAlign: 'center',
+    marginTop: 12,
   },
   buttonDisabled: { opacity: 0.4 },
   cameraContainer: { flex: 1, backgroundColor: '#000' },
