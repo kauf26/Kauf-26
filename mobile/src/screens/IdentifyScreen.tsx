@@ -28,8 +28,8 @@ import {
   shouldProceedToDraft,
 } from '../../../shared/identifyFlow';
 
-const LOGO_IMAGE = require('../../assets/icon.png');
-const LOGO_SIZE = 96 * 2;
+const LOGO_IMAGE = require('../../assets/img-2482.jpg');
+const LOGO_SIZE = 160;
 import {
   getAutoTranslateEnabled,
   setAutoTranslateEnabled,
@@ -320,13 +320,12 @@ export default function IdentifyScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.contentColumn}>
-          <View style={styles.logoCircle} accessibilityLabel="Kauf-AI logo">
-            <Image
-              source={LOGO_IMAGE}
-              style={styles.logoImage}
-              resizeMode="contain"
-            />
-          </View>
+          <Image
+            source={LOGO_IMAGE}
+            style={styles.logoImage}
+            resizeMode="contain"
+            accessibilityLabel="Kauf-AI logo"
+          />
 
           <View style={[styles.welcomeHeader, styles.sectionSpacing]}>
             <Text
@@ -507,21 +506,12 @@ const styles = StyleSheet.create({
     maxWidth: 480,
     alignItems: 'center',
   },
-  logoCircle: {
-    width: LOGO_SIZE,
-    height: LOGO_SIZE,
-    borderRadius: LOGO_SIZE / 2,
-    overflow: 'hidden',
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    marginTop: 20,
-    marginBottom: 20,
-  },
   logoImage: {
     width: LOGO_SIZE,
     height: LOGO_SIZE,
     alignSelf: 'center',
+    marginTop: 20,
+    marginBottom: 20,
   },
   sectionSpacing: {
     marginBottom: 20,
