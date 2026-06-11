@@ -10,6 +10,7 @@ import {
   Switch,
   Animated,
   Platform,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -50,18 +51,17 @@ const MAX_IMAGES = 5;
 const ANGLE_ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth'] as const;
 /** Matches web ProductCamera JPEG quality. */
 const PHOTO_CAPTURE_QUALITY = 0.85;
-/** Photo-only camera — do not pass onBarcodeScanned (no QR/barcode scanning). */
+/** Photo-only camera — no barcode/QR scanning props. */
 const PRODUCT_CAMERA_VIEW_PROPS = {
   mode: 'picture' as const,
   facing: 'back' as const,
-  barcodeScannerSettings: { barcodeTypes: [] as const },
 };
 
 type NavigationProp = StackNavigationProp<HomeStackParamList, 'Identify'>;
 
 export default function IdentifyScreen() {
   const navigation = useNavigation<NavigationProp>();
-  const cameraRef = useRef<CameraView>(null);
+  const cameraRef = useRef<CameraView | null>(null);
   const [permission, requestPermission] = useCameraPermissions();
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const successScale = useRef(new Animated.Value(0)).current;
@@ -87,8 +87,35 @@ export default function IdentifyScreen() {
     if (!showCamera) {
       setCameraReady(false);
       setIsCapturing(false);
+      return;
     }
+    // Fallback if onCameraReady is slow on a physical device.
+    const readyFallback = setTimeout(() => {
+      setCameraReady((ready) => ready || true);
+    }, 3000);
+    return () => clearTimeout(readyFallback);
   }, [showCamera]);
+
+  const ensureCameraPermission = async (): Promise<boolean> => {
+    if (permission?.granted) return true;
+
+    const result = await requestPermission();
+    if (result.granted) return true;
+
+    if (!result.canAskAgain) {
+      setError('Camera access is denied. Enable it in Settings → Kauf26 → Camera.');
+    } else {
+      setError('Could not access camera. Please allow camera permission.');
+    }
+    return false;
+  };
+
+  const openCamera = async () => {
+    const allowed = await ensureCameraPermission();
+    if (!allowed) return;
+    setError(null);
+    setShowCamera(true);
+  };
 
   const clearProgressTimer = () => {
     if (progressTimerRef.current) {
@@ -106,20 +133,13 @@ export default function IdentifyScreen() {
     }, 4500);
   };
 
-  const openCamera = async () => {
-    if (!permission?.granted) {
-      const result = await requestPermission();
-      if (!result.granted) {
-        setError('Could not access camera. Please check permissions.');
-        return;
-      }
-    }
-    setError(null);
-    setShowCamera(true);
-  };
-
   const capturePhoto = async () => {
-    if (!cameraRef.current || !cameraReady || isCapturing || isIdentifying) {
+    const camera = cameraRef.current;
+    if (!camera || isCapturing || isIdentifying) {
+      return;
+    }
+    if (!cameraReady) {
+      setError('Camera is still starting. Wait a moment and try again.');
       return;
     }
 
@@ -127,9 +147,9 @@ export default function IdentifyScreen() {
     setError(null);
 
     try {
-      const photo = await cameraRef.current.takePictureAsync({
+      const photo = await camera.takePictureAsync({
         quality: PHOTO_CAPTURE_QUALITY,
-        skipProcessing: false,
+        skipProcessing: Platform.OS === 'ios',
       });
       if (!photo?.uri) {
         setError('No image was captured. Please try again.');
@@ -149,8 +169,10 @@ export default function IdentifyScreen() {
       setShowCamera(false);
       setIsCapturingMore(false);
       setError(null);
-    } catch {
-      setError('Something went wrong while taking the photo.');
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Something went wrong while taking the photo.';
+      setError(message);
     } finally {
       setIsCapturing(false);
     }
@@ -240,73 +262,83 @@ export default function IdentifyScreen() {
     !showCamera && capturedImages.length === 0 && !isIdentifying;
 
   if (showCamera && permission?.granted) {
-    const shutterDisabled = !cameraReady || isCapturing || isIdentifying;
+    const shutterDisabled = isCapturing || isIdentifying;
 
     return (
       <View style={styles.cameraContainer}>
         <CameraView
           ref={cameraRef}
-          style={styles.camera}
+          style={StyleSheet.absoluteFill}
           {...PRODUCT_CAMERA_VIEW_PROPS}
           onCameraReady={() => setCameraReady(true)}
-        >
-          <View style={styles.cameraHud} pointerEvents="box-none">
-            <SafeAreaView style={styles.cameraTopBar} edges={['top']}>
+          onMountError={(event) => {
+            setError(event.message ?? 'Could not start the camera.');
+            setShowCamera(false);
+          }}
+        />
+        <View style={styles.cameraHud} pointerEvents="box-none">
+          <SafeAreaView style={styles.cameraTopBar} edges={['top']}>
+            <TouchableOpacity
+              style={styles.cameraCloseButton}
+              onPress={() => {
+                setShowCamera(false);
+                setIsCapturingMore(false);
+              }}
+              accessibilityLabel="Close camera"
+            >
+              <Ionicons name="close" size={28} color="#fff" />
+            </TouchableOpacity>
+          </SafeAreaView>
+
+          <SafeAreaView style={styles.cameraBottomBar} edges={['bottom']}>
+            {!cameraReady ? (
+              <View style={styles.cameraStartingRow}>
+                <ActivityIndicator color="#fff" size="small" />
+                <Text style={styles.captureHint}>Starting camera…</Text>
+              </View>
+            ) : null}
+
+            <Text style={styles.captureHint}>
+              {capturedImages.length === 0
+                ? 'Point at your product and tap the button to capture a photo.'
+                : `Capture your ${angleLabel} angle (${capturedImages.length + 1}/${MAX_IMAGES}).`}
+            </Text>
+            <Text style={styles.captureLabel}>{captureLabel}</Text>
+
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPressIn={() => setShutterPressed(true)}
+              onPressOut={() => setShutterPressed(false)}
+              onPress={() => void capturePhoto()}
+              disabled={shutterDisabled || !cameraReady}
+              accessibilityLabel={captureLabel}
+              style={[
+                styles.shutterOuter,
+                shutterPressed && styles.shutterPressed,
+                (shutterDisabled || !cameraReady) && styles.buttonDisabled,
+              ]}
+            >
+              <View style={styles.shutterInner}>
+                {isCapturing ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Ionicons name="camera" size={32} color="#fff" />
+                )}
+              </View>
+            </TouchableOpacity>
+
+            {capturedImages.length > 0 && (
               <TouchableOpacity
-                style={styles.cameraCloseButton}
                 onPress={() => {
                   setShowCamera(false);
                   setIsCapturingMore(false);
                 }}
-                accessibilityLabel="Close camera"
               >
-                <Ionicons name="close" size={28} color="#fff" />
+                <Text style={styles.doneAnglesText}>Done adding angles</Text>
               </TouchableOpacity>
-            </SafeAreaView>
-
-            <SafeAreaView style={styles.cameraBottomBar} edges={['bottom']}>
-              <Text style={styles.captureHint}>
-                {capturedImages.length === 0
-                  ? 'Point at your product and tap the button to capture a photo.'
-                  : `Capture your ${angleLabel} angle (${capturedImages.length + 1}/${MAX_IMAGES}).`}
-              </Text>
-              <Text style={styles.captureLabel}>{captureLabel}</Text>
-
-              <TouchableOpacity
-                activeOpacity={0.9}
-                onPressIn={() => setShutterPressed(true)}
-                onPressOut={() => setShutterPressed(false)}
-                onPress={() => void capturePhoto()}
-                disabled={shutterDisabled}
-                accessibilityLabel={captureLabel}
-                style={[
-                  styles.shutterOuter,
-                  shutterPressed && styles.shutterPressed,
-                  shutterDisabled && styles.buttonDisabled,
-                ]}
-              >
-                <View style={styles.shutterInner}>
-                  {isCapturing ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Ionicons name="camera" size={32} color="#fff" />
-                  )}
-                </View>
-              </TouchableOpacity>
-
-              {capturedImages.length > 0 && (
-                <TouchableOpacity
-                  onPress={() => {
-                    setShowCamera(false);
-                    setIsCapturingMore(false);
-                  }}
-                >
-                  <Text style={styles.doneAnglesText}>Done adding angles</Text>
-                </TouchableOpacity>
-              )}
-            </SafeAreaView>
-          </View>
-        </CameraView>
+            )}
+          </SafeAreaView>
+        </View>
       </View>
     );
   }
@@ -349,6 +381,11 @@ export default function IdentifyScreen() {
             {error ? (
               <View style={[styles.errorBanner, styles.sectionSpacing]}>
                 <Text style={styles.errorText}>{error}</Text>
+                {error.includes('Settings') ? (
+                  <TouchableOpacity onPress={() => void Linking.openSettings()}>
+                    <Text style={styles.settingsLink}>Open Settings</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
             ) : null}
 
@@ -590,6 +627,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   errorText: { color: T.errorText, fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  settingsLink: {
+    color: PALETTE.accent,
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 8,
+    textAlign: 'center',
+  },
   successBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -760,10 +804,15 @@ const styles = StyleSheet.create({
   },
   buttonDisabled: { opacity: 0.4 },
   cameraContainer: { flex: 1, backgroundColor: '#000' },
-  camera: { flex: 1 },
   cameraHud: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'space-between',
+    zIndex: 1,
+  },
+  cameraStartingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   cameraTopBar: {
     width: '100%',

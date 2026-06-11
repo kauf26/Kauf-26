@@ -59,7 +59,15 @@
     },
     "scheme": "kauf26",
     "plugins": [
-      "expo-camera",
+      "expo-dev-client",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Take photos of products to create marketplace listings with AI-powered descriptions.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ],
       "expo-image-picker",
       "expo-secure-store",
       [
