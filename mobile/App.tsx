@@ -11,16 +11,16 @@ import type { HomeStackParamList } from './src/types/identify';
 
 const Stack = createStackNavigator<HomeStackParamList>();
 
-const DarkTheme = {
+const AppTheme = {
   ...DefaultTheme,
   colors: {
     ...DefaultTheme.colors,
-    primary: '#3b82f6',
-    background: '#0a0a0f',
-    card: '#111827',
-    text: '#ffffff',
-    border: '#1f2937',
-    notification: '#3b82f6',
+    primary: '#2563eb',
+    background: '#ffffff',
+    card: '#18181b',
+    text: '#18181b',
+    border: '#e5e7eb',
+    notification: '#2563eb',
   },
 };
 
@@ -28,28 +28,28 @@ export default function App() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaProvider>
-      <NavigationContainer theme={DarkTheme}>
+      <NavigationContainer theme={AppTheme}>
         <Stack.Navigator
           initialRouteName="Identify"
           screenOptions={{
-            headerStyle: { backgroundColor: '#111827' },
-            headerTintColor: '#ffffff',
+            headerStyle: { backgroundColor: '#ffffff' },
+            headerTintColor: '#18181b',
             headerTitleStyle: { fontWeight: 'bold' },
-            cardStyle: { backgroundColor: '#0a0a0f' },
+            cardStyle: { backgroundColor: '#ffffff' },
           }}
         >
           <Stack.Screen
             name="Identify"
             component={IdentifyScreen}
-            options={{ title: 'Identify Product' }}
+            options={{ headerShown: false }}
           />
           <Stack.Screen
             name="Edit"
             component={EditScreen}
-            options={{ title: 'Review Listing' }}
+            options={{ title: 'Product Draft' }}
           />
         </Stack.Navigator>
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
       </NavigationContainer>
     </SafeAreaProvider>
     </GestureHandlerRootView>

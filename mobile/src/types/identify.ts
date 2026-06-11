@@ -68,6 +68,7 @@ export type IdentifyEditPayload = {
   translation: IdentifyTranslation | null;
   capturedImage: string | null;
   capturedImages: string[];
+  verificationMessage?: string | null;
   raw: IdentifyApiResponse;
 };
 

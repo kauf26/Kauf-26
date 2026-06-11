@@ -10,7 +10,7 @@ export type IdentifyImageInput = {
 };
 
 export function buildIdentifyFormData(
-  image: IdentifyImageInput,
+  images: IdentifyImageInput[],
   options?: {
     autoTranslate?: boolean;
     marketplaces?: string[];
@@ -18,14 +18,25 @@ export function buildIdentifyFormData(
   }
 ): FormData {
   const formData = new FormData();
-  const mime = image.mimeType ?? 'image/jpeg';
-  const name = image.fileName ?? 'product.jpg';
 
-  formData.append('image', {
-    uri: image.uri,
-    name,
-    type: mime,
-  } as unknown as Blob);
+  images.forEach((image, index) => {
+    const mime = image.mimeType ?? 'image/jpeg';
+    const name = image.fileName ?? `angle-${index + 1}.jpg`;
+    formData.append('images', {
+      uri: image.uri,
+      name,
+      type: mime,
+    } as unknown as Blob);
+  });
+
+  if (images.length === 1) {
+    const image = images[0];
+    formData.append('image', {
+      uri: image.uri,
+      name: image.fileName ?? 'product.jpg',
+      type: image.mimeType ?? 'image/jpeg',
+    } as unknown as Blob);
+  }
 
   const autoTranslate = options?.autoTranslate ?? true;
   formData.append('autoTranslate', String(autoTranslate));
@@ -41,14 +52,15 @@ export function buildIdentifyFormData(
 }
 
 export async function postIdentify(
-  image: IdentifyImageInput,
+  images: IdentifyImageInput | IdentifyImageInput[],
   options?: {
     autoTranslate?: boolean;
     marketplaces?: string[];
     targetLang?: string;
   }
 ): Promise<IdentifyApiResponse> {
-  const formData = buildIdentifyFormData(image, options);
+  const imageList = Array.isArray(images) ? images : [images];
+  const formData = buildIdentifyFormData(imageList, options);
   const deviceTz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
 
   const response = await fetch(`${API_BASE_URL}/api/identify`, {
@@ -117,6 +129,12 @@ export function mapIdentifyResponseToEditPayload(
       : product.capturedImage
         ? [product.capturedImage]
         : [],
+    verificationMessage: String(
+      response.message ??
+        (response.requiresManualReview
+          ? 'Product identified — please review pricing before posting.'
+          : '')
+    ).trim() || null,
     raw: response,
   };
 }

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -6,8 +6,10 @@ import {
   TouchableOpacity,
   Image,
   ActivityIndicator,
-  Alert,
   ScrollView,
+  Switch,
+  Animated,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -20,51 +22,66 @@ import {
   DEFAULT_IDENTIFY_MARKETPLACES,
   mapIdentifyResponseToEditPayload,
   postIdentify,
+  type IdentifyImageInput,
 } from '../services/identifyApi';
-import { getAutoTranslateEnabled } from '../services/translationPrefs';
+import {
+  getAutoTranslateEnabled,
+  setAutoTranslateEnabled,
+} from '../services/translationPrefs';
+import { IdentifyTheme as T } from '../theme/identifyTheme';
+
+const MAX_IMAGES = 5;
+const ANGLE_ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth'] as const;
 
 type NavigationProp = StackNavigationProp<HomeStackParamList, 'Identify'>;
-
-type SelectedImage = {
-  uri: string;
-  mimeType: string;
-  fileName: string;
-};
 
 export default function IdentifyScreen() {
   const navigation = useNavigation<NavigationProp>();
   const cameraRef = useRef<CameraView>(null);
   const [permission, requestPermission] = useCameraPermissions();
+  const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const successScale = useRef(new Animated.Value(0)).current;
 
-  const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null);
+  const [capturedImages, setCapturedImages] = useState<IdentifyImageInput[]>([]);
   const [showCamera, setShowCamera] = useState(false);
+  const [isCapturingMore, setIsCapturingMore] = useState(false);
   const [isIdentifying, setIsIdentifying] = useState(false);
-  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [analyzeStep, setAnalyzeStep] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [autoTranslate, setAutoTranslate] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [shutterPressed, setShutterPressed] = useState(false);
 
-  const setImageFromAsset = (asset: ImagePicker.ImagePickerAsset) => {
-    if (!asset.uri) {
-      Alert.alert('Image error', 'Could not read the selected photo. Please try again.');
-      return;
+  useEffect(() => {
+    void getAutoTranslateEnabled().then(setAutoTranslate);
+    return () => clearProgressTimer();
+  }, []);
+
+  const clearProgressTimer = () => {
+    if (progressTimerRef.current) {
+      clearInterval(progressTimerRef.current);
+      progressTimerRef.current = null;
     }
-    setSelectedImage({
-      uri: asset.uri,
-      mimeType: asset.mimeType ?? 'image/jpeg',
-      fileName: asset.fileName ?? `product-${Date.now()}.jpg`,
-    });
-    setStatusMessage(null);
+  };
+
+  const startAnalyzeProgress = (total: number) => {
+    clearProgressTimer();
+    setAnalyzeStep(1);
+    if (total <= 1) return;
+    progressTimerRef.current = setInterval(() => {
+      setAnalyzeStep((prev) => (prev < total ? prev + 1 : prev));
+    }, 4500);
   };
 
   const openCamera = async () => {
     if (!permission?.granted) {
       const result = await requestPermission();
       if (!result.granted) {
-        Alert.alert(
-          'Camera permission required',
-          'Enable camera access in Settings to take product photos.'
-        );
+        setError('Could not access camera. Please check permissions.');
         return;
       }
     }
+    setError(null);
     setShowCamera(true);
   };
 
@@ -75,98 +92,197 @@ export default function IdentifyScreen() {
         skipProcessing: false,
       });
       if (!photo?.uri) {
-        Alert.alert('Capture failed', 'No image was captured. Please try again.');
+        setError('No image was captured. Please try again.');
         return;
       }
-      setSelectedImage({
-        uri: photo.uri,
-        mimeType: 'image/jpeg',
-        fileName: `capture-${Date.now()}.jpg`,
+      setCapturedImages((prev) => {
+        if (prev.length >= MAX_IMAGES) return prev;
+        return [
+          ...prev,
+          {
+            uri: photo.uri,
+            mimeType: 'image/jpeg',
+            fileName: `capture-${Date.now()}.jpg`,
+          },
+        ];
       });
       setShowCamera(false);
-      setStatusMessage(null);
+      setIsCapturingMore(false);
+      setError(null);
     } catch {
-      Alert.alert('Capture failed', 'Something went wrong while taking the photo.');
+      setError('Something went wrong while taking the photo.');
     }
   };
 
   const pickFromGallery = async () => {
     const libraryPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!libraryPermission.granted) {
-      Alert.alert(
-        'Photo library permission required',
-        'Allow photo library access to choose a product image.'
-      );
+      setError('Allow photo library access to choose a product image.');
       return;
     }
 
+    const remaining = MAX_IMAGES - capturedImages.length;
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: false,
+      allowsMultipleSelection: remaining > 1,
       quality: 0.85,
+      selectionLimit: remaining,
     });
 
-    if (result.canceled || !result.assets?.[0]) return;
-    setImageFromAsset(result.assets[0]);
+    if (result.canceled || !result.assets?.length) return;
+
+    const newImages: IdentifyImageInput[] = result.assets
+      .filter((asset) => Boolean(asset.uri))
+      .map((asset, i) => ({
+        uri: asset.uri,
+        mimeType: asset.mimeType ?? 'image/jpeg',
+        fileName: asset.fileName ?? `product-${Date.now()}-${i}.jpg`,
+      }));
+
+    setCapturedImages((prev) => [...prev, ...newImages].slice(0, MAX_IMAGES));
+    setShowCamera(false);
+    setIsCapturingMore(false);
+    setError(null);
   };
 
+  const removeImage = (index: number) => {
+    setCapturedImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const retakeAll = () => {
+    setCapturedImages([]);
+    setIsCapturingMore(false);
+    setShowCamera(false);
+    setError(null);
+  };
+
+  const addAnotherAngle = () => {
+    if (capturedImages.length >= MAX_IMAGES) return;
+    setIsCapturingMore(true);
+    void openCamera();
+  };
+
+  const playSuccessAnimation = () =>
+    new Promise<void>((resolve) => {
+      setShowSuccess(true);
+      successScale.setValue(0);
+      Animated.spring(successScale, {
+        toValue: 1,
+        friction: 4,
+        useNativeDriver: true,
+      }).start(() => {
+        setTimeout(() => {
+          setShowSuccess(false);
+          resolve();
+        }, 600);
+      });
+    });
+
   const runIdentify = async () => {
-    if (!selectedImage) {
-      Alert.alert('No image', 'Take a photo or pick one from your gallery first.');
+    if (capturedImages.length === 0) {
+      setError('Take a photo or pick one from your gallery first.');
       return;
     }
 
     setIsIdentifying(true);
-    setStatusMessage('Analyzing product with AI — this may take up to a minute…');
+    setError(null);
+    startAnalyzeProgress(capturedImages.length);
 
     try {
-      const autoTranslate = await getAutoTranslateEnabled();
-      let response;
-      try {
-        response = await postIdentify(selectedImage, {
-          autoTranslate,
-          marketplaces: DEFAULT_IDENTIFY_MARKETPLACES,
-        });
-      } catch {
-        Alert.alert(
-          'Identification failed',
-          'Failed to identify product. Check server connection.'
-        );
-        return;
-      }
+      const response = await postIdentify(capturedImages, {
+        autoTranslate,
+        marketplaces: DEFAULT_IDENTIFY_MARKETPLACES,
+      });
 
       const payload = mapIdentifyResponseToEditPayload(response);
 
       if (!payload.title && !payload.brand) {
-        Alert.alert(
-          'Identification failed',
-          'The server did not return enough product details. Please try another photo.'
-        );
+        setError('The server did not return enough product details. Please try another photo.');
         return;
       }
 
+      await playSuccessAnimation();
       navigation.navigate('Edit', { result: payload });
+    } catch {
+      setError('Failed to identify product. Check server connection.');
     } finally {
-      setStatusMessage(null);
+      clearProgressTimer();
+      setAnalyzeStep(0);
       setIsIdentifying(false);
     }
   };
 
-  if (showCamera) {
+  const onToggleAutoTranslate = (value: boolean) => {
+    setAutoTranslate(value);
+    void setAutoTranslateEnabled(value);
+  };
+
+  const angleLabel =
+    capturedImages.length < ANGLE_ORDINALS.length
+      ? ANGLE_ORDINALS[capturedImages.length]
+      : `${capturedImages.length + 1}th`;
+
+  const captureLabel =
+    capturedImages.length === 0 ? 'Take Photo' : `Take ${angleLabel} photo`;
+
+  const showCameraView =
+    showCamera || (capturedImages.length === 0 && !isIdentifying);
+
+  if (showCamera && permission?.granted) {
     return (
       <View style={styles.cameraContainer}>
         <CameraView ref={cameraRef} style={styles.camera} facing="back">
           <SafeAreaView style={styles.cameraOverlay} edges={['top', 'bottom']}>
             <TouchableOpacity
               style={styles.cameraCloseButton}
-              onPress={() => setShowCamera(false)}
+              onPress={() => {
+                setShowCamera(false);
+                setIsCapturingMore(false);
+              }}
             >
               <Ionicons name="close" size={28} color="#fff" />
             </TouchableOpacity>
+
             <View style={styles.cameraBottomBar}>
-              <TouchableOpacity style={styles.shutterButton} onPress={() => void capturePhoto()}>
-                <View style={styles.shutterInner} />
+              <Text style={styles.captureLabel}>{captureLabel}</Text>
+
+              <TouchableOpacity
+                activeOpacity={0.9}
+                onPressIn={() => setShutterPressed(true)}
+                onPressOut={() => setShutterPressed(false)}
+                onPress={() => void capturePhoto()}
+                disabled={isIdentifying}
+                style={[
+                  styles.shutterOuter,
+                  shutterPressed && styles.shutterPressed,
+                  isIdentifying && styles.buttonDisabled,
+                ]}
+              >
+                <View style={styles.shutterInner}>
+                  <Ionicons name="camera" size={32} color="#fff" />
+                </View>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.galleryPill, isIdentifying && styles.buttonDisabled]}
+                onPress={() => void pickFromGallery()}
+                disabled={isIdentifying}
+              >
+                <Ionicons name="images-outline" size={20} color="#fff" />
+                <Text style={styles.galleryPillText}>Upload from gallery</Text>
+              </TouchableOpacity>
+
+              {capturedImages.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setShowCamera(false);
+                    setIsCapturingMore(false);
+                  }}
+                >
+                  <Text style={styles.doneAnglesText}>Done adding angles</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </SafeAreaView>
         </CameraView>
@@ -175,109 +291,343 @@ export default function IdentifyScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.subtitle}>
-          Capture or choose a product photo, then identify it with Kauf26 AI. Results open on the
-          edit screen for review before listing.
-        </Text>
+    <SafeAreaView style={styles.page} edges={['bottom']}>
+      <ScrollView contentContainerStyle={styles.pageContent}>
+        <View style={styles.welcomeHeader}>
+          <Text style={styles.brandTitle}>KAUF-AI</Text>
+          <Text style={styles.brandTagline}>PICTURE · POST · SELL</Text>
+          <Text style={styles.welcomeHint}>
+            For best results, take up to 5 photos: front, back, label/tag, and details.
+          </Text>
+        </View>
 
-        <View style={styles.previewCard}>
-          {selectedImage ? (
-            <Image source={{ uri: selectedImage.uri }} style={styles.previewImage} resizeMode="cover" />
+        <View style={styles.scannerCard}>
+          <Text style={styles.scannerTitle}>KAUF26 Scanner</Text>
+          <Text style={styles.scannerSubtitle}>
+            For best results, take up to 5 photos: front, back, label/tag, and details.
+          </Text>
+
+          {error ? (
+            <View style={styles.errorBanner}>
+              <Text style={styles.errorText}>{error}</Text>
+            </View>
+          ) : null}
+
+          {showSuccess ? (
+            <Animated.View
+              style={[styles.successBanner, { transform: [{ scale: successScale }] }]}
+            >
+              <Ionicons name="checkmark-circle" size={22} color={T.successText} />
+              <Text style={styles.successText}>Product identified!</Text>
+            </Animated.View>
+          ) : null}
+
+          {showCameraView && capturedImages.length === 0 ? (
+            <View style={styles.startActions}>
+              <TouchableOpacity
+                style={[styles.startCameraButton, isIdentifying && styles.buttonDisabled]}
+                onPress={() => void openCamera()}
+                disabled={isIdentifying}
+              >
+                <Text style={styles.startCameraText}>Start Camera</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.uploadOutlineButton, isIdentifying && styles.buttonDisabled]}
+                onPress={() => void pickFromGallery()}
+                disabled={isIdentifying}
+              >
+                <Ionicons name="camera-outline" size={24} color="#fff" />
+                <Text style={styles.uploadOutlineText}>Upload photo</Text>
+              </TouchableOpacity>
+            </View>
           ) : (
-            <View style={styles.previewPlaceholder}>
-              <Ionicons name="image-outline" size={48} color="#4b5563" />
-              <Text style={styles.previewPlaceholderText}>No image selected</Text>
+            <View style={styles.reviewSection}>
+              <View style={styles.imageGrid}>
+                {capturedImages.map((img, index) => (
+                  <View key={`${index}-${img.uri}`} style={styles.thumbWrap}>
+                    <Image source={{ uri: img.uri }} style={styles.thumb} resizeMode="cover" />
+                    <View style={styles.thumbBadge}>
+                      <Text style={styles.thumbBadgeText}>{index + 1}</Text>
+                    </View>
+                    <View style={styles.thumbActions}>
+                      <TouchableOpacity
+                        style={styles.thumbActionBtn}
+                        onPress={() => {
+                          removeImage(index);
+                          setIsCapturingMore(true);
+                          void openCamera();
+                        }}
+                        disabled={isIdentifying}
+                      >
+                        <Text style={styles.thumbActionText}>Replace</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.thumbActionBtn, styles.thumbRemoveBtn]}
+                        onPress={() => removeImage(index)}
+                        disabled={isIdentifying}
+                      >
+                        <Text style={styles.thumbActionText}>Remove</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+
+              {capturedImages.length < MAX_IMAGES && (
+                <TouchableOpacity
+                  style={[styles.addAngleButton, isIdentifying && styles.buttonDisabled]}
+                  onPress={addAnotherAngle}
+                  disabled={isIdentifying}
+                >
+                  <Text style={styles.addAngleText}>+ Add another angle</Text>
+                </TouchableOpacity>
+              )}
+
+              {isIdentifying && (
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator color={T.textMuted} size="small" />
+                  <Text style={styles.loadingText}>
+                    Analyzing image {Math.min(analyzeStep || 1, capturedImages.length)}/
+                    {capturedImages.length}… this may take up to a minute.
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.actionRow}>
+                <TouchableOpacity
+                  style={[styles.secondaryAction, isIdentifying && styles.buttonDisabled]}
+                  onPress={retakeAll}
+                  disabled={isIdentifying}
+                >
+                  <Text style={styles.secondaryActionText}>Start over</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.primaryAction, isIdentifying && styles.buttonDisabled]}
+                  onPress={() => void runIdentify()}
+                  disabled={isIdentifying}
+                >
+                  {isIdentifying ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : null}
+                  <Text style={styles.primaryActionText}>
+                    {isIdentifying
+                      ? 'Analyzing…'
+                      : capturedImages.length === 1
+                        ? 'Identify'
+                        : `Submit all (${capturedImages.length} photos)`}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
+
+          <View style={styles.translateRow}>
+            <View style={styles.translateTextWrap}>
+              <Text style={styles.translateTitle}>Auto-translate listings</Text>
+              <Text style={styles.translateHint}>
+                Translate title and description after identification.
+              </Text>
+            </View>
+            <Switch
+              value={autoTranslate}
+              onValueChange={onToggleAutoTranslate}
+              trackColor={{ false: T.surfaceBorder, true: T.primary }}
+              thumbColor="#fff"
+              disabled={isIdentifying}
+            />
+          </View>
         </View>
-
-        <View style={styles.buttonRow}>
-          <TouchableOpacity style={styles.secondaryButton} onPress={() => void openCamera()}>
-            <Ionicons name="camera" size={20} color="#fff" />
-            <Text style={styles.secondaryButtonText}>Open camera</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryButton} onPress={() => void pickFromGallery()}>
-            <Ionicons name="images" size={20} color="#fff" />
-            <Text style={styles.secondaryButtonText}>Pick from gallery</Text>
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity
-          style={[styles.primaryButton, (!selectedImage || isIdentifying) && styles.buttonDisabled]}
-          onPress={() => void runIdentify()}
-          disabled={!selectedImage || isIdentifying}
-        >
-          {isIdentifying ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Ionicons name="scan" size={20} color="#fff" />
-          )}
-          <Text style={styles.primaryButtonText}>
-            {isIdentifying ? 'Identifying…' : 'Identify product'}
-          </Text>
-        </TouchableOpacity>
-
-        {statusMessage ? <Text style={styles.statusText}>{statusMessage}</Text> : null}
-
-        <Text style={styles.hint}>
-          Sends to {DEFAULT_IDENTIFY_MARKETPLACES.join(', ')} marketplace context. Auto-translate
-          follows your Settings preference.
-        </Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0a0a0f' },
-  content: { padding: 16, paddingBottom: 32 },
-  subtitle: { color: '#9ca3af', fontSize: 14, lineHeight: 20, marginBottom: 16 },
-  previewCard: {
-    backgroundColor: '#111827',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#1f2937',
-    overflow: 'hidden',
-    marginBottom: 16,
-    minHeight: 240,
+  page: { flex: 1, backgroundColor: T.pageBg },
+  pageContent: { padding: 16, paddingBottom: 32 },
+  welcomeHeader: { alignItems: 'center', marginBottom: 16 },
+  brandTitle: {
+    fontSize: 42,
+    fontWeight: '700',
+    color: '#000',
+    letterSpacing: -1,
+    fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
   },
-  previewImage: { width: '100%', height: 280 },
-  previewPlaceholder: {
-    minHeight: 240,
+  brandTagline: {
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 3,
+    color: T.primary,
+    marginTop: 4,
+  },
+  welcomeHint: {
+    fontSize: 13,
+    color: '#4b5563',
+    textAlign: 'center',
+    marginTop: 10,
+    lineHeight: 18,
+    maxWidth: 320,
+  },
+  scannerCard: {
+    backgroundColor: T.cardBg,
+    borderWidth: 1,
+    borderColor: T.cardBorder,
+    borderRadius: 12,
+    padding: 14,
+    gap: 12,
+    ...Platform.select({
+      ios: {
+        shadowColor: T.shadow,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.15,
+        shadowRadius: 16,
+      },
+      android: { elevation: 6 },
+    }),
+  },
+  scannerTitle: {
+    color: T.text,
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  scannerSubtitle: {
+    color: T.textMuted,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  errorBanner: {
+    backgroundColor: T.errorBg,
+    borderWidth: 1,
+    borderColor: T.errorBorder,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  errorText: { color: T.errorText, fontSize: 12 },
+  successBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: T.successBg,
+    borderWidth: 1,
+    borderColor: T.successBorder,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  successText: { color: T.successText, fontSize: 13, fontWeight: '600' },
+  startActions: { gap: 12 },
+  startCameraButton: {
+    backgroundColor: T.primary,
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  startCameraText: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  uploadOutlineButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: T.cardBorder,
+    borderRadius: 12,
+    paddingVertical: 16,
+  },
+  uploadOutlineText: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  reviewSection: { gap: 12 },
+  imageGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  thumbWrap: {
+    width: '31%',
+    aspectRatio: 1,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: T.surfaceBorder,
+    position: 'relative',
+  },
+  thumb: { width: '100%', height: '100%' },
+  thumbBadge: {
+    position: 'absolute',
+    top: 4,
+    left: 4,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  thumbBadgeText: { color: '#fff', fontSize: 10 },
+  thumbActions: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    gap: 4,
+    padding: 4,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  thumbActionBtn: {
+    flex: 1,
+    backgroundColor: 'rgba(39,39,42,0.9)',
+    borderRadius: 4,
+    paddingVertical: 4,
+    alignItems: 'center',
+  },
+  thumbRemoveBtn: { backgroundColor: 'rgba(127,29,29,0.9)' },
+  thumbActionText: { color: '#fff', fontSize: 9, fontWeight: '600' },
+  addAngleButton: {
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: T.surfaceBorder,
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  addAngleText: { color: T.textMuted, fontSize: 14, fontWeight: '600' },
+  loadingRow: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
-  previewPlaceholderText: { color: '#6b7280', fontSize: 14 },
-  buttonRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
-  secondaryButton: {
+  loadingText: { color: T.textMuted, fontSize: 13, textAlign: 'center', flex: 1 },
+  actionRow: { flexDirection: 'row', gap: 12 },
+  secondaryAction: {
+    flex: 1,
+    backgroundColor: T.cardBorder,
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  secondaryActionText: { color: T.text, fontSize: 14, fontWeight: '600' },
+  primaryAction: {
     flex: 1,
     flexDirection: 'row',
+    backgroundColor: T.primary,
+    borderRadius: 8,
+    paddingVertical: 12,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    backgroundColor: '#1f2937',
-    borderRadius: 10,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
   },
-  secondaryButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-  primaryButton: {
+  primaryActionText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  translateRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 10,
-    backgroundColor: '#2563eb',
-    borderRadius: 10,
-    paddingVertical: 16,
-    marginBottom: 8,
+    borderTopWidth: 1,
+    borderTopColor: T.cardBorder,
+    paddingTop: 12,
+    marginTop: 4,
   },
-  primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  buttonDisabled: { opacity: 0.5 },
-  statusText: { color: '#93c5fd', fontSize: 13, textAlign: 'center', marginBottom: 8 },
-  hint: { color: '#6b7280', fontSize: 12, lineHeight: 18, marginTop: 8 },
+  translateTextWrap: { flex: 1 },
+  translateTitle: { color: T.text, fontSize: 13, fontWeight: '600' },
+  translateHint: { color: T.textSubtle, fontSize: 11, marginTop: 2 },
+  buttonDisabled: { opacity: 0.4 },
   cameraContainer: { flex: 1, backgroundColor: '#000' },
   camera: { flex: 1 },
   cameraOverlay: { flex: 1, justifyContent: 'space-between' },
@@ -290,21 +640,48 @@ const styles = StyleSheet.create({
   },
   cameraBottomBar: {
     alignItems: 'center',
-    paddingBottom: 24,
+    paddingBottom: 28,
+    paddingHorizontal: 16,
+    gap: 14,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingTop: 24,
   },
-  shutterButton: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    borderWidth: 4,
-    borderColor: '#fff',
+  captureLabel: {
+    color: '#fff',
+    fontSize: 17,
+    fontWeight: '700',
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  shutterOuter: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: T.emerald,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 4,
+    borderColor: 'rgba(255,255,255,0.4)',
   },
-  shutterInner: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
-    backgroundColor: '#fff',
+  shutterPressed: { transform: [{ scale: 0.95 }], backgroundColor: T.emeraldDark },
+  shutterInner: { alignItems: 'center', justifyContent: 'center' },
+  galleryPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(39,39,42,0.9)',
+    borderWidth: 1,
+    borderColor: T.surfaceBorder,
+    borderRadius: 999,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+  },
+  galleryPillText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  doneAnglesText: {
+    color: T.textMuted,
+    fontSize: 13,
+    fontWeight: '500',
+    textDecorationLine: 'underline',
   },
 });
