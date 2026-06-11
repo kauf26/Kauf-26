@@ -208,3 +208,105 @@ export function marketplaceLocalesForIds(
 ): MarketplaceLocale[] {
   return marketplaceIds.map((id) => getMarketplaceLocale(id));
 }
+
+/** Whether the identify pipeline should call LibreTranslate. */
+export function shouldRunListingTranslation(input: {
+  autoTranslate?: boolean;
+  marketplaceIds?: string[];
+  targetLang?: string | null;
+}): boolean {
+  if (input.autoTranslate === false) return false;
+  if (input.autoTranslate === true) return true;
+  const target = resolveTranslationTargetLanguage({
+    marketplaceIds: input.marketplaceIds,
+    targetLang: input.targetLang,
+  });
+  return Boolean(target && target !== "en" && (input.marketplaceIds?.length ?? 0) > 0);
+}
+
+export type ListingTranslationResult = {
+  applied: boolean;
+  targetLang: string | null;
+  originalTitle: string;
+  originalDescription: string;
+  translatedTitle?: string;
+  translatedDescription?: string;
+  error?: string;
+};
+
+/** Translate final listing title + description via LibreTranslate. */
+export async function translateListingTextFields(
+  listing: { title?: string; description?: string; longDescription?: string },
+  options: { targetLang: string; sourceLang?: string }
+): Promise<ListingTranslationResult & { listing: typeof listing }> {
+  const originalTitle = String(listing.title ?? "").trim();
+  const originalDescription = String(
+    listing.description ?? listing.longDescription ?? ""
+  ).trim();
+  const targetLang = normalizeLang(options.targetLang);
+
+  if (!targetLang || targetLang === "en" || (!originalTitle && !originalDescription)) {
+    return {
+      listing,
+      applied: false,
+      targetLang: targetLang || null,
+      originalTitle,
+      originalDescription,
+    };
+  }
+
+  try {
+    const [titleResult, descriptionResult] = await Promise.all([
+      originalTitle
+        ? translateText({
+            text: originalTitle,
+            targetLang,
+            sourceLang: options.sourceLang,
+          })
+        : Promise.resolve({
+            translatedText: "",
+            sourceLang: options.sourceLang ?? "auto",
+            targetLang,
+          }),
+      originalDescription
+        ? translateText({
+            text: originalDescription,
+            targetLang,
+            sourceLang: options.sourceLang,
+          })
+        : Promise.resolve({
+            translatedText: "",
+            sourceLang: options.sourceLang ?? "auto",
+            targetLang,
+          }),
+    ]);
+
+    const translatedTitle = titleResult.translatedText || originalTitle;
+    const translatedDescription =
+      descriptionResult.translatedText || originalDescription;
+
+    return {
+      listing: {
+        ...listing,
+        title: translatedTitle,
+        description: translatedDescription,
+        longDescription: translatedDescription || listing.longDescription,
+      },
+      applied: true,
+      targetLang,
+      originalTitle,
+      originalDescription,
+      translatedTitle,
+      translatedDescription,
+    };
+  } catch (error) {
+    return {
+      listing,
+      applied: false,
+      targetLang,
+      originalTitle,
+      originalDescription,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}

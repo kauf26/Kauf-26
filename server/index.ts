@@ -91,8 +91,11 @@ import {
 import {
   checkTranslationServiceHealth,
   resolveTranslationTargetLanguage,
+  shouldRunListingTranslation,
+  translateListingTextFields,
   translateText,
   translateVisionListingFields,
+  type ListingTranslationResult,
   type VisionTranslationResult,
 } from "./services/translationService";
 
@@ -916,6 +919,41 @@ const IDENTIFY_REQUEST_TIMEOUT_MS = Number(
 );
 const VISION_TIMEOUT_MS = Number(process.env.VISION_TIMEOUT_MS ?? 10_000);
 
+function buildTranslationResponse(
+  visionTranslation: VisionTranslationResult | null,
+  listingTranslation: ListingTranslationResult | null,
+  marketplaceIds?: string[]
+) {
+  if (!visionTranslation && !listingTranslation) return null;
+  return {
+    applied:
+      visionTranslation?.applied === true ||
+      listingTranslation?.applied === true,
+    targetLang:
+      listingTranslation?.targetLang ??
+      visionTranslation?.targetLang ??
+      null,
+    originalTitle:
+      listingTranslation?.originalTitle ??
+      visionTranslation?.originalTitle ??
+      "",
+    originalDescription:
+      listingTranslation?.originalDescription ??
+      visionTranslation?.originalDescription ??
+      "",
+    translatedTitle:
+      listingTranslation?.translatedTitle ??
+      visionTranslation?.translatedTitle ??
+      null,
+    translatedDescription:
+      listingTranslation?.translatedDescription ??
+      visionTranslation?.translatedDescription ??
+      null,
+    error: listingTranslation?.error ?? visionTranslation?.error ?? null,
+    marketplaceIds: marketplaceIds ?? [],
+  };
+}
+
 function applyScrapeMeta(
   listing: ScrapedListing,
   scrapedRaw: ScrapedListing | null
@@ -981,31 +1019,39 @@ async function runIdentifyPipeline(
    let vision = mergedVision;
    let searchQuery = initialSearchQuery;
    let translationResult: VisionTranslationResult | null = null;
+   let listingTranslationResult: ListingTranslationResult | null = null;
 
-   if (job.autoTranslate) {
-     const targetLang = resolveTranslationTargetLanguage({
+   const translationTargetLang = resolveTranslationTargetLanguage({
+     marketplaceIds: job.marketplaceIds,
+     targetLang: job.targetLang,
+   });
+
+   if (
+     shouldRunListingTranslation({
+       autoTranslate: job.autoTranslate,
        marketplaceIds: job.marketplaceIds,
        targetLang: job.targetLang,
+     }) &&
+     translationTargetLang &&
+     translationTargetLang !== "en"
+   ) {
+     console.log(
+       `🌐 [3/5] Translating listing fields → ${translationTargetLang} (marketplaces=${(job.marketplaceIds ?? []).join(",") || "default"})`
+     );
+     translationResult = await translateVisionListingFields(vision, {
+       targetLang: translationTargetLang,
+       sourceLang: "en",
      });
-     if (targetLang && targetLang !== "en") {
+     if (translationResult.applied) {
+       vision = translationResult.vision;
+       searchQuery = buildScraperSearchQuery(vision);
        console.log(
-         `🌐 [3/5] Translating listing fields → ${targetLang} (marketplaces=${(job.marketplaceIds ?? []).join(",") || "default"})`
+         `[Identify] Translated title="${vision.title}" searchQuery="${searchQuery}"`
        );
-       translationResult = await translateVisionListingFields(vision, {
-         targetLang,
-         sourceLang: "en",
-       });
-       if (translationResult.applied) {
-         vision = translationResult.vision;
-         searchQuery = buildScraperSearchQuery(vision);
-         console.log(
-           `[Identify] Translated title="${vision.title}" searchQuery="${searchQuery}"`
-         );
-       } else if (translationResult.error) {
-         console.warn(
-           `[Identify] Translation skipped: ${translationResult.error}`
-         );
-       }
+     } else if (translationResult.error) {
+       console.warn(
+         `[Identify] Vision translation skipped: ${translationResult.error}`
+       );
      }
    }
 
@@ -1094,6 +1140,32 @@ async function runIdentifyPipeline(
      }
      if (listings.timedOut) {
        console.warn("[Identify] One or more scrapers timed out");
+     }
+   }
+
+   if (
+     translationTargetLang &&
+     translationTargetLang !== "en" &&
+     shouldRunListingTranslation({
+       autoTranslate: job.autoTranslate,
+       marketplaceIds: job.marketplaceIds,
+       targetLang: job.targetLang,
+     })
+   ) {
+     const listingTranslation = await translateListingTextFields(listings, {
+       targetLang: translationTargetLang,
+       sourceLang: "en",
+     });
+     listingTranslationResult = listingTranslation;
+     if (listingTranslation.applied) {
+       listings = listingTranslation.listing as ScrapedListing;
+       console.log(
+         `[Identify] Final listing translated → ${translationTargetLang}: "${listings.title}"`
+       );
+     } else if (listingTranslation.error) {
+       console.warn(
+         `[Identify] Listing translation skipped: ${listingTranslation.error}`
+       );
      }
    }
 
@@ -1212,19 +1284,11 @@ async function runIdentifyPipeline(
        visionSources,
        productPageImageUrls: pageImageUrls,
        productPageImageCount: pageImageUrls.length,
-       translation: translationResult
-         ? {
-             applied: translationResult.applied,
-             targetLang: translationResult.targetLang,
-             originalTitle: translationResult.originalTitle,
-             originalDescription: translationResult.originalDescription,
-             translatedTitle: translationResult.translatedTitle ?? null,
-             translatedDescription:
-               translationResult.translatedDescription ?? null,
-             error: translationResult.error ?? null,
-             marketplaceIds: job.marketplaceIds ?? [],
-           }
-         : null,
+       translation: buildTranslationResponse(
+         translationResult,
+         listingTranslationResult,
+         job.marketplaceIds
+       ),
      }
    };
 
@@ -1278,18 +1342,11 @@ async function runIdentifyPipeline(
      scraperSource: listings.scraperSource ?? null,
      scraperMetadata: listings._scraperMetadata ?? null,
      verificationWarning: listings.verificationWarning ?? null,
-     translation: translationResult
-       ? {
-           applied: translationResult.applied,
-           targetLang: translationResult.targetLang,
-           originalTitle: translationResult.originalTitle,
-           originalDescription: translationResult.originalDescription,
-           translatedTitle: translationResult.translatedTitle ?? null,
-           translatedDescription:
-             translationResult.translatedDescription ?? null,
-           error: translationResult.error ?? null,
-         }
-       : null,
+     translation: buildTranslationResponse(
+       translationResult,
+       listingTranslationResult,
+       job.marketplaceIds
+     ),
      product: {
        title: listings.title ?? searchQuery,
        description: listings.description ?? vision.description ?? "",
@@ -1446,18 +1503,21 @@ app.post(
       let { vision, sources, primaryImageIndex, searchQuery, perImage } =
         visionPhase;
       let translationResult: VisionTranslationResult | null = null;
+      let listingTranslationResult: ListingTranslationResult | null = null;
 
-      if (identifyOptions.autoTranslate) {
-        const targetLang = resolveTranslationTargetLanguage(identifyOptions);
-        if (targetLang && targetLang !== "en") {
-          translationResult = await translateVisionListingFields(vision, {
-            targetLang,
-            sourceLang: "en",
-          });
-          if (translationResult.applied) {
-            vision = translationResult.vision;
-            searchQuery = buildScraperSearchQuery(vision);
-          }
+      const debugTargetLang = resolveTranslationTargetLanguage(identifyOptions);
+      if (
+        shouldRunListingTranslation(identifyOptions) &&
+        debugTargetLang &&
+        debugTargetLang !== "en"
+      ) {
+        translationResult = await translateVisionListingFields(vision, {
+          targetLang: debugTargetLang,
+          sourceLang: "en",
+        });
+        if (translationResult.applied) {
+          vision = translationResult.vision;
+          searchQuery = buildScraperSearchQuery(vision);
         }
       }
 
@@ -1487,6 +1547,21 @@ app.post(
         mergedListing = buildVisionFallback(vision);
       } else {
         mergedListing = mergeVisionAndScraper(vision, scrapedRaw!);
+      }
+
+      if (
+        debugTargetLang &&
+        debugTargetLang !== "en" &&
+        shouldRunListingTranslation(identifyOptions)
+      ) {
+        const listingTranslation = await translateListingTextFields(
+          mergedListing,
+          { targetLang: debugTargetLang, sourceLang: "en" }
+        );
+        listingTranslationResult = listingTranslation;
+        if (listingTranslation.applied) {
+          mergedListing = listingTranslation.listing as ScrapedListing;
+        }
       }
 
       const scraperRejected = shouldRejectScraperProduct(vision, scrapedRaw);
@@ -1524,7 +1599,11 @@ app.post(
         scraperRejected,
         priceRejected,
         identificationWarnings: warnings,
-        translation: translationResult,
+        translation: buildTranslationResponse(
+          translationResult,
+          listingTranslationResult,
+          identifyOptions.marketplaceIds
+        ),
         identifyOptions,
       });
     } catch (error) {
