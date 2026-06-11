@@ -27,6 +27,8 @@ import {
   resolveVerificationMessage,
   shouldProceedToDraft,
 } from '../../../shared/identifyFlow';
+
+const LOGO_IMAGE = require('../../assets/icon.png');
 import {
   getAutoTranslateEnabled,
   setAutoTranslateEnabled,
@@ -275,9 +277,9 @@ export default function IdentifyScreen() {
         <View style={styles.contentColumn}>
           <View style={styles.logoWrap}>
             <Image
-              source={require('../../assets/icon.png')}
-              style={styles.logo}
-              resizeMode="cover"
+              source={LOGO_IMAGE}
+              style={styles.logoImage}
+              resizeMode="contain"
               accessibilityLabel="Kauf-AI logo"
             />
           </View>
@@ -465,13 +467,13 @@ const styles = StyleSheet.create({
     width: '100%',
     alignSelf: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     marginTop: 20,
     marginBottom: 20,
   },
-  logo: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+  logoImage: {
+    width: 96,
+    height: 96,
     alignSelf: 'center',
   },
   sectionSpacing: {
