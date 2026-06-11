@@ -18,7 +18,6 @@ function resolveApiBaseUrl(): string {
     return stripTrailingSlash(fromEnv);
   }
 
-  // @ts-expect-error __DEV__ is injected by React Native / Metro
   const isDev = typeof __DEV__ !== "undefined" ? __DEV__ : process.env.NODE_ENV !== "production";
 
   if (isDev) {
