@@ -163,8 +163,9 @@ export default function SelectMarketplaces() {
     () => ({
       title: draft?.title,
       description: draft?.description,
+      priceUsd: parseFloat(String(draft?.price ?? "")) || null,
     }),
-    [draft?.title, draft?.description]
+    [draft?.title, draft?.description, draft?.price]
   );
   const unknownCategory = isUnknownProductCategory(productCategory);
 
@@ -293,6 +294,11 @@ export default function SelectMarketplaces() {
                 {isDisabled && support.policyHint && support.disabledReason && (
                   <p className="text-[10px] text-zinc-500 mt-0.5 normal-case no-underline">
                     {support.policyHint}
+                  </p>
+                )}
+                {!isDisabled && support.warnings && support.warnings.length > 0 && (
+                  <p className="text-[11px] text-amber-400/90 mt-1 normal-case">
+                    ⚠ {support.warnings[0]}
                   </p>
                 )}
               </div>

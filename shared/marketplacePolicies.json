@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "marketplaces": {
+    "stockx": {
+      "allowedKeywords": [
+        "shoe",
+        "shoes",
+        "sneaker",
+        "sneakers",
+        "footwear",
+        "boot",
+        "boots",
+        "trainer",
+        "trainers",
+        "slide",
+        "slides",
+        "sandal",
+        "sandals"
+      ],
+      "policyHint": "StockX only accepts footwear"
+    },
+    "poshmark": {
+      "allowedKeywords": [
+        "clothing",
+        "apparel",
+        "fashion",
+        "dress",
+        "shirt",
+        "pants",
+        "jeans",
+        "jacket",
+        "coat",
+        "shoe",
+        "shoes",
+        "footwear",
+        "sneaker",
+        "accessories",
+        "handbag",
+        "handbags",
+        "bag",
+        "purse",
+        "jewelry",
+        "scarf",
+        "hat",
+        "watch",
+        "watches",
+        "smartwatch",
+        "smart watch",
+        "apple watch",
+        "g-shock",
+        "g shock"
+      ],
+      "policyHint": "Poshmark accepts clothing, shoes, accessories, and watches",
+      "conditionalRules": [
+        {
+          "id": "poshmark-high-value-watch",
+          "matchKeywords": [
+            "watch",
+            "watches",
+            "smartwatch",
+            "smart watch",
+            "apple watch",
+            "g-shock",
+            "g shock"
+          ],
+          "minPriceUsd": 500,
+          "severity": "warn",
+          "message": "Poshmark does not offer its standard authentication process for electronics items over $500. Listing a watch over this value may risk operational holds."
+        }
+      ]
+    },
+    "wayfair": {
+      "allowedKeywords": [
+        "home",
+        "furniture",
+        "furnishing",
+        "decor",
+        "decoration",
+        "kitchen",
+        "bedding",
+        "lighting",
+        "outdoor",
+        "rug",
+        "sofa",
+        "couch",
+        "table",
+        "chair",
+        "mattress",
+        "lamp",
+        "patio",
+        "garden"
+      ],
+      "policyHint": "Wayfair accepts home goods and furniture only"
+    },
+    "newegg": {
+      "allowedKeywords": [
+        "electronic",
+        "electronics",
+        "computer",
+        "computers",
+        "laptop",
+        "notebook",
+        "pc",
+        "gaming",
+        "smartwatch",
+        "smart watch",
+        "smart-watch",
+        "wearable",
+        "phone",
+        "smartphone",
+        "tablet",
+        "component",
+        "gpu",
+        "cpu",
+        "monitor",
+        "keyboard",
+        "software",
+        "network",
+        "storage",
+        "ssd",
+        "motherboard"
+      ],
+      "policyHint": "Newegg accepts electronics and computers only"
+    }
+  }
+}

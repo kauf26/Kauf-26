@@ -22,6 +22,7 @@ import {
   filterMarketplacesForProductCategory,
   validateMarketplacesForProductCategory,
 } from "./listingService";
+import { draftPrice } from "./adapters/adapterUtils";
 import { isInternationalChannelMarketplace } from "../../shared/marketplaceChannels";
 import {
   getMarketplaceListingLanguage,
@@ -206,6 +207,7 @@ export async function publishDraft(
   const categoryContext = {
     title: payload.title,
     description: String(payload.attributes.description ?? ""),
+    priceUsd: draftPrice(payload),
   };
 
   if (marketplaceNames == null) {

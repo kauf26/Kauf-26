@@ -214,8 +214,12 @@ export default function HomeScreen() {
   };
 
   const categoryContext = useMemo(
-    () => ({ title, description }),
-    [title, description]
+    () => ({
+      title,
+      description,
+      priceUsd: parseFloat(price) || null,
+    }),
+    [title, description, price]
   );
   const unknownCategory = isUnknownProductCategory(category);
 

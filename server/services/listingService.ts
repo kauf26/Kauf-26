@@ -5,10 +5,13 @@ import {
 } from "./oauthService";
 import { hasConnection } from "./oauthConnectionStorage";
 import {
-  assertMarketplacesSupportCategory,
   filterSupportedMarketplaces,
-  type CategoryContext,
+  type ListingPolicyContext,
 } from "../../shared/marketplaceCategorySupport";
+import {
+  logPreListingPolicyWarnings,
+  validatePreListingPolicies,
+} from "../../shared/marketplacePolicyValidation";
 
 const OAUTH_MARKETPLACES: OAuthProviderId[] = ["etsy", "ebay", "shopify", "amazon"];
 
@@ -67,20 +70,40 @@ export function extractCategoryFromDraftAttributes(
   ).trim();
 }
 
-/** Validate marketplace IDs against product category before publish. */
+/** Validate marketplace IDs against product category before publish. Logs warn-only policy hits. */
 export function validateMarketplacesForProductCategory(
   marketplaceIds: readonly string[],
   category: string | undefined | null,
-  context?: CategoryContext
+  context?: ListingPolicyContext
 ): void {
-  assertMarketplacesSupportCategory(marketplaceIds, category, context);
+  const { warnings, rejected } = validatePreListingPolicies(
+    marketplaceIds,
+    category,
+    context
+  );
+  logPreListingPolicyWarnings(warnings);
+
+  if (rejected.length > 0) {
+    throw new Error(rejected[0].reason);
+  }
+}
+
+/** Pre-listing validation with structured warn vs reject results. */
+export function runPreListingPolicyValidation(
+  marketplaceIds: readonly string[],
+  category: string | undefined | null,
+  context?: ListingPolicyContext
+) {
+  const result = validatePreListingPolicies(marketplaceIds, category, context);
+  logPreListingPolicyWarnings(result.warnings);
+  return result;
 }
 
 /** Keep only marketplaces that accept the product category (e.g. publish-all). */
 export function filterMarketplacesForProductCategory(
   marketplaceIds: readonly string[],
   category: string | undefined | null,
-  context?: CategoryContext
+  context?: ListingPolicyContext
 ): string[] {
   return filterSupportedMarketplaces(marketplaceIds, category, context);
 }
