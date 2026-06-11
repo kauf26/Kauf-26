@@ -10,6 +10,7 @@ import {
   Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { PRIVACY_POLICY_URL, TERMS_OF_SERVICE_URL } from '../config/legal';
 import {
@@ -31,6 +32,7 @@ async function openLegalUrl(url: string, label: string) {
 }
 
 export default function SettingsScreen() {
+  const navigation = useNavigation<any>();
   const [autoTranslate, setAutoTranslate] = useState(false);
 
   useEffect(() => {
@@ -52,6 +54,21 @@ export default function SettingsScreen() {
           <Text style={styles.mono}>EXPO_PUBLIC_TERMS_URL</Text>) before production EAS builds.
         </Text>
 
+        <Text style={styles.sectionHeader}>Account</Text>
+        <View style={styles.card}>
+          <TouchableOpacity
+            style={styles.linkRow}
+            onPress={() => navigation.getParent()?.navigate('Login')}
+          >
+            <Ionicons name="log-in-outline" size={20} color="#3b82f6" />
+            <View style={styles.linkTextWrap}>
+              <Text style={styles.linkTitle}>Sign in</Text>
+              <Text style={styles.linkHint}>Google or Apple account (web OAuth)</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#6b7280" />
+          </TouchableOpacity>
+        </View>
+
         <Text style={styles.sectionHeader}>Listing</Text>
         <View style={styles.card}>
           <View style={styles.toggleRow}>
@@ -69,6 +86,21 @@ export default function SettingsScreen() {
               thumbColor="#fff"
             />
           </View>
+        </View>
+
+        <Text style={styles.sectionHeader}>Inventory</Text>
+        <View style={styles.card}>
+          <TouchableOpacity
+            style={styles.linkRow}
+            onPress={() => navigation.navigate('Inventory')}
+          >
+            <Ionicons name="layers-outline" size={20} color="#3b82f6" />
+            <View style={styles.linkTextWrap}>
+              <Text style={styles.linkTitle}>Manage inventory</Text>
+              <Text style={styles.linkHint}>View and update draft stock quantities</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#6b7280" />
+          </TouchableOpacity>
         </View>
 
         <Text style={styles.sectionHeader}>Legal</Text>

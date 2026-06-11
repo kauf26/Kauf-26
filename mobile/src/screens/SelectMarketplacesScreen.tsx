@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { StackScreenProps } from '@react-navigation/stack';
-import type { HomeStackParamList } from '../types/identify';
+import type { HomeStackParamList, PublishReport } from '../types/navigation';
 import { API_BASE_URL } from '../services/config';
 import { DEFAULT_IDENTIFY_MARKETPLACES } from '../services/identifyApi';
 import {
@@ -100,22 +100,25 @@ export default function SelectMarketplacesScreen({ route, navigation }: Props) {
           draftId,
           marketplaceIds: selected,
           translateInternational,
+          sync: true,
           listing,
         }),
       });
-      const body = (await res.json().catch(() => ({}))) as {
+      const body = (await res.json().catch(() => ({}))) as PublishReport & {
         message?: string;
         error?: string;
-        jobId?: number;
+        success?: boolean;
       };
       if (!res.ok) {
         throw new Error(body.error || body.message || `Publish failed (${res.status})`);
       }
-      Alert.alert(
-        'Publishing queued',
-        body.message || 'Your listing is being published to the selected marketplaces.',
-        [{ text: 'OK', onPress: () => navigation.navigate('Identify') }]
-      );
+      navigation.navigate('PublishConfirmation', {
+        report: {
+          ...body,
+          title: listing.title || undefined,
+          draftId,
+        },
+      });
     } catch (err) {
       Alert.alert(
         'Publish failed',

@@ -94,8 +94,4 @@ export type MarketplaceListingPayload = {
   matchType: string;
 };
 
-export type HomeStackParamList = {
-  Identify: undefined;
-  Edit: { result: IdentifyEditPayload };
-  SelectMarketplaces: { draftId: number; listing: MarketplaceListingPayload };
-};
+export type { HomeStackParamList, PublishReport, PublishOutcome } from './navigation';

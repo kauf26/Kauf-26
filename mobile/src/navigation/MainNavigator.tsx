@@ -4,13 +4,15 @@ import { Ionicons } from '@expo/vector-icons';
 import HomeStackNavigator from './HomeStackNavigator';
 import HomeScreen from '../screens/HomeScreen';
 import ListingsScreen from '../screens/ListingsScreen';
+import InventoryScreen from '../screens/InventoryScreen';
 import SoldProductsScreen from '../screens/SoldProductsScreen';
 import SalesScreen from '../screens/SalesScreen';
 import ConnectionsScreen from '../screens/ConnectionsScreen';
 import SettingsScreen from '../screens/SettingsScreen';
 import ToolsScreen from '../screens/ToolsScreen';
+import type { MainTabParamList } from '../types/navigation';
 
-const Tab = createBottomTabNavigator();
+const Tab = createBottomTabNavigator<MainTabParamList>();
 
 export default function MainNavigator() {
   return (
@@ -25,6 +27,8 @@ export default function MainNavigator() {
             iconName = focused ? 'cloud-upload' : 'cloud-upload-outline';
           } else if (route.name === 'Listings') {
             iconName = focused ? 'list' : 'list-outline';
+          } else if (route.name === 'Inventory') {
+            iconName = focused ? 'layers' : 'layers-outline';
           } else if (route.name === 'SoldProducts') {
             iconName = focused ? 'cube' : 'cube-outline';
           } else if (route.name === 'Sales') {
@@ -74,6 +78,11 @@ export default function MainNavigator() {
         name="Listings" 
         component={ListingsScreen}
         options={{ title: 'My Listings' }}
+      />
+      <Tab.Screen
+        name="Inventory"
+        component={InventoryScreen}
+        options={{ title: 'Inventory' }}
       />
       <Tab.Screen
         name="SoldProducts"

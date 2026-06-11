@@ -1,16 +1,13 @@
 import 'react-native-gesture-handler';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import IdentifyScreen from './src/screens/IdentifyScreen';
-import EditScreen from './src/screens/EditScreen';
-import SelectMarketplacesScreen from './src/screens/SelectMarketplacesScreen';
-import type { HomeStackParamList } from './src/types/identify';
-
-const Stack = createStackNavigator<HomeStackParamList>();
+import * as SecureStore from 'expo-secure-store';
+import PinAuthScreen from './src/screens/PinAuthScreen';
+import RootNavigator from './src/navigation/RootNavigator';
 
 const AppTheme = {
   ...DefaultTheme,
@@ -18,7 +15,7 @@ const AppTheme = {
     ...DefaultTheme.colors,
     primary: '#2563eb',
     background: '#ffffff',
-    card: '#18181b',
+    card: '#ffffff',
     text: '#18181b',
     border: '#e5e7eb',
     notification: '#2563eb',
@@ -26,38 +23,62 @@ const AppTheme = {
 };
 
 export default function App() {
+  const [booting, setBooting] = useState(true);
+  const [hasPin, setHasPin] = useState(false);
+  const [pinAuthenticated, setPinAuthenticated] = useState(false);
+
+  useEffect(() => {
+    void (async () => {
+      const storedPin = await SecureStore.getItemAsync('userPin');
+      setHasPin(Boolean(storedPin));
+      setBooting(false);
+    })();
+  }, []);
+
+  if (booting) {
+    return (
+      <View style={styles.boot}>
+        <ActivityIndicator size="large" color="#2563eb" />
+      </View>
+    );
+  }
+
+  if (!pinAuthenticated) {
+    return (
+      <GestureHandlerRootView style={styles.flex}>
+        <SafeAreaProvider>
+          <PinAuthScreen
+            hasPin={hasPin}
+            onAuthenticate={() => setPinAuthenticated(true)}
+            onPinSet={() => {
+              setHasPin(true);
+              setPinAuthenticated(true);
+            }}
+          />
+          <StatusBar style="light" />
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    );
+  }
+
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-    <SafeAreaProvider>
-      <NavigationContainer theme={AppTheme}>
-        <Stack.Navigator
-          initialRouteName="Identify"
-          screenOptions={{
-            headerStyle: { backgroundColor: '#ffffff' },
-            headerTintColor: '#18181b',
-            headerTitleStyle: { fontWeight: 'bold' },
-            cardStyle: { backgroundColor: '#ffffff' },
-          }}
-        >
-          <Stack.Screen
-            name="Identify"
-            component={IdentifyScreen}
-            options={{ headerShown: false }}
-          />
-          <Stack.Screen
-            name="Edit"
-            component={EditScreen}
-            options={{ title: 'Product Draft' }}
-          />
-          <Stack.Screen
-            name="SelectMarketplaces"
-            component={SelectMarketplacesScreen}
-            options={{ title: 'Select Marketplaces' }}
-          />
-        </Stack.Navigator>
-        <StatusBar style="dark" />
-      </NavigationContainer>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={styles.flex}>
+      <SafeAreaProvider>
+        <NavigationContainer theme={AppTheme}>
+          <RootNavigator />
+          <StatusBar style="dark" />
+        </NavigationContainer>
+      </SafeAreaProvider>
     </GestureHandlerRootView>
   );
 }
+
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  boot: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ffffff',
+  },
+});

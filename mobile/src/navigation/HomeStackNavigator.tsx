@@ -2,7 +2,10 @@ import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import IdentifyScreen from '../screens/IdentifyScreen';
 import EditScreen from '../screens/EditScreen';
-import type { HomeStackParamList } from '../types/identify';
+import SelectMarketplacesScreen from '../screens/SelectMarketplacesScreen';
+import PublishConfirmationScreen from '../screens/PublishConfirmationScreen';
+import InventoryScreen from '../screens/InventoryScreen';
+import type { HomeStackParamList } from '../types/navigation';
 
 const Stack = createStackNavigator<HomeStackParamList>();
 
@@ -10,21 +13,36 @@ export default function HomeStackNavigator() {
   return (
     <Stack.Navigator
       screenOptions={{
-        headerStyle: { backgroundColor: '#111827' },
-        headerTintColor: '#ffffff',
+        headerStyle: { backgroundColor: '#ffffff' },
+        headerTintColor: '#18181b',
         headerTitleStyle: { fontWeight: 'bold' },
-        cardStyle: { backgroundColor: '#0a0a0f' },
+        cardStyle: { backgroundColor: '#ffffff' },
       }}
     >
       <Stack.Screen
         name="Identify"
         component={IdentifyScreen}
-        options={{ title: 'Identify Product' }}
+        options={{ headerShown: false }}
       />
       <Stack.Screen
         name="Edit"
         component={EditScreen}
-        options={{ title: 'Review Listing' }}
+        options={{ title: 'Product Draft' }}
+      />
+      <Stack.Screen
+        name="SelectMarketplaces"
+        component={SelectMarketplacesScreen}
+        options={{ title: 'Select Marketplaces' }}
+      />
+      <Stack.Screen
+        name="PublishConfirmation"
+        component={PublishConfirmationScreen}
+        options={{ title: 'Publish Results', headerLeft: () => null }}
+      />
+      <Stack.Screen
+        name="Inventory"
+        component={InventoryScreen}
+        options={{ title: 'Inventory' }}
       />
     </Stack.Navigator>
   );
