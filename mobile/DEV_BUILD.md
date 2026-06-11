@@ -1,37 +1,44 @@
-# Development build on your personal phone
+# Install Kauf26 on your physical iPhone (development build)
 
-Expo Go cannot run this app (custom native modules: camera, biometrics, secure store). Use a **development build** with `expo-dev-client`.
+Expo Go **cannot** run this app (camera, biometrics, secure store). Use a **development build** with `expo-dev-client`.
 
-## Prerequisites
+Two paths:
 
-- Mac with Xcode (iOS) or Android Studio (Android)
-- iPhone/iPad connected via USB **or** on the same Wi‑Fi as your Mac
-- Apple ID added in Xcode → Settings → Accounts (free account works for 7‑day installs)
-- Node.js and `npm install` already done in `mobile/`
+| Path | Best for |
+|------|----------|
+| **A — EAS cloud build** | No Xcode cable build; install via QR/link on phone |
+| **B — Local Xcode build** | Mac + USB; fastest iteration when Xcode works |
 
-## 1. Configure API URL for a physical device
+---
 
-The phone cannot reach `localhost`. Use your Mac’s LAN IP:
+## Before you start
+
+### 1. API URL for a physical device
+
+Your phone cannot reach `localhost`. Use your Mac’s LAN IP:
 
 ```bash
-# Find your Mac IP (example output: 192.168.1.42)
 ipconfig getifaddr en0
+# example: 192.168.1.186
 ```
 
-Create or edit `mobile/.env`:
+Edit `mobile/.env`:
 
 ```bash
-EXPO_PUBLIC_API_URL=http://192.168.1.42:2626
-EXPO_PUBLIC_WEB_BASE_URL=http://192.168.1.42:5173
+EXPO_PUBLIC_API_URL=http://192.168.1.186:2626
+EXPO_PUBLIC_WEB_BASE_URL=http://192.168.1.186:5173
 ```
 
-Start the backend on your Mac (same machine):
+Start the backend on your Mac:
 
 ```bash
-cd .. && npm run server   # port 2626
+cd /Users/chriskaeufl/Desktop/Kauf26_Local
+npm run server
 ```
 
-## 2. Install dependencies (once)
+Phone and Mac must be on the **same Wi‑Fi**.
+
+### 2. Install dependencies
 
 ```bash
 cd mobile
@@ -39,68 +46,195 @@ npm install
 npx expo install expo-dev-client
 ```
 
-## 3. Build and install on iPhone (recommended)
+`expo-dev-client` is already in `package.json` — re-run the command above to verify the SDK 51–compatible version.
+
+---
+
+## Path A — EAS development build (recommended for your iPhone)
+
+### Step 1 — Install EAS CLI and log in
+
+```bash
+npm install -g eas-cli
+eas login
+```
+
+Or without global install:
+
+```bash
+npx eas-cli login
+```
+
+You need a free [Expo](https://expo.dev) account.
+
+### Step 2 — Link project to Expo (first time only)
 
 ```bash
 cd mobile
-npx expo run:ios --device
+eas init
 ```
 
-- Pick your phone from the list when prompted.
-- First build takes several minutes (CocoaPods + Xcode).
-- Trust the developer certificate on the phone: **Settings → General → VPN & Device Management**.
+This adds `extra.eas.projectId` to your Expo config. Commit that change (no secrets).
 
-## 3b. Android
+If prompted, choose **Create a new project** or link an existing one.
 
-Enable **Developer options** and **USB debugging**, connect the phone, then:
+### Step 3 — Configure EAS (first time only)
+
+```bash
+eas build:configure
+```
+
+Your repo already has `eas.json` with a `development` profile:
+
+```json
+"development": {
+  "developmentClient": true,
+  "distribution": "internal"
+}
+```
+
+Running `build:configure` is safe — it won’t remove that profile.
+
+### Step 4 — Start the iOS development build
 
 ```bash
 cd mobile
-npx expo run:android --device
+eas build --platform ios --profile development
 ```
 
-## 4. Start Metro (every dev session)
+Or use the npm script:
 
-In a **separate terminal**:
+```bash
+npm run eas:build:dev:ios
+```
+
+**First build prompts:**
+
+- **Apple account** — sign in with your Apple ID (free or paid developer account).
+- **Distribution certificate / provisioning** — choose **Let EAS handle it** (recommended).
+- **Register devices** — EAS may ask you to register your iPhone UDID for ad-hoc/internal installs.
+
+Build runs in the cloud (~10–20 min). Watch progress at [expo.dev](https://expo.dev) → your project → Builds.
+
+### Step 5 — Install on your iPhone
+
+When the build finishes:
+
+1. Open the build page (link in terminal or Expo dashboard).
+2. On your iPhone, scan the **QR code** or open the **Install** link in **Safari**.
+3. Tap **Install** when iOS prompts.
+
+### Step 6 — Enable Developer Mode (iOS 16+)
+
+If the app won’t open or install fails:
+
+**Settings → Privacy & Security → Developer Mode → On**
+
+Restart the phone when asked.
+
+### Step 7 — Trust the developer certificate
+
+**Settings → General → VPN & Device Management**
+
+Tap your developer profile (Apple Development / your team name) → **Trust**.
+
+---
+
+## Path B — Local build (USB + Xcode)
+
+```bash
+cd mobile
+npm run dev:ios
+```
+
+Pick your physical iPhone from the list. Then complete Steps 6–7 above if needed.
+
+---
+
+## Daily development (after the app is installed)
+
+### Terminal 1 — API server
+
+```bash
+cd /Users/chriskaeufl/Desktop/Kauf26_Local
+npm run server
+```
+
+### Terminal 2 — Metro (dev client)
 
 ```bash
 cd mobile
 npm run start:dev
 ```
 
-Open the **Kauf26** app on your phone (not Expo Go). It connects to Metro on your LAN IP.
-
-If the app shows “Could not connect to development server”, shake the device → **Configure bundler** → enter `http://YOUR_MAC_IP:8081`.
-
-## 5. Test the camera
-
-1. Complete PIN / Face ID onboarding.
-2. **Home** tab → **Start Camera**.
-3. Allow **Camera** when iOS prompts.
-4. Wait for “Starting camera…” to finish, then tap the green shutter button.
-5. Photo appears in the review grid → **Identify**.
-
-If capture fails:
-
-- **Settings → Kauf26 → Camera** → Allow
-- Rebuild after native changes: `npx expo run:ios --device`
-
-## 6. EAS cloud development build (optional)
-
-If you prefer not to use Xcode locally:
+Equivalent:
 
 ```bash
-cd mobile
-eas build --profile development --platform ios
+npx expo start --dev-client --clear
 ```
 
-Install the `.ipa` via the link EAS provides, then run `npm run start:dev`.
+### Connect the app
 
-## Quick reference
+1. Open **Kauf26** on your iPhone (not Expo Go).
+2. The dev client should auto-connect to Metro on your LAN.
+3. If not:
+   - Scan the **QR code** shown in the terminal with the **Camera** app, or
+   - Shake the phone → **Configure bundler** → enter `http://YOUR_MAC_IP:8081`
+
+Example: `http://192.168.1.186:8081`
+
+### Test the camera
+
+1. Complete PIN / Face ID.
+2. **Home** → **Start Camera** → allow Camera.
+3. Wait for preview → tap green shutter → **Identify**.
+
+---
+
+## Troubleshooting
+
+### Build errors
+
+| Error | Fix |
+|-------|-----|
+| `Not logged in` | `eas login` |
+| `No projectId` / project not configured | `cd mobile && eas init` |
+| Apple credentials failed | `eas credentials` → reset iOS credentials, or choose “Let EAS manage” again |
+| `bundle identifier` already in use | Change `ios.bundleIdentifier` in `app.json` or use your Apple team’s app |
+| Build fails on `expo-dev-menu` / `TARGET_IPHONE_SIMULATOR` | Run `npm install` in `mobile/` (postinstall patch applies automatically) |
+| `EXPO_PUBLIC_API_URL is required` | Only on **production** profile — use `--profile development` for dev builds |
+
+### Install / open errors on iPhone
+
+| Symptom | Fix |
+|---------|-----|
+| “Untrusted developer” | Settings → General → VPN & Device Management → Trust |
+| App won’t install | Enable **Developer Mode** (Settings → Privacy & Security) |
+| “Unable to install” | Device must be registered in Apple Developer / EAS device list — re-run build and register UDID when prompted |
+| Build expired (7-day free cert) | Re-run `eas build --profile development` or `npm run dev:ios` |
+
+### Metro / “Could not connect to development server”
+
+| Symptom | Fix |
+|---------|-----|
+| Red error screen | Start Metro: `npm run start:dev` |
+| Wrong bundler URL | Shake phone → Configure bundler → `http://MAC_IP:8081` |
+| Firewall | Allow Node/Metro on Mac firewall; same Wi‑Fi for phone and Mac |
+| API errors after connect | Change `EXPO_PUBLIC_API_URL` from `localhost` to `http://MAC_IP:2626` and restart Metro |
+
+### Camera not capturing
+
+- Settings → Kauf26 → Camera → Allow
+- Rebuild dev client after native module changes: `eas build --profile development --platform ios` or `npm run dev:ios`
+
+---
+
+## Quick commands
 
 | Command | Purpose |
 |---------|---------|
-| `npm run dev:ios` | Build + install on connected iPhone |
-| `npm run dev:android` | Build + install on connected Android |
+| `npm run eas:build:dev:ios` | EAS cloud dev build for iPhone |
+| `npm run dev:ios` | Local Xcode build + install (USB) |
 | `npm run start:dev` | Metro for dev client |
-| `npm run server` (repo root) | API on :2626 |
+| `eas build:list` | See past builds + install links |
+| `eas device:create` | Register a new iPhone for internal installs |

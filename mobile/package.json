@@ -12,6 +12,10 @@
     "postinstall": "node scripts/patch-expo-dev-menu.js",
     "web": "expo start --web",
     "validate:production-env": "node scripts/validate-production-env.js --production",
+    "eas:login": "eas login",
+    "eas:configure": "eas build:configure",
+    "eas:build:dev:ios": "eas build --platform ios --profile development",
+    "eas:build:dev:android": "eas build --platform android --profile development",
     "build:ios": "npm run validate:production-env && eas build --platform ios --profile production",
     "build:android": "npm run validate:production-env && eas build --platform android --profile production"
   },
