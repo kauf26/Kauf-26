@@ -9,6 +9,7 @@ import type { MarketplaceOAuthProviderConfig } from '../../../shared/marketplace
 import { assertRedirectUriMatches } from '../../../shared/oauthRedirect';
 import { getOAuthManifestEntry } from '../../../shared/marketplaceOAuthManifest';
 import { fetchMarketplaceUserProfile } from './marketplaceUserInfo';
+import { getConnectBlockedReason } from './auth';
 import {
   getOAuthProvider,
   getMobileClientSecret,
@@ -231,7 +232,15 @@ export async function connectMarketplaceOneTap(
 
     const config = await getOAuthProvider(marketplaceId);
     if (!config?.configured) {
-      throw new Error(`${config?.name ?? marketplaceId} OAuth is not configured on the server`);
+      throw new Error(
+        getConnectBlockedReason(marketplaceId, false) ??
+          `${config?.name ?? marketplaceId} OAuth is not configured on the server`
+      );
+    }
+
+    const blocked = getConnectBlockedReason(marketplaceId, true);
+    if (blocked) {
+      throw new Error(blocked);
     }
 
     const savedCtx = (await loadConnectContext(marketplaceId)) ?? {};

@@ -1,4 +1,5 @@
 import { apiRequest } from './api';
+import { manifestFallbackProviders } from './auth';
 import { getOAuthManifestEntry } from '../../../shared/marketplaceOAuthManifest';
 import type { MarketplaceOAuthProviderConfig } from '../../../shared/marketplaceOAuthTypes';
 
@@ -24,13 +25,35 @@ let cacheAt = 0;
 const CACHE_MS = 60_000;
 
 export async function fetchOAuthProviders(): Promise<MarketplaceOAuthProviderConfig[]> {
+  const result = await fetchOAuthProvidersSafe();
+  return result.providers;
+}
+
+export type OAuthProvidersFetchResult = {
+  providers: MarketplaceOAuthProviderConfig[];
+  fromServer: boolean;
+  error?: string;
+};
+
+/** Fetches OAuth metadata from the server; falls back to manifest when offline. */
+export async function fetchOAuthProvidersSafe(): Promise<OAuthProvidersFetchResult> {
   if (cachedProviders && Date.now() - cacheAt < CACHE_MS) {
-    return cachedProviders;
+    return { providers: cachedProviders, fromServer: true };
   }
-  const res = await apiRequest<OAuthConfigResponse>('/api/marketplaces/oauth-config');
-  cachedProviders = res.providers ?? [];
-  cacheAt = Date.now();
-  return cachedProviders;
+  try {
+    const res = await apiRequest<OAuthConfigResponse>('/api/marketplaces/oauth-config');
+    cachedProviders = res.providers ?? [];
+    cacheAt = Date.now();
+    return { providers: cachedProviders, fromServer: true };
+  } catch (err) {
+    const message =
+      err instanceof Error ? err.message : 'Could not load OAuth configuration from server';
+    return {
+      providers: manifestFallbackProviders(),
+      fromServer: false,
+      error: message,
+    };
+  }
 }
 
 export async function getOAuthProvider(

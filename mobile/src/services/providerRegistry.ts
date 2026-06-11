@@ -5,7 +5,11 @@ import { MARKETPLACE_OAUTH_MANIFEST } from '../../../shared/marketplaceOAuthMani
 import type { MarketplaceOAuthProviderConfig } from '../../../shared/marketplaceOAuthTypes';
 import type { MarketplaceOAuthFlow } from '../../../shared/marketplaceOAuthTypes';
 import type { ProviderDisplayMeta } from '../types/marketplaceConnect';
-import { fetchOAuthProviders } from './oauthConfig';
+import {
+  CREDENTIALS_NOT_CONFIGURED,
+  isFullyConfiguredForConnect,
+} from './auth';
+import { fetchOAuthProvidersSafe } from './oauthConfig';
 
 const MARKETPLACE_COLORS: Record<string, string> = {
   aliexpress: '#e43225',
@@ -49,19 +53,21 @@ export function nonOAuthStatusMessage(oauthFlow: MarketplaceOAuthFlow): string {
 export async function loadProviderRegistry(): Promise<{
   providers: ProviderDisplayMeta[];
   configured: MarketplaceOAuthProviderConfig[];
+  configWarning?: string;
 }> {
-  const remote = await fetchOAuthProviders();
+  const { providers: remote, fromServer, error } = await fetchOAuthProvidersSafe();
   const byId = new Map(remote.map((p) => [p.id, p]));
 
   const providers: ProviderDisplayMeta[] = MARKETPLACE_OAUTH_MANIFEST.map((entry) => {
     const remoteEntry = byId.get(entry.id);
+    const serverConfigured = remoteEntry?.configured ?? false;
     return {
       id: entry.id,
       name: entry.name,
       color: MARKETPLACE_COLORS[entry.id] ?? '#3b82f6',
       oauthSupported: entry.oauthSupported,
       oauthFlow: entry.oauthFlow,
-      configured: remoteEntry?.configured ?? false,
+      configured: isFullyConfiguredForConnect(entry.id, serverConfigured),
       requiresShopDomain: entry.requiresShopDomain,
       requiresSiteUrl: entry.requiresSiteUrl,
       requiresBaseUrl: entry.requiresBaseUrl,
@@ -69,6 +75,13 @@ export async function loadProviderRegistry(): Promise<{
     };
   });
 
-  const configured = remote.filter((p) => p.configured);
-  return { providers, configured };
+  const configured = remote.filter((p) =>
+    isFullyConfiguredForConnect(p.id, p.configured)
+  );
+
+  const configWarning = !fromServer
+    ? error ?? CREDENTIALS_NOT_CONFIGURED
+    : undefined;
+
+  return { providers, configured, configWarning };
 }

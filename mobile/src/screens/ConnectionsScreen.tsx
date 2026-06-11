@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { connectPlatform, oneTapHelpText } from '../services/marketplaceConnect';
 import { isOAuthCancelledError } from '../services/oauthErrors';
+import { CREDENTIALS_NOT_CONFIGURED, getConnectBlockedReason } from '../services/auth';
 import { verifyMarketplace } from '../services/marketplaceClients';
 import {
   loadOnboardingProfile,
@@ -55,10 +56,19 @@ export default function ConnectionsScreen() {
     message: string;
     platform?: string;
   } | null>(null);
+  const [configWarning, setConfigWarning] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
-    const { providers: registry } = await loadProviderRegistry();
-    setProviders(registry);
+    let registry: ProviderDisplayMeta[] = [];
+    try {
+      const loaded = await loadProviderRegistry();
+      registry = loaded.providers;
+      setProviders(registry);
+      setConfigWarning(loaded.configWarning ?? null);
+    } catch {
+      setConfigWarning('Could not load marketplace configuration. Check your server connection.');
+      return;
+    }
 
     let serverConnections: Awaited<ReturnType<typeof fetchServerOAuthConnections>> = [];
     try {
@@ -83,7 +93,7 @@ export default function ConnectionsScreen() {
         if (!row?.configured) {
           next[p.id] = {
             ok: false,
-            message: 'Server OAuth not configured',
+            message: CREDENTIALS_NOT_CONFIGURED,
           };
           continue;
         }
@@ -100,7 +110,7 @@ export default function ConnectionsScreen() {
       if (!connected) {
         next[p.id] = {
           ok: false,
-          message: p.configured ? 'Not connected' : 'Server OAuth not configured',
+          message: p.configured ? 'Not connected' : CREDENTIALS_NOT_CONFIGURED,
         };
         continue;
       }
@@ -147,8 +157,9 @@ export default function ConnectionsScreen() {
     if (!p.oauthSupported) return;
     if (!p.configured) {
       Alert.alert(
-        'Not configured',
-        `Set ${p.name} client credentials on the server and rebuild the mobile app secrets if required.`
+        CREDENTIALS_NOT_CONFIGURED,
+        getConnectBlockedReason(p.id, false) ??
+          `Set ${p.name} client credentials on the server (and mobile/.env secrets if required).`
       );
       return;
     }
@@ -231,6 +242,16 @@ export default function ConnectionsScreen() {
           <Text style={styles.heroTitle}>One-tap marketplace connect</Text>
         </View>
         <Text style={styles.subtitle}>{oneTapHelpText()}</Text>
+
+        {configWarning ? (
+          <View style={[styles.notice, styles.noticeError]}>
+            <Ionicons name="alert-circle-outline" size={18} color="#fca5a5" />
+            <Text style={styles.noticeText}>{configWarning}</Text>
+            <TouchableOpacity onPress={() => setConfigWarning(null)}>
+              <Text style={styles.noticeDismiss}>Dismiss</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         {oauthNotice && (
           <View
@@ -407,7 +428,7 @@ export default function ConnectionsScreen() {
                       ? usesServerOAuth(p.id)
                         ? `Connect ${p.name}`
                         : `Connect ${p.name} — one tap`
-                      : 'Configure server OAuth first'}
+                      : CREDENTIALS_NOT_CONFIGURED}
                   </Text>
                 </View>
               )}
