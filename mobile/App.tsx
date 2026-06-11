@@ -3,6 +3,7 @@ import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import IdentifyScreen from './src/screens/IdentifyScreen';
 import EditScreen from './src/screens/EditScreen';
@@ -25,6 +26,7 @@ const DarkTheme = {
 
 export default function App() {
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaProvider>
       <NavigationContainer theme={DarkTheme}>
         <Stack.Navigator
@@ -50,5 +52,6 @@ export default function App() {
         <StatusBar style="light" />
       </NavigationContainer>
     </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
