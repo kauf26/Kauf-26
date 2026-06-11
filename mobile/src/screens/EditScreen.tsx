@@ -180,8 +180,13 @@ export default function EditScreen({ route, navigation }: Props) {
 
   return (
     <SafeAreaView style={styles.page} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.pageContent}>
-        <View style={styles.draftCard}>
+      <View style={styles.centeredContainer}>
+        <ScrollView
+          contentContainerStyle={styles.pageContent}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.contentColumn}>
+            <View style={styles.draftCard}>
           {verificationMessage ? (
             <View style={styles.warningBanner}>
               <Ionicons name="alert-circle" size={18} color={T.warningTitle} />
@@ -371,16 +376,36 @@ export default function EditScreen({ route, navigation }: Props) {
             <Ionicons name="camera-outline" size={18} color={T.text} />
             <Text style={styles.secondaryButtonText}>Retake photo</Text>
           </TouchableOpacity>
-        </View>
-      </ScrollView>
+            </View>
+          </View>
+        </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: T.pageBg },
-  pageContent: { padding: 16, paddingBottom: 32 },
+  centeredContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pageContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+    width: '100%',
+  },
+  contentColumn: {
+    width: '100%',
+    maxWidth: 480,
+    alignItems: 'center',
+  },
   draftCard: {
+    width: '100%',
+    alignItems: 'center',
     backgroundColor: T.cardBg,
     borderWidth: 1,
     borderColor: T.cardBorder,
@@ -398,8 +423,10 @@ const styles = StyleSheet.create({
     }),
   },
   warningBanner: {
+    width: '100%',
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 10,
     backgroundColor: T.warningBg,
     borderWidth: 1,
@@ -411,13 +438,21 @@ const styles = StyleSheet.create({
     color: T.warningTitle,
     fontSize: 13,
     fontWeight: '700',
-    marginBottom: 2,
+    textAlign: 'center',
   },
-  warningBannerText: { color: T.warningText, fontSize: 12, lineHeight: 17, flex: 1 },
-  bannerTextWrap: { flex: 1 },
+  warningBannerText: {
+    color: T.warningText,
+    fontSize: 12,
+    lineHeight: 17,
+    flex: 1,
+    textAlign: 'center',
+  },
+  bannerTextWrap: { flex: 1, alignItems: 'center' },
   exactBanner: {
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 10,
     backgroundColor: T.successBg,
     borderWidth: 1,
@@ -433,19 +468,24 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   exactBadgeText: { color: '#fff', fontSize: 11, fontWeight: '700' },
-  exactText: { color: T.successText, fontSize: 12, flex: 1 },
+  exactText: { color: T.successText, fontSize: 12, flex: 1, textAlign: 'center' },
   similarBanner: {
+    width: '100%',
     backgroundColor: T.similarBg,
     borderWidth: 1,
     borderColor: T.similarBorder,
     borderRadius: 8,
     padding: 12,
+    alignItems: 'center',
+    gap: 4,
   },
-  similarTitle: { color: T.similarText, fontSize: 13, fontWeight: '600' },
-  similarSubtext: { color: T.similarText, fontSize: 11, marginTop: 4, opacity: 0.8 },
+  similarTitle: { color: T.similarText, fontSize: 13, fontWeight: '600', textAlign: 'center' },
+  similarSubtext: { color: T.similarText, fontSize: 11, opacity: 0.8, textAlign: 'center' },
   reviewBanner: {
+    width: '100%',
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 10,
     backgroundColor: T.warningBg,
     borderWidth: 1,
@@ -453,26 +493,29 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 12,
   },
-  reviewTitle: { color: T.warningText, fontSize: 13, fontWeight: '600' },
-  reviewSubtext: { color: T.warningText, fontSize: 11, marginTop: 4, opacity: 0.8 },
+  reviewTitle: { color: T.warningText, fontSize: 13, fontWeight: '600', textAlign: 'center' },
+  reviewSubtext: { color: T.warningText, fontSize: 11, opacity: 0.8, textAlign: 'center' },
   summaryCard: {
+    width: '100%',
     backgroundColor: T.surface,
     borderWidth: 1,
     borderColor: T.cardBorder,
     borderRadius: 8,
     padding: 12,
     gap: 8,
+    alignItems: 'center',
   },
   summaryHeading: {
     color: T.textSubtle,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1,
-    marginBottom: 4,
+    textAlign: 'center',
+    width: '100%',
   },
-  summaryRow: { gap: 2 },
-  summaryLabel: { color: T.textSubtle, fontSize: 12 },
-  summaryValue: { color: T.text, fontSize: 14, fontWeight: '600' },
+  summaryRow: { gap: 2, alignItems: 'center', width: '100%' },
+  summaryLabel: { color: T.textSubtle, fontSize: 12, textAlign: 'center' },
+  summaryValue: { color: T.text, fontSize: 14, fontWeight: '600', textAlign: 'center' },
   previewImage: {
     width: '100%',
     height: 200,
@@ -481,19 +524,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: T.cardBorder,
   },
-  draftHeader: { gap: 4 },
-  draftTitle: { color: T.text, fontSize: 22, fontWeight: '700' },
-  draftSubtitle: { color: T.textSubtle, fontSize: 12 },
+  draftHeader: { width: '100%', gap: 4, alignItems: 'center' },
+  draftTitle: { color: T.text, fontSize: 22, fontWeight: '700', textAlign: 'center' },
+  draftSubtitle: { color: T.textSubtle, fontSize: 12, textAlign: 'center' },
   fieldLabel: {
     color: T.label,
     fontSize: 12,
     fontWeight: '500',
-    marginBottom: 4,
-    marginTop: 4,
+    textAlign: 'center',
+    width: '100%',
   },
-  fieldRow: { flexDirection: 'row', gap: 10 },
-  fieldHalf: { flex: 1 },
+  fieldRow: { width: '100%', flexDirection: 'row', gap: 10 },
+  fieldHalf: { flex: 1, alignItems: 'center' },
   input: {
+    width: '100%',
     backgroundColor: T.inputBg,
     borderWidth: 1,
     borderColor: T.inputBorder,
@@ -504,38 +548,45 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   textArea: { minHeight: 110 },
-  priceHint: { color: T.warningTitle, fontSize: 11, marginTop: 4 },
+  priceHint: { color: T.warningTitle, fontSize: 11, textAlign: 'center', width: '100%' },
   disclaimerBox: {
+    width: '100%',
     backgroundColor: T.warningBg,
     borderWidth: 1,
     borderColor: T.warningBorder,
     borderRadius: 6,
     padding: 10,
-    marginBottom: 6,
+    alignItems: 'center',
   },
-  disclaimerText: { color: T.warningText, fontSize: 11 },
+  disclaimerText: { color: T.warningText, fontSize: 11, textAlign: 'center' },
   translationCard: {
+    width: '100%',
     backgroundColor: T.surface,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: T.cardBorder,
     padding: 12,
     gap: 12,
+    alignItems: 'center',
   },
   translationCardTitle: {
     color: T.textMuted,
     fontSize: 13,
     fontWeight: '700',
+    textAlign: 'center',
+    width: '100%',
   },
-  translationBlock: { gap: 8 },
+  translationBlock: { width: '100%', gap: 8, alignItems: 'center' },
   translationLabel: {
     color: T.textSubtle,
     fontSize: 11,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.4,
+    textAlign: 'center',
+    width: '100%',
   },
-  translationRow: { flexDirection: 'row', gap: 8 },
+  translationRow: { width: '100%', flexDirection: 'row', gap: 8 },
   translationColumn: {
     flex: 1,
     backgroundColor: T.inputBg,
@@ -543,6 +594,7 @@ const styles = StyleSheet.create({
     padding: 10,
     borderWidth: 1,
     borderColor: T.inputBorder,
+    alignItems: 'center',
   },
   translationDivider: { width: 1, backgroundColor: T.surfaceBorder },
   translationColumnHeader: {
@@ -550,18 +602,20 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     textTransform: 'uppercase',
-    marginBottom: 6,
+    textAlign: 'center',
+    width: '100%',
   },
-  translationText: { color: T.inputText, fontSize: 12, lineHeight: 17 },
+  translationText: { color: T.inputText, fontSize: 12, lineHeight: 17, textAlign: 'center' },
   primaryButton: {
+    width: '100%',
     backgroundColor: T.primary,
     borderRadius: 8,
     paddingVertical: 14,
     alignItems: 'center',
-    marginTop: 8,
   },
   primaryButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
   secondaryButton: {
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

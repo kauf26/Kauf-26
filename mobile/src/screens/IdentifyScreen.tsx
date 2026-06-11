@@ -293,63 +293,76 @@ export default function IdentifyScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.page} edges={['bottom']}>
-      <View style={styles.centeredContainer}>
-        <ScrollView
-          contentContainerStyle={styles.pageContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.contentColumn}>
-            <View style={styles.welcomeHeader}>
-              <Text style={styles.brandTitle}>KAUF-AI</Text>
-              <Text style={styles.brandTagline}>PICTURE · POST · SELL</Text>
-              <Text style={styles.welcomeHint}>
-                For best results, take up to 5 photos: front, back, label/tag, and details.
-              </Text>
-            </View>
+    <SafeAreaView style={styles.page} edges={['top', 'bottom']}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.pageContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.contentColumn}>
+          <View style={[styles.welcomeHeader, styles.sectionSpacing]}>
+            <Text style={styles.brandTitle}>KAUF-AI</Text>
+            <Text style={styles.brandTagline}>PICTURE · POST · SELL</Text>
+            <Text style={styles.welcomeHint}>
+              For best results, take up to 5 photos: front, back, label/tag, and details.
+            </Text>
+          </View>
 
-            <View style={styles.scannerCard}>
-              <Text style={styles.scannerTitle}>KAUF26 Scanner</Text>
-              <Text style={styles.scannerSubtitle}>
-                For best results, take up to 5 photos: front, back, label/tag, and details.
-              </Text>
+          <View style={styles.scannerCard}>
+            <Text style={[styles.scannerTitle, styles.sectionSpacing]}>KAUF26 Scanner</Text>
+            <Text style={[styles.scannerSubtitle, styles.sectionSpacing]}>
+              For best results, take up to 5 photos: front, back, label/tag, and details.
+            </Text>
 
-              {error ? (
-                <View style={styles.errorBanner}>
-                  <Text style={styles.errorText}>{error}</Text>
-                </View>
-              ) : null}
+            {error ? (
+              <View style={[styles.errorBanner, styles.sectionSpacing]}>
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : null}
 
-              {showSuccess ? (
-                <Animated.View
-                  style={[styles.successBanner, { transform: [{ scale: successScale }] }]}
+            {showSuccess ? (
+              <Animated.View
+                style={[
+                  styles.successBanner,
+                  styles.sectionSpacing,
+                  { transform: [{ scale: successScale }] },
+                ]}
+              >
+                <Ionicons name="checkmark-circle" size={22} color={T.successText} />
+                <Text style={styles.successText}>Product identified!</Text>
+              </Animated.View>
+            ) : null}
+
+            {showCameraView && capturedImages.length === 0 ? (
+              <View style={styles.startActions}>
+                <TouchableOpacity
+                  style={[
+                    styles.startCameraButton,
+                    styles.sectionSpacing,
+                    isIdentifying && styles.buttonDisabled,
+                  ]}
+                  onPress={() => void openCamera()}
+                  disabled={isIdentifying}
                 >
-                  <Ionicons name="checkmark-circle" size={22} color={T.successText} />
-                  <Text style={styles.successText}>Product identified!</Text>
-                </Animated.View>
-              ) : null}
-
-              {showCameraView && capturedImages.length === 0 ? (
-                <View style={styles.startActions}>
-                  <TouchableOpacity
-                    style={[styles.startCameraButton, isIdentifying && styles.buttonDisabled]}
-                    onPress={() => void openCamera()}
-                    disabled={isIdentifying}
-                  >
-                    <Text style={styles.startCameraText}>Start Camera</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.uploadOutlineButton, isIdentifying && styles.buttonDisabled]}
-                    onPress={() => void pickFromGallery()}
-                    disabled={isIdentifying}
-                  >
-                    <Ionicons name="camera-outline" size={24} color="#fff" />
-                    <Text style={styles.uploadOutlineText}>Upload photo</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <View style={styles.reviewSection}>
-                  <View style={styles.imageGrid}>
+                  <Text style={styles.startCameraText}>Start Camera</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.uploadOutlineButton,
+                    styles.sectionSpacing,
+                    isIdentifying && styles.buttonDisabled,
+                  ]}
+                  onPress={() => void pickFromGallery()}
+                  disabled={isIdentifying}
+                >
+                  <Ionicons name="camera-outline" size={22} color="#fff" />
+                  <Text style={styles.uploadOutlineText}>Upload photo</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+                <View style={[styles.reviewSection, styles.sectionSpacing]}>
+                  <View style={[styles.imageGrid, styles.sectionSpacing]}>
                     {capturedImages.map((img, index) => (
                       <View key={`${index}-${img.uri}`} style={styles.thumbWrap}>
                         <View style={styles.thumbImageBox}>
@@ -382,7 +395,11 @@ export default function IdentifyScreen() {
 
                   {capturedImages.length < MAX_IMAGES && (
                     <TouchableOpacity
-                      style={[styles.addAngleButton, isIdentifying && styles.buttonDisabled]}
+                      style={[
+                        styles.addAngleButton,
+                        styles.sectionSpacing,
+                        isIdentifying && styles.buttonDisabled,
+                      ]}
                       onPress={addAnotherAngle}
                       disabled={isIdentifying}
                     >
@@ -391,7 +408,7 @@ export default function IdentifyScreen() {
                   )}
 
                   {isIdentifying && (
-                    <View style={styles.loadingRow}>
+                    <View style={[styles.loadingRow, styles.sectionSpacing]}>
                       <ActivityIndicator color={T.textMuted} size="small" />
                       <Text style={styles.loadingText}>
                         Analyzing image {Math.min(analyzeStep || 1, capturedImages.length)}/
@@ -400,7 +417,7 @@ export default function IdentifyScreen() {
                     </View>
                   )}
 
-                  <View style={styles.actionRow}>
+                  <View style={[styles.actionRow, styles.sectionSpacing]}>
                     <TouchableOpacity
                       style={[styles.secondaryAction, isIdentifying && styles.buttonDisabled]}
                       onPress={retakeAll}
@@ -428,13 +445,14 @@ export default function IdentifyScreen() {
                 </View>
               )}
 
-              <View style={styles.translateRow}>
-                <View style={styles.translateTextWrap}>
-                  <Text style={styles.translateTitle}>Auto-translate listings</Text>
-                  <Text style={styles.translateHint}>
-                    Translate title and description after identification.
-                  </Text>
-                </View>
+            <View style={styles.translateRow}>
+              <View style={styles.translateTextWrap}>
+                <Text style={styles.translateTitle}>Auto-translate listings</Text>
+                <Text style={styles.translateHint}>
+                  Translate title and description after identification.
+                </Text>
+              </View>
+              <View style={styles.switchWrap}>
                 <Switch
                   value={autoTranslate}
                   onValueChange={onToggleAutoTranslate}
@@ -445,58 +463,57 @@ export default function IdentifyScreen() {
               </View>
             </View>
           </View>
-        </ScrollView>
-      </View>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   page: { flex: 1, backgroundColor: T.pageBg },
-  centeredContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  scroll: { flex: 1 },
   pageContent: {
     flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 30,
     width: '100%',
   },
   contentColumn: {
     width: '100%',
     maxWidth: 480,
     alignItems: 'center',
-    gap: 16,
+  },
+  sectionSpacing: {
+    marginBottom: 20,
   },
   welcomeHeader: {
     alignItems: 'center',
     width: '100%',
-    gap: 4,
   },
   brandTitle: {
-    fontSize: 42,
+    fontSize: 24,
     fontWeight: '700',
     color: '#000',
-    letterSpacing: -1,
+    letterSpacing: -0.5,
     textAlign: 'center',
     fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
   },
   brandTagline: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '800',
-    letterSpacing: 3,
+    letterSpacing: 2,
     color: T.primary,
     textAlign: 'center',
+    marginTop: 4,
   },
   welcomeHint: {
-    fontSize: 13,
+    fontSize: 16,
     color: '#4b5563',
     textAlign: 'center',
-    lineHeight: 18,
-    maxWidth: 320,
+    lineHeight: 22,
+    marginTop: 8,
   },
   scannerCard: {
     width: '100%',
@@ -505,8 +522,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: T.cardBorder,
     borderRadius: 12,
-    padding: 14,
-    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
     ...Platform.select({
       ios: {
         shadowColor: T.shadow,
@@ -519,15 +536,15 @@ const styles = StyleSheet.create({
   },
   scannerTitle: {
     color: T.text,
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     textAlign: 'center',
     width: '100%',
   },
   scannerSubtitle: {
     color: T.textMuted,
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 16,
+    lineHeight: 22,
     textAlign: 'center',
     width: '100%',
   },
@@ -541,7 +558,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     alignItems: 'center',
   },
-  errorText: { color: T.errorText, fontSize: 12, textAlign: 'center' },
+  errorText: { color: T.errorText, fontSize: 14, textAlign: 'center', lineHeight: 20 },
   successBanner: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -556,15 +573,15 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   successText: { color: T.successText, fontSize: 13, fontWeight: '600' },
-  startActions: { width: '100%', gap: 12, alignItems: 'center' },
+  startActions: { width: '100%', alignItems: 'center' },
   startCameraButton: {
     width: '100%',
     backgroundColor: T.primary,
     borderRadius: 12,
-    paddingVertical: 16,
+    paddingVertical: 14,
     alignItems: 'center',
   },
-  startCameraText: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  startCameraText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   uploadOutlineButton: {
     width: '100%',
     flexDirection: 'row',
@@ -573,10 +590,10 @@ const styles = StyleSheet.create({
     gap: 8,
     backgroundColor: T.cardBorder,
     borderRadius: 12,
-    paddingVertical: 16,
+    paddingVertical: 14,
   },
-  uploadOutlineText: { color: '#fff', fontSize: 17, fontWeight: '700' },
-  reviewSection: { width: '100%', gap: 12, alignItems: 'center' },
+  uploadOutlineText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  reviewSection: { width: '100%', alignItems: 'center' },
   imageGrid: {
     width: '100%',
     flexDirection: 'row',
@@ -635,7 +652,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
   },
-  loadingText: { color: T.textMuted, fontSize: 13, textAlign: 'center' },
+  loadingText: { color: T.textMuted, fontSize: 14, textAlign: 'center', lineHeight: 20, flexShrink: 1 },
   actionRow: { width: '100%', flexDirection: 'row', gap: 12 },
   secondaryAction: {
     flex: 1,
@@ -659,15 +676,25 @@ const styles = StyleSheet.create({
   translateRow: {
     width: '100%',
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 10,
     borderTopWidth: 1,
     borderTopColor: T.cardBorder,
-    paddingTop: 12,
+    paddingTop: 16,
+    marginTop: 4,
   },
-  translateTextWrap: { flex: 1 },
-  translateTitle: { color: T.text, fontSize: 13, fontWeight: '600' },
-  translateHint: { color: T.textSubtle, fontSize: 11 },
+  translateTextWrap: {
+    flex: 1,
+    flexShrink: 1,
+    marginRight: 12,
+  },
+  translateTitle: { color: T.text, fontSize: 15, fontWeight: '600' },
+  translateHint: { color: T.textSubtle, fontSize: 13, lineHeight: 18, marginTop: 4 },
+  switchWrap: {
+    marginLeft: 8,
+    marginRight: 4,
+    paddingLeft: 4,
+  },
   buttonDisabled: { opacity: 0.4 },
   cameraContainer: { flex: 1, backgroundColor: '#000' },
   camera: { flex: 1 },
