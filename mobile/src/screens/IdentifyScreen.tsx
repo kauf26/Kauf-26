@@ -463,6 +463,11 @@ export default function IdentifyScreen() {
               </View>
             </View>
           </View>
+
+          <View style={styles.promoFooter}>
+            <Text style={styles.promoTrial}>Free 14 day trial</Text>
+            <Text style={styles.promoTagline}>The only way to sell online</Text>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -694,6 +699,26 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     marginRight: 4,
     paddingLeft: 4,
+  },
+  promoFooter: {
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 30,
+    paddingHorizontal: 12,
+    paddingBottom: 10,
+  },
+  promoTrial: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#007AFF',
+    textAlign: 'center',
+  },
+  promoTagline: {
+    fontSize: 14,
+    fontWeight: '400',
+    color: '#666666',
+    textAlign: 'center',
+    marginTop: 6,
   },
   buttonDisabled: { opacity: 0.4 },
   cameraContainer: { flex: 1, backgroundColor: '#000' },
