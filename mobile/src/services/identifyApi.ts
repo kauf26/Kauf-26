@@ -102,7 +102,11 @@ export function mapIdentifyResponseToEditPayload(
     material: String(product.material ?? attrs?.material ?? '').trim(),
     color: String(product.color ?? attrs?.color ?? '').trim(),
     model: String(product.model ?? attrs?.model ?? '').trim(),
-    requiresManualReview: response.requiresManualReview === true,
+    requiresManualReview:
+      response.requiresManualReview === true ||
+      response.fallbackToVision === true ||
+      attrs?.requiresManualReview === true ||
+      response.draftPreview?.status === 'requires_review',
     priceReliable: response.priceReliable === true || product.priceReliable === true,
     isExactMatch: response.isExactMatch === true || product.isExactMatch === true,
     matchType: String(response.matchType ?? product.matchType ?? 'generic'),

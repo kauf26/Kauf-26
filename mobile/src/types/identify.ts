@@ -46,6 +46,7 @@ export type IdentifyApiResponse = {
   product?: IdentifyProduct;
   draftPreview?: {
     title?: string;
+    status?: string;
     attributes?: Record<string, unknown>;
   };
 };

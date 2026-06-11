@@ -121,26 +121,33 @@ export default function IdentifyScreen() {
 
     try {
       const autoTranslate = await getAutoTranslateEnabled();
-      const response = await postIdentify(selectedImage, {
-        autoTranslate,
-        marketplaces: DEFAULT_IDENTIFY_MARKETPLACES,
-      });
+      let response;
+      try {
+        response = await postIdentify(selectedImage, {
+          autoTranslate,
+          marketplaces: DEFAULT_IDENTIFY_MARKETPLACES,
+        });
+      } catch {
+        Alert.alert(
+          'Identification failed',
+          'Failed to identify product. Check server connection.'
+        );
+        return;
+      }
 
       const payload = mapIdentifyResponseToEditPayload(response);
 
       if (!payload.title && !payload.brand) {
-        throw new Error('The server did not return enough product details. Please try another photo.');
+        Alert.alert(
+          'Identification failed',
+          'The server did not return enough product details. Please try another photo.'
+        );
+        return;
       }
 
       navigation.navigate('Edit', { result: payload });
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Identification failed. Check your network and try again.';
-      setStatusMessage(null);
-      Alert.alert('Identification failed', message);
     } finally {
+      setStatusMessage(null);
       setIsIdentifying(false);
     }
   };
