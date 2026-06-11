@@ -26,6 +26,7 @@ import {
   uploadDraftPhotosMobile,
 } from '../services/draftPhotos';
 import { resetMobileListingFlow } from '../services/resetListingFlow';
+import { getAutoTranslateEnabled } from '../services/translationPrefs';
 import {
   AUTO_DESCRIPTION_DISCLAIMER,
   LISTING_LIABILITY_DISCLAIMER,
@@ -105,6 +106,13 @@ export default function HomeScreen() {
   const [draftId, setDraftId] = useState<number | null>(null);
   const [isAddingPhotos, setIsAddingPhotos] = useState(false);
   const [flowSessionKey, setFlowSessionKey] = useState(0);
+  const [autoTranslate, setAutoTranslate] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      void getAutoTranslateEnabled().then(setAutoTranslate);
+    }, [])
+  );
 
   const bumpFlowSessionKey = useCallback(() => {
     setFlowSessionKey((key) => key + 1);
@@ -273,7 +281,11 @@ export default function HomeScreen() {
           'Content-Type': 'application/json',
           'X-Client-Timezone': deviceTz,
         },
-        body: JSON.stringify({ image: `data:image/jpeg;base64,${base64}` }),
+        body: JSON.stringify({
+          image: `data:image/jpeg;base64,${base64}`,
+          autoTranslate,
+          marketplaces: selectedMarketplaces,
+        }),
       });
       
       if (response.ok) {

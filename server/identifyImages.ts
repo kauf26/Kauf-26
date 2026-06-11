@@ -76,3 +76,59 @@ export function toDataUrl(image: IdentifyImageInput): string {
   const mime = image.mimetype || "image/jpeg";
   return `data:${mime};base64,${image.buffer.toString("base64")}`;
 }
+
+function parseBooleanField(value: unknown): boolean {
+  if (value === true || value === 1) return true;
+  const s = String(value ?? "")
+    .trim()
+    .toLowerCase();
+  return s === "true" || s === "1" || s === "yes" || s === "on";
+}
+
+function parseMarketplaceIds(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.map((id) => String(id).trim()).filter(Boolean);
+  }
+  if (typeof raw === "string") {
+    const trimmed = raw.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith("[")) {
+      try {
+        const parsed = JSON.parse(trimmed) as unknown;
+        if (Array.isArray(parsed)) {
+          return parsed.map((id) => String(id).trim()).filter(Boolean);
+        }
+      } catch {
+        /* fall through to comma split */
+      }
+    }
+    return trimmed
+      .split(/[,;]/)
+      .map((id) => id.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+/** Parse optional identify options from multipart fields or JSON body. */
+export function parseIdentifyOptions(req: Request): {
+  marketplaceIds: string[];
+  autoTranslate: boolean;
+  targetLang?: string;
+} {
+  const body = req.body as Record<string, unknown>;
+  const marketplaceIds = parseMarketplaceIds(
+    body.marketplaces ?? body.marketplace ?? body.marketplaceIds
+  );
+  const autoTranslate = parseBooleanField(
+    body.autoTranslate ?? body.auto_translate
+  );
+  const targetLang =
+    typeof body.targetLang === "string"
+      ? body.targetLang.trim()
+      : typeof body.target_lang === "string"
+        ? body.target_lang.trim()
+        : undefined;
+
+  return { marketplaceIds, autoTranslate, targetLang };
+}

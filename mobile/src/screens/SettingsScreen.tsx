@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,15 @@ import {
   TouchableOpacity,
   Linking,
   Alert,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { PRIVACY_POLICY_URL, TERMS_OF_SERVICE_URL } from '../config/legal';
+import {
+  getAutoTranslateEnabled,
+  setAutoTranslateEnabled,
+} from '../services/translationPrefs';
 
 async function openLegalUrl(url: string, label: string) {
   try {
@@ -26,6 +31,17 @@ async function openLegalUrl(url: string, label: string) {
 }
 
 export default function SettingsScreen() {
+  const [autoTranslate, setAutoTranslate] = useState(false);
+
+  useEffect(() => {
+    void getAutoTranslateEnabled().then(setAutoTranslate);
+  }, []);
+
+  const onToggleAutoTranslate = (value: boolean) => {
+    setAutoTranslate(value);
+    void setAutoTranslateEnabled(value);
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -35,6 +51,25 @@ export default function SettingsScreen() {
           <Text style={styles.mono}>EXPO_PUBLIC_PRIVACY_URL</Text> /{' '}
           <Text style={styles.mono}>EXPO_PUBLIC_TERMS_URL</Text>) before production EAS builds.
         </Text>
+
+        <Text style={styles.sectionHeader}>Listing</Text>
+        <View style={styles.card}>
+          <View style={styles.toggleRow}>
+            <View style={styles.linkTextWrap}>
+              <Text style={styles.linkTitle}>Auto-translate listings</Text>
+              <Text style={styles.linkHint}>
+                Translate title and description to the target marketplace language after photo
+                identification (requires LibreTranslate on the server).
+              </Text>
+            </View>
+            <Switch
+              value={autoTranslate}
+              onValueChange={onToggleAutoTranslate}
+              trackColor={{ false: '#374151', true: '#2563eb' }}
+              thumbColor="#fff"
+            />
+          </View>
+        </View>
 
         <Text style={styles.sectionHeader}>Legal</Text>
         <View style={styles.card}>
@@ -104,8 +139,15 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 16,
   },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 16,
+  },
   linkTextWrap: { flex: 1 },
   linkTitle: { color: '#fff', fontSize: 16, fontWeight: '600', marginBottom: 4 },
+  linkHint: { color: '#6b7280', fontSize: 12, lineHeight: 17 },
   linkUrl: { color: '#6b7280', fontSize: 12 },
   divider: { height: 1, backgroundColor: '#1f2937' },
   hint: { color: '#6b7280', fontSize: 12, lineHeight: 18, marginTop: 16 },

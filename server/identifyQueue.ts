@@ -22,6 +22,12 @@ export const IDENTIFY_JOB_TIMEOUT_MS = Number(
 export type IdentifyJobData = {
   /** All images uploaded in a single request — scraper must not run until vision merges these. */
   images: IdentifyImageInput[];
+  /** Selected marketplace IDs — used to pick listing translation language. */
+  marketplaceIds?: string[];
+  /** When true, translate title/description via LibreTranslate before scraper. */
+  autoTranslate?: boolean;
+  /** Optional ISO language override (e.g. es, fr). */
+  targetLang?: string;
 };
 
 export class IdentifyJobTimeoutError extends Error {

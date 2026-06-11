@@ -31,6 +31,7 @@
   "dependencies": {
     "@ai-sdk/openai": "^1.0.0",
     "@auth/drizzle-adapter": "^1.1.0",
+    "axios": "^1.7.9",
     "@hookform/resolvers": "^3.3.4",
     "@jridgewell/trace-mapping": "^0.3.25",
     "@neondatabase/serverless": "^1.1.0",

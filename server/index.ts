@@ -71,6 +71,7 @@ import { ensureUploadsDir, UPLOADS_DIR } from "./services/draftPhotoUpload";
 import {
   extractIdentifyImages,
   MAX_IDENTIFY_IMAGES,
+  parseIdentifyOptions,
   toDataUrl,
   type IdentifyImageInput,
 } from "./identifyImages";
@@ -85,7 +86,15 @@ import {
   type VisionConfidence,
   type VisionPerImage,
   type VisionProduct,
+  buildScraperSearchQuery,
 } from "./visionMerge";
+import {
+  checkTranslationServiceHealth,
+  resolveTranslationTargetLanguage,
+  translateText,
+  translateVisionListingFields,
+  type VisionTranslationResult,
+} from "./services/translationService";
 
 /** Skip vague scraper categories like "General" */
 function isWeakCategory(category: string): boolean {
@@ -962,12 +971,43 @@ async function runIdentifyPipeline(
    step = logStep("Vision aggregate complete", visionStart);
 
    const {
-     vision,
+     vision: mergedVision,
      sources: visionSources,
      primaryImageIndex,
-     searchQuery,
+     searchQuery: initialSearchQuery,
      perImage: perImageVision,
    } = visionPhase;
+
+   let vision = mergedVision;
+   let searchQuery = initialSearchQuery;
+   let translationResult: VisionTranslationResult | null = null;
+
+   if (job.autoTranslate) {
+     const targetLang = resolveTranslationTargetLanguage({
+       marketplaceIds: job.marketplaceIds,
+       targetLang: job.targetLang,
+     });
+     if (targetLang && targetLang !== "en") {
+       console.log(
+         `🌐 [3/5] Translating listing fields → ${targetLang} (marketplaces=${(job.marketplaceIds ?? []).join(",") || "default"})`
+       );
+       translationResult = await translateVisionListingFields(vision, {
+         targetLang,
+         sourceLang: "en",
+       });
+       if (translationResult.applied) {
+         vision = translationResult.vision;
+         searchQuery = buildScraperSearchQuery(vision);
+         console.log(
+           `[Identify] Translated title="${vision.title}" searchQuery="${searchQuery}"`
+         );
+       } else if (translationResult.error) {
+         console.warn(
+           `[Identify] Translation skipped: ${translationResult.error}`
+         );
+       }
+     }
+   }
 
    const primaryImage =
      imageInputs[primaryImageIndex] ?? imageInputs[0];
@@ -1172,6 +1212,19 @@ async function runIdentifyPipeline(
        visionSources,
        productPageImageUrls: pageImageUrls,
        productPageImageCount: pageImageUrls.length,
+       translation: translationResult
+         ? {
+             applied: translationResult.applied,
+             targetLang: translationResult.targetLang,
+             originalTitle: translationResult.originalTitle,
+             originalDescription: translationResult.originalDescription,
+             translatedTitle: translationResult.translatedTitle ?? null,
+             translatedDescription:
+               translationResult.translatedDescription ?? null,
+             error: translationResult.error ?? null,
+             marketplaceIds: job.marketplaceIds ?? [],
+           }
+         : null,
      }
    };
 
@@ -1225,6 +1278,18 @@ async function runIdentifyPipeline(
      scraperSource: listings.scraperSource ?? null,
      scraperMetadata: listings._scraperMetadata ?? null,
      verificationWarning: listings.verificationWarning ?? null,
+     translation: translationResult
+       ? {
+           applied: translationResult.applied,
+           targetLang: translationResult.targetLang,
+           originalTitle: translationResult.originalTitle,
+           originalDescription: translationResult.originalDescription,
+           translatedTitle: translationResult.translatedTitle ?? null,
+           translatedDescription:
+             translationResult.translatedDescription ?? null,
+           error: translationResult.error ?? null,
+         }
+       : null,
      product: {
        title: listings.title ?? searchQuery,
        description: listings.description ?? vision.description ?? "",
@@ -1262,6 +1327,46 @@ async function runIdentifyPipeline(
    });
 }
 
+// -------------------- TRANSLATION (LibreTranslate) --------------------
+app.post("/api/translate", async (req: Request, res: Response) => {
+  try {
+    const text = String(req.body?.text ?? req.body?.q ?? "").trim();
+    const targetLang = String(
+      req.body?.targetLang ?? req.body?.target ?? ""
+    ).trim();
+    const sourceLang = String(
+      req.body?.sourceLang ?? req.body?.source ?? "auto"
+    ).trim();
+
+    if (!text) {
+      return res.status(400).json({ error: "text is required" });
+    }
+    if (!targetLang) {
+      return res.status(400).json({ error: "targetLang is required" });
+    }
+
+    const result = await translateText({ text, targetLang, sourceLang });
+    return res.json({ success: true, ...result });
+  } catch (error) {
+    console.error("[Translate] error:", error);
+    const message =
+      error instanceof Error ? error.message : "Translation failed";
+    const status =
+      message.includes("ECONNREFUSED") || message.includes("timeout")
+        ? 503
+        : 500;
+    return res.status(status).json({ error: "Translation failed", message });
+  }
+});
+
+app.get("/api/translate/health", async (_req: Request, res: Response) => {
+  const ok = await checkTranslationServiceHealth();
+  res.status(ok ? 200 : 503).json({
+    ok,
+    url: process.env.LIBRETRANSLATE_URL ?? "http://localhost:5000",
+  });
+});
+
 // -------------------- IDENTIFY ROUTE (image -> scrape -> save to drafts) --------------------
 app.post(
   "/api/identify",
@@ -1289,8 +1394,9 @@ app.post(
     }
 
     try {
+      const identifyOptions = parseIdentifyOptions(req);
       await enqueueIdentifyJob(
-        { images: imageInputs },
+        { images: imageInputs, ...identifyOptions },
         (job) => runIdentifyPipeline(job, res)
       );
     } catch (error) {
@@ -1332,12 +1438,29 @@ app.post(
     }
 
     try {
+      const identifyOptions = parseIdentifyOptions(req);
       const visionPhase = await runVisionPhase(
-        { images: imageInputs },
+        { images: imageInputs, ...identifyOptions },
         callVisionForImage
       );
-      const { vision, sources, primaryImageIndex, searchQuery, perImage } =
+      let { vision, sources, primaryImageIndex, searchQuery, perImage } =
         visionPhase;
+      let translationResult: VisionTranslationResult | null = null;
+
+      if (identifyOptions.autoTranslate) {
+        const targetLang = resolveTranslationTargetLanguage(identifyOptions);
+        if (targetLang && targetLang !== "en") {
+          translationResult = await translateVisionListingFields(vision, {
+            targetLang,
+            sourceLang: "en",
+          });
+          if (translationResult.applied) {
+            vision = translationResult.vision;
+            searchQuery = buildScraperSearchQuery(vision);
+          }
+        }
+      }
+
       const primaryImage =
         imageInputs[primaryImageIndex] ?? imageInputs[0];
 
@@ -1401,6 +1524,8 @@ app.post(
         scraperRejected,
         priceRejected,
         identificationWarnings: warnings,
+        translation: translationResult,
+        identifyOptions,
       });
     } catch (error) {
       if (error instanceof VisionIdentifyError) {
@@ -1552,6 +1677,8 @@ const server = createServer(app);
  server.listen(PORT, "0.0.0.0", () => {
    console.log(`🚀 Unified Kauf26 engine running on port ${PORT}`);
    console.log(`📋 API endpoints available:`);
+   console.log(`   - POST /api/translate (LibreTranslate proxy)`);
+   console.log(`   - GET  /api/translate/health`);
    console.log(`   - POST /api/identify (1–5 images → OpenAI vision merge → scrape → draft)`);
    console.log(`   - POST /api/catalog/scrape (JSON { query } → masterScraper)`);
    console.log(`   - GET  /api/health`);

@@ -1,0 +1,16 @@
+services:
+  libretranslate:
+    image: libretranslate/libretranslate:latest
+    container_name: kauf26-libretranslate
+    ports:
+      - "5000:5000"
+    environment:
+      # Load common marketplace languages only (faster startup, lower memory)
+      LT_LOAD_ONLY: en,es,fr,de,pl,nl,pt,ja,zh
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/languages"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
