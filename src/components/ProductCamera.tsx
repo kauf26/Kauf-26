@@ -1,6 +1,16 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { saveListingSession, type MatchType } from '@/lib/pendingAnalysis';
+import { AutoTranslateRow } from '@/components/AutoTranslateRow';
+import {
+  getAutoTranslateEnabled,
+  setAutoTranslateEnabled,
+} from '@/lib/translationPrefs';
+import {
+  DEFAULT_IDENTIFY_MARKETPLACES,
+  shouldProceedToDraft,
+  resolveVerificationMessage,
+} from '@shared/identifyFlow';
 
 const MAX_IMAGES = 5;
 
@@ -216,33 +226,6 @@ type IdentifyApiResponse = {
   priceReliable?: boolean;
 };
 
-function isExactMatchResult(result: IdentifyApiResponse): boolean {
-  const matchType = result.matchType ?? result.product?.matchType;
-  return (
-    result.isExactMatch === true ||
-    result.product?.isExactMatch === true ||
-    matchType === 'exact'
-  );
-}
-
-function shouldProceedToDraft(result: IdentifyApiResponse): boolean {
-  if (result.success === true && result.draftId != null) return true;
-  if (result.requiresManualReview === true) return true;
-  if (result.fallbackToVision === true) return true;
-  if (isExactMatchResult(result)) return true;
-  const p = result.product;
-  if (!p) return false;
-  const price = parseFloat(String(p.price ?? 0));
-  const reliable =
-    result.priceReliable === true || p.priceReliable === true;
-  const matchType = result.matchType ?? p.matchType;
-  return (
-    (matchType === 'similar' || matchType === 'exact') &&
-    price > 0 &&
-    reliable
-  );
-}
-
 function persistPendingAnalysisFromIdentify(
   result: IdentifyApiResponse,
   capturedImages: string[]
@@ -338,6 +321,16 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [analyzeStep, setAnalyzeStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [autoTranslate, setAutoTranslate] = useState(true);
+
+  useEffect(() => {
+    setAutoTranslate(getAutoTranslateEnabled());
+  }, []);
+
+  const onToggleAutoTranslate = (value: boolean) => {
+    setAutoTranslate(value);
+    setAutoTranslateEnabled(value);
+  };
 
   const stopStream = () => {
     const active = streamRef.current;
@@ -385,9 +378,19 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
       const blob = await dataUrlToBlob(imageDataUrls[i]);
       formData.append('images', blob, `angle-${i + 1}.jpg`);
     }
+    if (imageDataUrls.length === 1) {
+      const blob = await dataUrlToBlob(imageDataUrls[0]);
+      formData.append('image', blob, 'product.jpg');
+    }
+    formData.append('autoTranslate', String(autoTranslate));
+    formData.append('marketplaces', JSON.stringify([...DEFAULT_IDENTIFY_MARKETPLACES]));
 
+    const deviceTz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
     const res = await fetch('/api/identify', {
       method: 'POST',
+      headers: {
+        'X-Client-Timezone': deviceTz,
+      },
       body: formData,
     });
 
@@ -441,11 +444,7 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
         goToDraft({
           ...result,
           verificationWarning:
-            result.verificationWarning ??
-            (result.requiresManualReview
-              ? result.message ??
-                'Product identified — please review pricing before posting.'
-              : undefined),
+            resolveVerificationMessage(result) ?? undefined,
         });
         return;
       }
@@ -453,7 +452,7 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
       goToDraft({
         ...result,
         verificationWarning:
-          result.message ??
+          resolveVerificationMessage(result) ??
           "Here's our match, please review before publishing.",
       });
     } catch (err) {
@@ -755,6 +754,13 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
           </div>
         </div>
       )}
+
+      <AutoTranslateRow
+        checked={autoTranslate}
+        onCheckedChange={onToggleAutoTranslate}
+        disabled={isLoading}
+      />
+
       <canvas ref={canvasRef} className="hidden" />
     </div>
   );

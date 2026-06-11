@@ -1,7 +1,8 @@
+import { DEFAULT_IDENTIFY_MARKETPLACES } from '../../../shared/identifyFlow';
 import { API_BASE_URL } from './config';
 import type { IdentifyApiResponse, IdentifyEditPayload } from '../types/identify';
 
-export const DEFAULT_IDENTIFY_MARKETPLACES = ['ebay'];
+export { DEFAULT_IDENTIFY_MARKETPLACES };
 
 export type IdentifyImageInput = {
   uri: string;
@@ -93,6 +94,7 @@ export function mapIdentifyResponseToEditPayload(
 ): IdentifyEditPayload {
   const product = response.product ?? {};
   const attrs = response.draftPreview?.attributes as Record<string, unknown> | undefined;
+  const marketPrices = attrs?.marketPrices as Record<string, unknown> | undefined;
 
   const title =
     String(product.title ?? response.draftPreview?.title ?? '').trim();
@@ -135,6 +137,17 @@ export function mapIdentifyResponseToEditPayload(
           ? 'Product identified — please review pricing before posting.'
           : '')
     ).trim() || null,
+    draftId:
+      response.draftId != null && !Number.isNaN(Number(response.draftId))
+        ? Number(response.draftId)
+        : null,
+    productUrl: String(product.productUrl ?? attrs?.productUrl ?? '').trim(),
+    allegroAverage: String(
+      product.allegroAvg ?? attrs?.allegroAvg ?? marketPrices?.allegroAvg ?? ''
+    ).trim(),
+    ebayAverage: String(
+      product.ebayAvg ?? attrs?.ebayAvg ?? marketPrices?.ebayAvg ?? ''
+    ).trim(),
     raw: response,
   };
 }

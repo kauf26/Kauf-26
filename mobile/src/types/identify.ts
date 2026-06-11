@@ -69,10 +69,33 @@ export type IdentifyEditPayload = {
   capturedImage: string | null;
   capturedImages: string[];
   verificationMessage?: string | null;
+  draftId?: number | null;
+  productUrl?: string;
+  allegroAverage?: string;
+  ebayAverage?: string;
   raw: IdentifyApiResponse;
+};
+
+export type MarketplaceListingPayload = {
+  title: string;
+  description: string;
+  price: string;
+  brand: string;
+  category: string;
+  condition: string;
+  material: string;
+  color: string;
+  model: string;
+  productUrl?: string;
+  capturedImage?: string | null;
+  capturedImages: string[];
+  priceReliable: boolean;
+  isExactMatch: boolean;
+  matchType: string;
 };
 
 export type HomeStackParamList = {
   Identify: undefined;
   Edit: { result: IdentifyEditPayload };
+  SelectMarketplaces: { draftId: number; listing: MarketplaceListingPayload };
 };

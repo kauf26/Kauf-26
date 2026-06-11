@@ -7,6 +7,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import IdentifyScreen from './src/screens/IdentifyScreen';
 import EditScreen from './src/screens/EditScreen';
+import SelectMarketplacesScreen from './src/screens/SelectMarketplacesScreen';
 import type { HomeStackParamList } from './src/types/identify';
 
 const Stack = createStackNavigator<HomeStackParamList>();
@@ -47,6 +48,11 @@ export default function App() {
             name="Edit"
             component={EditScreen}
             options={{ title: 'Product Draft' }}
+          />
+          <Stack.Screen
+            name="SelectMarketplaces"
+            component={SelectMarketplacesScreen}
+            options={{ title: 'Select Marketplaces' }}
           />
         </Stack.Navigator>
         <StatusBar style="dark" />

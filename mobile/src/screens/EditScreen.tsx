@@ -8,14 +8,20 @@ import {
   TextInput,
   TouchableOpacity,
   Platform,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { HomeStackParamList, IdentifyTranslation } from '../types/identify';
 import { IdentifyTheme as T } from '../theme/identifyTheme';
+import { API_BASE_URL } from '../services/config';
+import { saveDraftSnapshotMobile } from '../services/draftPhotos';
 
 type Props = StackScreenProps<HomeStackParamList, 'Edit'>;
+
+const PROHIBITED_KEYWORDS = ['gun', 'drugs', 'alcohol', 'tobacco', 'vape', 'weapon'];
 
 function hasTranslationContent(translation: IdentifyTranslation | null): boolean {
   if (!translation) return false;
@@ -79,6 +85,13 @@ export default function EditScreen({ route, navigation }: Props) {
   const [model, setModel] = useState(result.model);
   const [material, setMaterial] = useState(result.material);
   const [color, setColor] = useState(result.color);
+  const [productUrl, setProductUrl] = useState(result.productUrl ?? '');
+  const [allegroAverage, setAllegroAverage] = useState(result.allegroAverage ?? '');
+  const [ebayAverage, setEbayAverage] = useState(result.ebayAverage ?? '');
+  const [exactSearchTerm, setExactSearchTerm] = useState('');
+  const [isRescraping, setIsRescraping] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [draftId, setDraftId] = useState<number | null>(result.draftId ?? null);
 
   const previewUri = result.capturedImage ?? result.capturedImages[0] ?? null;
   const translation = result.translation;
@@ -128,8 +141,122 @@ export default function EditScreen({ route, navigation }: Props) {
     ]
   );
 
-  const handlePostToMarketplace = () => {
-    console.log('[EditScreen] Post to Marketplace (placeholder):', finalListing);
+  const isProhibited = PROHIBITED_KEYWORDS.some(
+    (kw) =>
+      title.toLowerCase().includes(kw) || category.toLowerCase().includes(kw)
+  );
+
+  const buildDraftAttributes = (images: string[]) => ({
+    capturedImage: images[0] ?? previewUri ?? '',
+    capturedImages: images,
+    modelName: title.trim(),
+    brand: brand.trim(),
+    condition: condition.trim(),
+    category: category.trim(),
+    aiDescription: description.trim(),
+    recommendedPrice: parseFloat(price) || 0,
+    medianPrice: price.trim(),
+    allegroAvg: parseFloat(allegroAverage) || 0,
+    ebayAvg: parseFloat(ebayAverage) || 0,
+    marketPrices: {
+      recommendedPrice: price.trim(),
+      allegroAvg: allegroAverage.trim(),
+      ebayAvg: ebayAverage.trim(),
+    },
+    productUrl: productUrl.trim(),
+  });
+
+  const handleRescrapeExact = async () => {
+    const term = exactSearchTerm.trim();
+    if (!term) {
+      Alert.alert('Enter a search term', 'Type a product name or model to search.');
+      return;
+    }
+    setIsRescraping(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/catalog/scrape`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          query: term,
+          searchQuery: term,
+          visionTitle: title || term,
+          visionBrand: brand,
+        }),
+      });
+      const data = (await res.json()) as Record<string, unknown> & { message?: string };
+      if (!res.ok) {
+        throw new Error(data.message ?? `Search failed (${res.status})`);
+      }
+      if (typeof data.title === 'string' && data.title.trim()) setTitle(data.title.trim());
+      if (typeof data.brand === 'string' && data.brand.trim()) setBrand(data.brand.trim());
+      if (typeof data.description === 'string' && data.description.trim()) {
+        setDescription(data.description.trim());
+      }
+      if (data.price != null) setPrice(String(data.price));
+      if (typeof data.category === 'string' && data.category.trim()) {
+        setCategory(data.category.trim());
+      }
+      if (typeof data.productUrl === 'string') setProductUrl(data.productUrl.trim());
+      if (data.allegroAvg != null) setAllegroAverage(String(data.allegroAvg));
+      if (data.ebayAvg != null) setEbayAverage(String(data.ebayAvg));
+    } catch (err) {
+      Alert.alert(
+        'Search failed',
+        err instanceof Error ? err.message : 'Could not refresh listing data.'
+      );
+    } finally {
+      setIsRescraping(false);
+    }
+  };
+
+  const handlePostToMarketplace = async () => {
+    if (isProhibited) return;
+
+    setIsSaving(true);
+    try {
+      const images = result.capturedImages.length
+        ? result.capturedImages
+        : previewUri
+          ? [previewUri]
+          : [];
+
+      const savedDraftId = await saveDraftSnapshotMobile({
+        draftId,
+        title: title.trim() || 'Untitled draft',
+        images,
+        attributes: buildDraftAttributes(images),
+      });
+      setDraftId(savedDraftId);
+
+      navigation.navigate('SelectMarketplaces', {
+        draftId: savedDraftId,
+        listing: {
+          title: title.trim(),
+          description: description.trim(),
+          price: price.trim(),
+          brand: brand.trim(),
+          category: category.trim(),
+          condition: condition.trim(),
+          material: material.trim(),
+          color: color.trim(),
+          model: model.trim(),
+          productUrl: productUrl.trim(),
+          capturedImage: previewUri,
+          capturedImages: images,
+          priceReliable: result.priceReliable,
+          isExactMatch: result.isExactMatch,
+          matchType: result.matchType,
+        },
+      });
+    } catch (err) {
+      Alert.alert(
+        'Could not save draft',
+        err instanceof Error ? err.message : 'Please try again.'
+      );
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleRetakePhoto = () => {
@@ -235,6 +362,40 @@ export default function EditScreen({ route, navigation }: Props) {
           {previewUri ? (
             <Image source={{ uri: previewUri }} style={styles.previewImage} resizeMode="cover" />
           ) : null}
+
+          <View style={styles.valuationCard}>
+            <Text style={styles.valuationTitle}>Scraped Valuations</Text>
+            <View style={styles.valuationRow}>
+              <Text style={styles.valuationLabel}>eBay Market Avg:</Text>
+              <Text style={styles.valuationValue}>{ebayAverage || '—'}</Text>
+            </View>
+            <View style={styles.valuationRow}>
+              <Text style={styles.valuationLabel}>Allegro Market Avg:</Text>
+              <Text style={styles.valuationValue}>{allegroAverage || '—'}</Text>
+            </View>
+          </View>
+
+          <View style={styles.rescrapeCard}>
+            <Text style={styles.fieldLabel}>Exact match search</Text>
+            <TextInput
+              style={styles.input}
+              value={exactSearchTerm}
+              onChangeText={setExactSearchTerm}
+              placeholder="Search term for exact marketplace match"
+              placeholderTextColor={T.textSubtle}
+            />
+            <TouchableOpacity
+              style={[styles.rescrapeButton, isRescraping && styles.buttonDisabled]}
+              onPress={() => void handleRescrapeExact()}
+              disabled={isRescraping}
+            >
+              {isRescraping ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.rescrapeButtonText}>Refresh from marketplace search</Text>
+              )}
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.draftHeader}>
             <Text style={styles.draftTitle}>Product Draft</Text>
@@ -368,9 +529,25 @@ export default function EditScreen({ route, navigation }: Props) {
             </View>
           ) : null}
 
-          <TouchableOpacity style={styles.primaryButton} onPress={handlePostToMarketplace}>
-            <Text style={styles.primaryButtonText}>Continue to Marketplaces & Post</Text>
-          </TouchableOpacity>
+          {isProhibited ? (
+            <View style={styles.prohibitedBanner}>
+              <Text style={styles.prohibitedText}>
+                PROHIBITED KEYWORD DETECTED — UNABLE TO SYNDICATE LISTING
+              </Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.primaryButton, isSaving && styles.buttonDisabled]}
+              onPress={() => void handlePostToMarketplace()}
+              disabled={isSaving}
+            >
+              {isSaving ? (
+                <ActivityIndicator color="#fff" size="small" />
+              ) : (
+                <Text style={styles.primaryButtonText}>Continue to Marketplaces & Post</Text>
+              )}
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity style={styles.secondaryButton} onPress={handleRetakePhoto}>
             <Ionicons name="camera-outline" size={18} color={T.text} />
@@ -606,6 +783,59 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   translationText: { color: T.inputText, fontSize: 12, lineHeight: 17, textAlign: 'center' },
+  valuationCard: {
+    width: '100%',
+    backgroundColor: T.surface,
+    borderWidth: 1,
+    borderColor: T.surfaceBorder,
+    borderRadius: 8,
+    padding: 12,
+    gap: 8,
+  },
+  valuationTitle: {
+    color: T.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+  },
+  valuationRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  valuationLabel: { color: T.textSubtle, fontSize: 13 },
+  valuationValue: { color: T.inputText, fontSize: 13, fontWeight: '600' },
+  rescrapeCard: {
+    width: '100%',
+    gap: 8,
+  },
+  rescrapeButton: {
+    width: '100%',
+    backgroundColor: '#374151',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  rescrapeButtonText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  prohibitedBanner: {
+    width: '100%',
+    backgroundColor: 'rgba(127,29,29,0.35)',
+    borderWidth: 1,
+    borderColor: '#B91C1C',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+  },
+  prohibitedText: {
+    color: '#FCA5A5',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+  buttonDisabled: { opacity: 0.5 },
   primaryButton: {
     width: '100%',
     backgroundColor: T.primary,

@@ -25,6 +25,10 @@ import {
   type IdentifyImageInput,
 } from '../services/identifyApi';
 import {
+  resolveVerificationMessage,
+  shouldProceedToDraft,
+} from '../../../shared/identifyFlow';
+import {
   getAutoTranslateEnabled,
   setAutoTranslateEnabled,
 } from '../services/translationPrefs';
@@ -59,6 +63,7 @@ export default function IdentifyScreen() {
   const [analyzeStep, setAnalyzeStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [autoTranslate, setAutoTranslate] = useState(true);
+  const [showCameraPanel, setShowCameraPanel] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [shutterPressed, setShutterPressed] = useState(false);
 
@@ -66,6 +71,12 @@ export default function IdentifyScreen() {
     void getAutoTranslateEnabled().then(setAutoTranslate);
     return () => clearProgressTimer();
   }, []);
+
+  useEffect(() => {
+    if (capturedImages.length > 0) {
+      setShowCameraPanel(true);
+    }
+  }, [capturedImages.length]);
 
   const clearProgressTimer = () => {
     if (progressTimerRef.current) {
@@ -206,11 +217,11 @@ export default function IdentifyScreen() {
       });
 
       const payload = mapIdentifyResponseToEditPayload(response);
-
-      if (!payload.title && !payload.brand) {
-        setError('The server did not return enough product details. Please try another photo.');
-        return;
-      }
+      payload.verificationMessage =
+        resolveVerificationMessage(response) ??
+        (shouldProceedToDraft(response)
+          ? payload.verificationMessage
+          : "Here's our match, please review before publishing.");
 
       await playSuccessAnimation();
       navigation.navigate('Edit', { result: payload });
@@ -236,8 +247,8 @@ export default function IdentifyScreen() {
   const captureLabel =
     capturedImages.length === 0 ? 'Take Photo' : `Take ${angleLabel} photo`;
 
-  const showCameraView =
-    showCamera || (capturedImages.length === 0 && !isIdentifying);
+  const showScannerContent =
+    showCameraPanel || capturedImages.length > 0 || isIdentifying;
 
   if (showCamera && permission?.granted) {
     return (
@@ -327,9 +338,29 @@ export default function IdentifyScreen() {
               <Text style={styles.taglineDot}> · </Text>
               <Text style={styles.taglinePink}>SELL</Text>
             </View>
+            <Text style={styles.welcomeDescription}>
+              For best results, take up to 5 photos: front, back, label/tag, and details.
+            </Text>
           </View>
 
-          <View style={styles.scannerCard}>
+          <View style={styles.mainInteraction}>
+            {!showScannerContent ? (
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => setShowCameraPanel(true)}
+                accessibilityLabel="Open Kauf-AI scanner"
+                style={styles.logoPressable}
+              >
+                <Image
+                  source={require('../../assets/icon.png')}
+                  style={styles.logoHero}
+                  resizeMode="contain"
+                  accessibilityLabel="Kauf-AI logo"
+                />
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.scannerCardShell}>
+                <View style={styles.scannerCard}>
             {error ? (
               <View style={[styles.errorBanner, styles.sectionSpacing]}>
                 <Text style={styles.errorText}>{error}</Text>
@@ -349,7 +380,7 @@ export default function IdentifyScreen() {
               </Animated.View>
             ) : null}
 
-            {showCameraView && capturedImages.length === 0 ? (
+            {capturedImages.length === 0 && !isIdentifying ? (
               <View style={styles.startActions}>
                 <TouchableOpacity
                   style={[
@@ -473,13 +504,13 @@ export default function IdentifyScreen() {
                 />
               </View>
             </View>
+                </View>
+              </View>
+            )}
           </View>
 
-          <View style={styles.promoFooter}>
-            <Text style={styles.promoTrial}>Free 14 day trial</Text>
-            <Text style={styles.promoTagline}>selling online made easy</Text>
-            <Text style={styles.promoSold}>sold with KAUF – AI</Text>
-          </View>
+          <Text style={styles.trialFooter}>14 DAY FREE TRIAL</Text>
+          <Text style={styles.appFooter}>Sold with KAUF</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -491,11 +522,12 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   pageContent: {
     flexGrow: 1,
-    justifyContent: 'center',
+    justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 30,
+    paddingVertical: 24,
     width: '100%',
+    minHeight: '100%',
   },
   contentColumn: {
     width: '100%',
@@ -509,10 +541,52 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
   },
+  welcomeDescription: {
+    marginTop: 12,
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#6B7280',
+    textAlign: 'center',
+    maxWidth: 360,
+    paddingHorizontal: 8,
+  },
+  mainInteraction: {
+    width: '100%',
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 280,
+  },
+  logoPressable: {
+    width: '100%',
+    maxWidth: 360,
+    alignItems: 'center',
+  },
+  logoHero: {
+    width: '100%',
+    height: 220,
+    borderRadius: 24,
+  },
+  scannerCardShell: {
+    width: '100%',
+    borderRadius: 24,
+    borderWidth: 4,
+    borderColor: '#F3F4F6',
+    overflow: 'hidden',
+    ...Platform.select({
+      ios: {
+        shadowColor: T.shadow,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.12,
+        shadowRadius: 16,
+      },
+      android: { elevation: 8 },
+    }),
+  },
   brandTitle: {
     fontSize: 48,
     fontWeight: '700',
-    color: PALETTE.purple,
+    color: '#000000',
     letterSpacing: -0.5,
     textAlign: 'center',
     fontFamily: Platform.OS === 'ios' ? 'Georgia' : 'serif',
@@ -536,18 +610,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     letterSpacing: 2,
-    color: PALETTE.blue,
+    color: PALETTE.purple,
   },
   taglinePink: {
     fontSize: 14,
     fontWeight: '800',
     letterSpacing: 2,
-    color: PALETTE.pink,
+    color: PALETTE.purple,
   },
   taglineDot: {
     fontSize: 14,
     fontWeight: '800',
-    color: PALETTE.muted,
+    color: PALETTE.purple,
   },
   scannerCard: {
     width: '100%',
@@ -733,32 +807,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     transform: [{ scaleX: 1.15 }, { scaleY: 1.15 }],
   },
-  promoFooter: {
+  trialFooter: {
     width: '100%',
-    alignItems: 'center',
-    marginTop: 30,
-    paddingHorizontal: 12,
-    paddingBottom: 10,
-  },
-  promoTrial: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '700',
-    color: PALETTE.purple,
+    color: '#1F2937',
     textAlign: 'center',
+    letterSpacing: 3,
+    textTransform: 'uppercase',
+    marginTop: 16,
   },
-  promoTagline: {
+  appFooter: {
+    width: '100%',
     fontSize: 14,
-    fontWeight: '400',
-    color: PALETTE.body,
-    textAlign: 'center',
-    marginTop: 6,
-  },
-  promoSold: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: PALETTE.purple,
+    fontWeight: '500',
+    color: '#C084FC',
     textAlign: 'center',
     marginTop: 12,
+    marginBottom: 8,
   },
   buttonDisabled: { opacity: 0.4 },
   cameraContainer: { flex: 1, backgroundColor: '#000' },
