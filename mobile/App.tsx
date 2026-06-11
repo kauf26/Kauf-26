@@ -8,6 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
 import PinAuthScreen from './src/screens/PinAuthScreen';
 import RootNavigator from './src/navigation/RootNavigator';
+import { USER_PIN_KEY } from './src/auth/biometric';
 
 const AppTheme = {
   ...DefaultTheme,
@@ -29,7 +30,7 @@ export default function App() {
 
   useEffect(() => {
     void (async () => {
-      const storedPin = await SecureStore.getItemAsync('userPin');
+      const storedPin = await SecureStore.getItemAsync(USER_PIN_KEY);
       setHasPin(Boolean(storedPin));
       setBooting(false);
     })();

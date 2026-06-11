@@ -17,6 +17,14 @@ import {
   getAutoTranslateEnabled,
   setAutoTranslateEnabled,
 } from '../services/translationPrefs';
+import {
+  disableBiometricAuth,
+  enableBiometricAuth,
+  getBiometricCapability,
+  getStoredPin,
+  isBiometricEnabled,
+  type BiometricCapability,
+} from '../auth/biometric';
 
 async function openLegalUrl(url: string, label: string) {
   try {
@@ -34,15 +42,65 @@ async function openLegalUrl(url: string, label: string) {
 export default function SettingsScreen() {
   const navigation = useNavigation<any>();
   const [autoTranslate, setAutoTranslate] = useState(false);
+  const [biometricOn, setBiometricOn] = useState(false);
+  const [biometricCap, setBiometricCap] = useState<BiometricCapability | null>(null);
+  const [biometricBusy, setBiometricBusy] = useState(false);
 
   useEffect(() => {
     void getAutoTranslateEnabled().then(setAutoTranslate);
+    void (async () => {
+      const [enabled, cap] = await Promise.all([
+        isBiometricEnabled(),
+        getBiometricCapability(),
+      ]);
+      setBiometricOn(enabled);
+      setBiometricCap(cap);
+    })();
   }, []);
 
   const onToggleAutoTranslate = (value: boolean) => {
     setAutoTranslate(value);
     void setAutoTranslateEnabled(value);
   };
+
+  const onToggleBiometric = async (value: boolean) => {
+    if (biometricBusy) return;
+
+    if (!biometricCap?.available || !biometricCap.enrolled) {
+      Alert.alert(
+        'Biometrics unavailable',
+        biometricCap?.available
+          ? `Enroll ${biometricCap.label} in your device Settings first.`
+          : 'This device does not support biometric authentication.'
+      );
+      return;
+    }
+
+    setBiometricBusy(true);
+    try {
+      if (value) {
+        const pin = await getStoredPin();
+        if (!pin) {
+          Alert.alert('PIN required', 'Set up your app PIN before enabling biometrics.');
+          return;
+        }
+        const result = await enableBiometricAuth(pin);
+        if (result.ok) {
+          setBiometricOn(true);
+        } else if (result.error !== 'Cancelled') {
+          Alert.alert('Could not enable biometrics', result.error);
+        }
+      } else {
+        await disableBiometricAuth();
+        setBiometricOn(false);
+      }
+    } finally {
+      setBiometricBusy(false);
+    }
+  };
+
+  const biometricLabel = biometricCap?.label ?? 'Biometrics';
+  const biometricAvailable = Boolean(biometricCap?.available && biometricCap?.enrolled);
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -67,6 +125,29 @@ export default function SettingsScreen() {
             </View>
             <Ionicons name="chevron-forward" size={18} color="#6b7280" />
           </TouchableOpacity>
+        </View>
+
+        <Text style={styles.sectionHeader}>Security</Text>
+        <View style={styles.card}>
+          <View style={styles.toggleRow}>
+            <View style={styles.linkTextWrap}>
+              <Text style={styles.linkTitle}>{biometricLabel} unlock</Text>
+              <Text style={styles.linkHint}>
+                {biometricAvailable
+                  ? `Use ${biometricLabel} instead of your PIN when opening the app. PIN remains available as fallback.`
+                  : biometricCap?.available
+                    ? `Enroll ${biometricLabel} in device Settings to enable.`
+                    : 'Biometric authentication is not available on this device.'}
+              </Text>
+            </View>
+            <Switch
+              value={biometricOn}
+              onValueChange={(v) => void onToggleBiometric(v)}
+              disabled={!biometricAvailable || biometricBusy}
+              trackColor={{ false: '#374151', true: '#2563eb' }}
+              thumbColor="#fff"
+            />
+          </View>
         </View>
 
         <Text style={styles.sectionHeader}>Listing</Text>
