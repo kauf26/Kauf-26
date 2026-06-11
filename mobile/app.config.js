@@ -43,7 +43,10 @@ module.exports = {
     ],
     extra: {
       apiUrl: process.env.EXPO_PUBLIC_API_URL?.trim()?.replace(/\/$/, "") ?? "",
-      eas: base.expo.extra?.eas,
+      eas: {
+        projectId: "59f74669-28ab-41fc-8f7b-18fc9b0a5595",
+        ...(base.expo.extra?.eas ?? {}),
+      },
     },
   },
 };
