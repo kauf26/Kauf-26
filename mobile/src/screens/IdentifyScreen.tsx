@@ -48,6 +48,14 @@ const PALETTE = {
 
 const MAX_IMAGES = 5;
 const ANGLE_ORDINALS = ['first', 'second', 'third', 'fourth', 'fifth'] as const;
+/** Matches web ProductCamera JPEG quality. */
+const PHOTO_CAPTURE_QUALITY = 0.85;
+/** Photo-only camera — do not pass onBarcodeScanned (no QR/barcode scanning). */
+const PRODUCT_CAMERA_VIEW_PROPS = {
+  mode: 'picture' as const,
+  facing: 'back' as const,
+  barcodeScannerSettings: { barcodeTypes: [] as const },
+};
 
 type NavigationProp = StackNavigationProp<HomeStackParamList, 'Identify'>;
 
@@ -120,7 +128,7 @@ export default function IdentifyScreen() {
 
     try {
       const photo = await cameraRef.current.takePictureAsync({
-        quality: 0.85,
+        quality: PHOTO_CAPTURE_QUALITY,
         skipProcessing: false,
       });
       if (!photo?.uri) {
@@ -228,8 +236,8 @@ export default function IdentifyScreen() {
   const captureLabel =
     capturedImages.length === 0 ? 'Take Photo' : `Take ${angleLabel} photo`;
 
-  const showCameraView =
-    showCamera || (capturedImages.length === 0 && !isIdentifying);
+  const showStartCamera =
+    !showCamera && capturedImages.length === 0 && !isIdentifying;
 
   if (showCamera && permission?.granted) {
     const shutterDisabled = !cameraReady || isCapturing || isIdentifying;
@@ -239,8 +247,7 @@ export default function IdentifyScreen() {
         <CameraView
           ref={cameraRef}
           style={styles.camera}
-          facing="back"
-          mode="picture"
+          {...PRODUCT_CAMERA_VIEW_PROPS}
           onCameraReady={() => setCameraReady(true)}
         >
           <View style={styles.cameraHud} pointerEvents="box-none">
@@ -359,7 +366,7 @@ export default function IdentifyScreen() {
               </Animated.View>
             ) : null}
 
-            {showCameraView && capturedImages.length === 0 ? (
+            {showStartCamera ? (
               <View style={styles.startActions}>
                 <TouchableOpacity
                   style={[
