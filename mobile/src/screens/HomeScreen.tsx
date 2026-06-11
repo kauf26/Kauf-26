@@ -144,7 +144,7 @@ export default function HomeScreen() {
 
   const startFreshListing = useCallback(() => {
     resetListingForm();
-    navigation.navigate('Home');
+    navigation.navigate('Upload');
   }, [navigation, resetListingForm]);
 
   useFocusEffect(

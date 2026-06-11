@@ -1,6 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import HomeStackNavigator from './HomeStackNavigator';
 import HomeScreen from '../screens/HomeScreen';
 import ListingsScreen from '../screens/ListingsScreen';
 import SoldProductsScreen from '../screens/SoldProductsScreen';
@@ -19,7 +20,9 @@ export default function MainNavigator() {
           let iconName: keyof typeof Ionicons.glyphMap;
 
           if (route.name === 'Home') {
-            iconName = focused ? 'home' : 'home-outline';
+            iconName = focused ? 'scan' : 'scan-outline';
+          } else if (route.name === 'Upload') {
+            iconName = focused ? 'cloud-upload' : 'cloud-upload-outline';
           } else if (route.name === 'Listings') {
             iconName = focused ? 'list' : 'list-outline';
           } else if (route.name === 'SoldProducts') {
@@ -57,8 +60,13 @@ export default function MainNavigator() {
         },
       })}
     >
-      <Tab.Screen 
-        name="Home" 
+      <Tab.Screen
+        name="Home"
+        component={HomeStackNavigator}
+        options={{ title: 'Identify', headerShown: false }}
+      />
+      <Tab.Screen
+        name="Upload"
         component={HomeScreen}
         options={{ title: 'Upload Product' }}
       />
