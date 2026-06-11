@@ -1,16 +1,14 @@
 import 'react-native-gesture-handler';
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
+import { createStackNavigator } from '@react-navigation/stack';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import * as SecureStore from 'expo-secure-store';
-import * as WebBrowser from 'expo-web-browser';
-import MainNavigator from './src/navigation/MainNavigator';
-import PinAuthScreen from './src/screens/PinAuthScreen';
-import SoldItemAlertMobile from './src/components/SoldItemAlertMobile';
-import { wireOAuthSessionLifecycle } from './src/services/oauthSessionLifecycle';
+import IdentifyScreen from './src/screens/IdentifyScreen';
+import EditScreen from './src/screens/EditScreen';
+import type { HomeStackParamList } from './src/types/identify';
 
-WebBrowser.maybeCompleteAuthSession();
+const Stack = createStackNavigator<HomeStackParamList>();
 
 const DarkTheme = {
   ...DefaultTheme,
@@ -26,60 +24,29 @@ const DarkTheme = {
 };
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [hasPin, setHasPin] = useState<boolean | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    checkPin();
-  }, []);
-
-  useEffect(() => {
-    return wireOAuthSessionLifecycle();
-  }, []);
-
-  const checkPin = async () => {
-    try {
-      const storedPin = await SecureStore.getItemAsync('userPin');
-      setHasPin(!!storedPin);
-    } catch (error) {
-      setHasPin(false);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleAuthenticate = () => {
-    setIsAuthenticated(true);
-  };
-
-  const handlePinSet = () => {
-    setHasPin(true);
-    setIsAuthenticated(true);
-  };
-
-  if (isLoading) {
-    return null;
-  }
-
-  if (!isAuthenticated) {
-    return (
-      <SafeAreaProvider>
-        <PinAuthScreen
-          hasPin={hasPin || false}
-          onAuthenticate={handleAuthenticate}
-          onPinSet={handlePinSet}
-        />
-        <StatusBar style="light" />
-      </SafeAreaProvider>
-    );
-  }
-
   return (
     <SafeAreaProvider>
       <NavigationContainer theme={DarkTheme}>
-        <MainNavigator />
-        <SoldItemAlertMobile />
+        <Stack.Navigator
+          initialRouteName="Identify"
+          screenOptions={{
+            headerStyle: { backgroundColor: '#111827' },
+            headerTintColor: '#ffffff',
+            headerTitleStyle: { fontWeight: 'bold' },
+            cardStyle: { backgroundColor: '#0a0a0f' },
+          }}
+        >
+          <Stack.Screen
+            name="Identify"
+            component={IdentifyScreen}
+            options={{ title: 'Identify Product' }}
+          />
+          <Stack.Screen
+            name="Edit"
+            component={EditScreen}
+            options={{ title: 'Review Listing' }}
+          />
+        </Stack.Navigator>
         <StatusBar style="light" />
       </NavigationContainer>
     </SafeAreaProvider>
