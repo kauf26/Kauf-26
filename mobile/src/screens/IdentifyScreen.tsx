@@ -35,7 +35,7 @@ const PALETTE = {
   blue: '#3B82F6',
   pink: '#EC4899',
   accent: '#2563EB',
-  secondary: '#F59E0B',
+  secondary: '#1F2937',
   body: '#1F2937',
   muted: '#9CA3AF',
 } as const;
@@ -327,24 +327,9 @@ export default function IdentifyScreen() {
               <Text style={styles.taglineDot}> · </Text>
               <Text style={styles.taglinePink}>SELL</Text>
             </View>
-            <Text style={styles.welcomeHint}>
-              For best results, take up to 5 photos: front, back, label/tag, and details.
-            </Text>
           </View>
 
           <View style={styles.scannerCard}>
-            <Text
-              style={[styles.scannerTitle, styles.sectionSpacing]}
-              adjustsFontSizeToFit
-              numberOfLines={1}
-              minimumFontScale={0.65}
-            >
-              KAUF26 Scanner
-            </Text>
-            <Text style={[styles.scannerSubtitle, styles.sectionSpacing]}>
-              For best results, take up to 5 photos: front, back, label/tag, and details.
-            </Text>
-
             {error ? (
               <View style={[styles.errorBanner, styles.sectionSpacing]}>
                 <Text style={styles.errorText}>{error}</Text>
@@ -564,13 +549,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: PALETTE.muted,
   },
-  welcomeHint: {
-    fontSize: 16,
-    color: PALETTE.body,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginTop: 8,
-  },
   scannerCard: {
     width: '100%',
     alignItems: 'center',
@@ -589,20 +567,6 @@ const styles = StyleSheet.create({
       },
       android: { elevation: 6 },
     }),
-  },
-  scannerTitle: {
-    color: PALETTE.body,
-    fontSize: 40,
-    fontWeight: '700',
-    textAlign: 'center',
-    width: '100%',
-  },
-  scannerSubtitle: {
-    color: PALETTE.body,
-    fontSize: 16,
-    lineHeight: 22,
-    textAlign: 'center',
-    width: '100%',
   },
   errorBanner: {
     width: '100%',
