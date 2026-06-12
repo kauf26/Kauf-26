@@ -1,8 +1,21 @@
-import type { Express } from "express";
-import { getUserById } from "./authStorage";
+import type { Express, Request, Response } from "express";
+import { getUserById, updateUserProfile } from "./authStorage";
 import { registerDevLoginRoutes } from "./devLogin";
 import { isAuthenticated } from "./setupAuth";
 import type { SessionUser } from "./types";
+
+function profileResponse(user: NonNullable<Awaited<ReturnType<typeof getUserById>>>) {
+  const displayName = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
+  return {
+    id: user.id,
+    email: user.email,
+    firstName: user.firstName,
+    lastName: user.lastName,
+    name: displayName || user.username,
+    profileImageUrl: user.profileImageUrl,
+    onboardingCompleted: user.onboardingCompleted,
+  };
+}
 
 export function registerAuthRoutes(app: Express): void {
   registerDevLoginRoutes(app);
@@ -31,6 +44,39 @@ export function registerAuthRoutes(app: Express): void {
     } catch (error) {
       console.error("[auth] /api/auth/user", error);
       res.status(500).json({ message: "Failed to fetch user" });
+    }
+  });
+
+  app.get("/api/user/profile", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const sessionUser = req.user as SessionUser;
+      const user = await getUserById(sessionUser.id);
+      if (!user) {
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+      return res.json(profileResponse(user));
+    } catch (error) {
+      console.error("[auth] GET /api/user/profile", error);
+      return res.status(500).json({ message: "Failed to load profile" });
+    }
+  });
+
+  app.post("/api/user/profile", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const sessionUser = req.user as SessionUser;
+      const { name, email, firstName, lastName } = req.body ?? {};
+      const updated = await updateUserProfile(sessionUser.id, {
+        name: typeof name === "string" ? name : undefined,
+        email: typeof email === "string" ? email : undefined,
+        firstName: typeof firstName === "string" ? firstName : undefined,
+        lastName: typeof lastName === "string" ? lastName : undefined,
+      });
+      return res.json(profileResponse(updated));
+    } catch (error) {
+      console.error("[auth] POST /api/user/profile", error);
+      return res.status(500).json({
+        message: error instanceof Error ? error.message : "Failed to update profile",
+      });
     }
   });
 }

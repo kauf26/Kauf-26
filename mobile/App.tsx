@@ -8,7 +8,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
 import PinAuthScreen from './src/screens/PinAuthScreen';
 import RootNavigator from './src/navigation/RootNavigator';
+import MarketplaceOnboardingScreen from './src/screens/MarketplaceOnboardingScreen';
 import { USER_PIN_KEY } from './src/auth/biometric';
+import { isMarketplaceOnboardingCompleted } from './src/services/userProfile';
 
 const AppTheme = {
   ...DefaultTheme,
@@ -27,11 +29,16 @@ export default function App() {
   const [booting, setBooting] = useState(true);
   const [hasPin, setHasPin] = useState(false);
   const [pinAuthenticated, setPinAuthenticated] = useState(false);
+  const [onboardingDone, setOnboardingDone] = useState(true);
 
   useEffect(() => {
     void (async () => {
-      const storedPin = await SecureStore.getItemAsync(USER_PIN_KEY);
+      const [storedPin, onboardingComplete] = await Promise.all([
+        SecureStore.getItemAsync(USER_PIN_KEY),
+        isMarketplaceOnboardingCompleted(),
+      ]);
       setHasPin(Boolean(storedPin));
+      setOnboardingDone(onboardingComplete);
       setBooting(false);
     })();
   }, []);
@@ -54,9 +61,21 @@ export default function App() {
             onPinSet={() => {
               setHasPin(true);
               setPinAuthenticated(true);
+              setOnboardingDone(false);
             }}
           />
           <StatusBar style="light" />
+        </SafeAreaProvider>
+      </GestureHandlerRootView>
+    );
+  }
+
+  if (!onboardingDone) {
+    return (
+      <GestureHandlerRootView style={styles.flex}>
+        <SafeAreaProvider>
+          <MarketplaceOnboardingScreen onComplete={() => setOnboardingDone(true)} />
+          <StatusBar style="dark" />
         </SafeAreaProvider>
       </GestureHandlerRootView>
     );

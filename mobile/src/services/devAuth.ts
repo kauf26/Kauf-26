@@ -25,6 +25,7 @@ export async function fetchDevLoginEnabled(): Promise<boolean> {
 export async function devLoginWithPin(pin: string): Promise<DevSession> {
   const res = await fetch(`${API_BASE_URL}/api/auth/dev-login`, {
     method: 'POST',
+    credentials: 'include',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({ pin }),
   });

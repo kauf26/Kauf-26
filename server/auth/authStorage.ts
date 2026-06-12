@@ -89,3 +89,56 @@ export async function completeOnboarding(userId: number): Promise<User> {
   if (!user) throw new Error("User not found");
   return user;
 }
+
+export type UpdateUserProfileInput = {
+  name?: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+};
+
+function splitDisplayName(name: string): { firstName: string; lastName: string } {
+  const trimmed = name.trim();
+  if (!trimmed) return { firstName: "", lastName: "" };
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 1) return { firstName: parts[0], lastName: "" };
+  return {
+    firstName: parts[0],
+    lastName: parts.slice(1).join(" "),
+  };
+}
+
+export async function updateUserProfile(
+  userId: number,
+  input: UpdateUserProfileInput
+): Promise<User> {
+  const updates: Partial<typeof users.$inferInsert> = {};
+
+  if (input.email?.trim()) {
+    updates.email = input.email.trim();
+  }
+
+  if (input.firstName?.trim() || input.lastName?.trim()) {
+    if (input.firstName?.trim()) updates.firstName = input.firstName.trim();
+    if (input.lastName?.trim()) updates.lastName = input.lastName.trim();
+  } else if (input.name?.trim()) {
+    const { firstName, lastName } = splitDisplayName(input.name);
+    if (firstName) updates.firstName = firstName;
+    if (lastName) updates.lastName = lastName;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    const existing = await getUserById(userId);
+    if (!existing) throw new Error("User not found");
+    return existing;
+  }
+
+  const [user] = await db
+    .update(users)
+    .set(updates)
+    .where(eq(users.id, userId))
+    .returning();
+
+  if (!user) throw new Error("User not found");
+  return user;
+}

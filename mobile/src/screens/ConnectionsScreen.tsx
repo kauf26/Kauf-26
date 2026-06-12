@@ -22,6 +22,7 @@ import {
   saveOnboardingProfile,
   type OnboardingProfile,
 } from '../services/onboardingProfile';
+import { syncUserProfileToBackend } from '../services/userProfile';
 import { loadProviderRegistry, nonOAuthStatusMessage, authMethodLabel, MARKETPLACE_COUNT } from '../services/providerRegistry';
 import {
   connectMarketplaceViaServer,
@@ -143,6 +144,7 @@ export default function ConnectionsScreen() {
   const persistProfile = async (next: OnboardingProfile) => {
     setProfile(next);
     await saveOnboardingProfile(next);
+    void syncUserProfileToBackend({ name: next.name, email: next.email });
     setProfileDirty(false);
   };
 
@@ -174,6 +176,18 @@ export default function ConnectionsScreen() {
         });
         if (!result.ok) {
           throw new Error(result.message);
+        }
+        const connections = await fetchServerOAuthConnections();
+        const row = connections.find((c) => c.marketplace === p.id);
+        if (row?.accountLabel) {
+          const merged = await mergeProfileFromMarketplace({
+            marketplace: p.id,
+            name: row.accountLabel,
+            email: profile.email,
+            accountLabel: row.accountLabel,
+          });
+          setProfile(merged);
+          await persistProfile(merged);
         }
         Alert.alert(`${p.name} connected`, result.message);
         await refresh();
@@ -232,6 +246,20 @@ export default function ConnectionsScreen() {
   };
 
   const configuredCount = providers.filter((p) => p.configured).length;
+  const connectedCount = providers.filter((p) => statuses[p.id]?.ok).length;
+
+  const connectAllSupported = async () => {
+    const pending = providers.filter(
+      (p) => p.oauthSupported && p.configured && !statuses[p.id]?.ok
+    );
+    if (pending.length === 0) {
+      Alert.alert('All set', 'Every configured marketplace is already connected.');
+      return;
+    }
+    for (const p of pending) {
+      await handleConnect(p);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -312,9 +340,15 @@ export default function ConnectionsScreen() {
           )}
         </View>
 
-        <Text style={styles.groupTitle}>
-          Marketplaces ({providers.length || MARKETPLACE_COUNT}) · {configuredCount} configured
-        </Text>
+        <View style={styles.marketplaceToolbar}>
+          <Text style={styles.groupTitle}>
+            Marketplaces ({providers.length || MARKETPLACE_COUNT}) · {connectedCount} connected ·{' '}
+            {configuredCount} configured
+          </Text>
+          <TouchableOpacity onPress={() => void connectAllSupported()}>
+            <Text style={styles.connectAllLink}>Connect all</Text>
+          </TouchableOpacity>
+        </View>
         {providers.map((p) => renderProviderCard(p))}
 
         <Text style={styles.footerNote}>
@@ -452,6 +486,18 @@ const styles = StyleSheet.create({
   hero: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   heroTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
   subtitle: { color: '#9ca3af', fontSize: 14, lineHeight: 20, marginBottom: 16 },
+  marketplaceToolbar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  connectAllLink: {
+    color: '#3b82f6',
+    fontWeight: '700',
+    fontSize: 13,
+  },
   groupTitle: {
     color: '#9ca3af',
     fontSize: 12,

@@ -31,6 +31,8 @@ import {
   setMarketplacePoliciesOverride,
   type MarketplacePoliciesDocument,
 } from '../../../shared/marketplaceKeywordBlocker';
+import PublishPinModal from '../components/PublishPinModal';
+import { isRequiresAuthForPublish } from '../auth/publishAuth';
 
 type Props = StackScreenProps<HomeStackParamList, 'SelectMarketplaces'>;
 
@@ -59,6 +61,8 @@ export default function SelectMarketplacesScreen({ route, navigation }: Props) {
   const [translateInternational, setTranslateInternational] = useState(true);
   const [publishing, setPublishing] = useState(false);
   const [policiesLoading, setPoliciesLoading] = useState(true);
+  const [publishAuthVisible, setPublishAuthVisible] = useState(false);
+  const [publishAuthRequired, setPublishAuthRequired] = useState(true);
 
   const productCategory = listing.category?.trim() ?? '';
   const categoryContext = useMemo(
@@ -74,6 +78,7 @@ export default function SelectMarketplacesScreen({ route, navigation }: Props) {
 
   useEffect(() => {
     void getTranslateInternationalEnabled().then(setTranslateInternational);
+    void isRequiresAuthForPublish().then(setPublishAuthRequired);
   }, []);
 
   useEffect(() => {
@@ -222,7 +227,7 @@ export default function SelectMarketplacesScreen({ route, navigation }: Props) {
     </>
   );
 
-  const handlePublish = async () => {
+  const runPublish = async () => {
     const allowedSelected = filterAllowedMarketplaces(
       selected,
       productCategory,
@@ -276,6 +281,14 @@ export default function SelectMarketplacesScreen({ route, navigation }: Props) {
     } finally {
       setPublishing(false);
     }
+  };
+
+  const handlePublish = () => {
+    if (publishAuthRequired) {
+      setPublishAuthVisible(true);
+      return;
+    }
+    void runPublish();
   };
 
   const supportedSelectedCount = filterAllowedMarketplaces(
@@ -342,6 +355,17 @@ export default function SelectMarketplacesScreen({ route, navigation }: Props) {
           )}
         </TouchableOpacity>
       </ScrollView>
+
+      <PublishPinModal
+        visible={publishAuthVisible}
+        title="Authenticate to publish"
+        subtitle="Confirm with Face ID / Touch ID or your 4-digit PIN"
+        onSuccess={() => {
+          setPublishAuthVisible(false);
+          void runPublish();
+        }}
+        onCancel={() => setPublishAuthVisible(false)}
+      />
     </SafeAreaView>
   );
 }

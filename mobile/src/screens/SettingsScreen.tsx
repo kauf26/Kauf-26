@@ -25,6 +25,10 @@ import {
   isBiometricEnabled,
   type BiometricCapability,
 } from '../auth/biometric';
+import {
+  isRequiresAuthForPublish,
+  setRequiresAuthForPublish,
+} from '../auth/publishAuth';
 
 async function openLegalUrl(url: string, label: string) {
   try {
@@ -45,16 +49,19 @@ export default function SettingsScreen() {
   const [biometricOn, setBiometricOn] = useState(false);
   const [biometricCap, setBiometricCap] = useState<BiometricCapability | null>(null);
   const [biometricBusy, setBiometricBusy] = useState(false);
+  const [requirePublishAuth, setRequirePublishAuth] = useState(true);
 
   useEffect(() => {
     void getAutoTranslateEnabled().then(setAutoTranslate);
     void (async () => {
-      const [enabled, cap] = await Promise.all([
+      const [enabled, cap, publishAuth] = await Promise.all([
         isBiometricEnabled(),
         getBiometricCapability(),
+        isRequiresAuthForPublish(),
       ]);
       setBiometricOn(enabled);
       setBiometricCap(cap);
+      setRequirePublishAuth(publishAuth);
     })();
   }, []);
 
@@ -144,6 +151,24 @@ export default function SettingsScreen() {
               value={biometricOn}
               onValueChange={(v) => void onToggleBiometric(v)}
               disabled={!biometricAvailable || biometricBusy}
+              trackColor={{ false: '#374151', true: '#2563eb' }}
+              thumbColor="#fff"
+            />
+          </View>
+          <View style={styles.divider} />
+          <View style={styles.toggleRow}>
+            <View style={styles.linkTextWrap}>
+              <Text style={styles.linkTitle}>Require auth before publish</Text>
+              <Text style={styles.linkHint}>
+                Face ID, Touch ID, or PIN before sending listings to marketplaces (recommended).
+              </Text>
+            </View>
+            <Switch
+              value={requirePublishAuth}
+              onValueChange={(v) => {
+                setRequirePublishAuth(v);
+                void setRequiresAuthForPublish(v);
+              }}
               trackColor={{ false: '#374151', true: '#2563eb' }}
               thumbColor="#fff"
             />

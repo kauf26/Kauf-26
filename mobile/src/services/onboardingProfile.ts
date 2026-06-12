@@ -49,3 +49,11 @@ export async function mergeProfileFromMarketplace(
   await saveOnboardingProfile(merged);
   return merged;
 }
+
+/** Push merged profile to backend when a server session exists. */
+export async function syncOnboardingProfileToBackend(
+  profile: OnboardingProfile
+): Promise<void> {
+  const { syncUserProfileToBackend } = await import('./userProfile');
+  await syncUserProfileToBackend({ name: profile.name, email: profile.email });
+}

@@ -41,6 +41,8 @@ import {
   filterAllowedMarketplaces,
   isUnknownProductCategory,
 } from '../../../shared/marketplaceKeywordBlocker';
+import PublishPinModal from '../components/PublishPinModal';
+import { isRequiresAuthForPublish } from '../auth/publishAuth';
 
 const MOBILE_PUBLISH_PLATFORMS = new Set(['etsy', 'shopify', 'ebay']);
 
@@ -103,6 +105,8 @@ export default function HomeScreen() {
   const [selectedMarketplaces, setSelectedMarketplaces] = useState<string[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isListing, setIsListing] = useState(false);
+  const [publishAuthVisible, setPublishAuthVisible] = useState(false);
+  const [publishAuthRequired, setPublishAuthRequired] = useState(true);
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
   const [draftId, setDraftId] = useState<number | null>(null);
   const [isAddingPhotos, setIsAddingPhotos] = useState(false);
@@ -225,6 +229,10 @@ export default function HomeScreen() {
       filterAllowedMarketplaces(prev, category, categoryContext)
     );
   }, [category, categoryContext]);
+
+  useEffect(() => {
+    void isRequiresAuthForPublish().then(setPublishAuthRequired);
+  }, []);
 
   const applyAnalyzeResult = (data: Record<string, unknown>) => {
     const nextTitle = String(data.title ?? data.modelName ?? '').trim();
@@ -425,7 +433,7 @@ export default function HomeScreen() {
     [selectedMarketplaces, category, categoryContext]
   );
 
-  const handleCreateListing = async () => {
+  const runCreateListing = async () => {
     const supportedSelected = filterAllowedMarketplaces(
       selectedMarketplaces,
       category,
@@ -486,6 +494,14 @@ export default function HomeScreen() {
     } finally {
       setIsListing(false);
     }
+  };
+
+  const handleCreateListing = () => {
+    if (publishAuthRequired) {
+      setPublishAuthVisible(true);
+      return;
+    }
+    void runCreateListing();
   };
 
   return (
@@ -746,6 +762,17 @@ export default function HomeScreen() {
           )}
         </TouchableOpacity>
       </ScrollView>
+
+      <PublishPinModal
+        visible={publishAuthVisible}
+        title="Authenticate to publish"
+        subtitle="Confirm with Face ID / Touch ID or your 4-digit PIN"
+        onSuccess={() => {
+          setPublishAuthVisible(false);
+          void runCreateListing();
+        }}
+        onCancel={() => setPublishAuthVisible(false)}
+      />
     </SafeAreaView>
   );
 }
