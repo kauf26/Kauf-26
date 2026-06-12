@@ -66,6 +66,15 @@ function logNonJsonResponse(
   }
 }
 
+function nonJsonErrorMessage(
+  status: number,
+  contentType: string,
+  preview: string,
+  detail: string
+): string {
+  return `${detail} Status: ${status}. Content-Type: ${contentType || 'none'}. Preview: ${preview || '(empty)'}`;
+}
+
 export async function parseJsonResponse<T>(
   response: Response,
   bodyText?: string
@@ -79,15 +88,18 @@ export async function parseJsonResponse<T>(
     logNonJsonResponse(status, contentType, preview);
 
     if (looksLikeHtml(text) || /text\/html/i.test(contentType)) {
-      throw new ApiResponseError(`Server returned HTML (status ${status}). Expected JSON.`, {
-        status,
-        isHtmlResponse: true,
-        bodyPreview: preview,
-      });
+      throw new ApiResponseError(
+        nonJsonErrorMessage(status, contentType, preview, 'Server returned HTML. Expected JSON.'),
+        {
+          status,
+          isHtmlResponse: true,
+          bodyPreview: preview,
+        }
+      );
     }
 
     throw new ApiResponseError(
-      `Server returned non-JSON content (status ${status}, Content-Type: ${contentType || 'none'}). Expected JSON.`,
+      nonJsonErrorMessage(status, contentType, preview, 'Server returned non-JSON content. Expected JSON.'),
       { status, bodyPreview: preview }
     );
   }
@@ -96,17 +108,17 @@ export async function parseJsonResponse<T>(
     return JSON.parse(text) as T;
   } catch {
     logNonJsonResponse(status, contentType, preview);
-    throw new ApiResponseError(`Invalid JSON from server (status ${status}). Expected JSON.`, {
-      status,
-      bodyPreview: preview,
-    });
+    throw new ApiResponseError(
+      nonJsonErrorMessage(status, contentType, preview, 'Invalid JSON from server. Expected JSON.'),
+      { status, bodyPreview: preview }
+    );
   }
 }
 
 function enrichFetchError(error: ApiResponseError, url: string): ApiResponseError {
   const previewSuffix = error.bodyPreview ? ` Response preview: "${error.bodyPreview}"` : '';
   return new ApiResponseError(
-    `${error.message} Request: ${url}. Status: ${error.status}.${previewSuffix} ${apiReachabilityHint()}`,
+    `${error.message} URL: ${url}.${previewSuffix}`,
     {
       status: error.status,
       isHtmlResponse: error.isHtmlResponse,

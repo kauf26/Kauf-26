@@ -135,7 +135,7 @@ export async function saveDraftSnapshotMobile(
       (err instanceof ApiResponseError && err.isNetworkError)
     ) {
       throw new Error(
-        'Server error – unable to save draft. Check connection or login.'
+        'Server error – unable to save draft. Check connection or login status.'
       );
     }
 
