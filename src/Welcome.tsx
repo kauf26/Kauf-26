@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import ProductCamera from "./components/ProductCamera";
+import { TrialBanner } from "@/components/TrialBanner";
 import { useProductDraft } from "./ProductDraftContext";
 import {
   initializeWelcomePage,
@@ -69,9 +70,7 @@ const Welcome = () => {
       </div>
 
       {/* Footer */}
-      <p className="font-bold uppercase text-gray-700 text-center tracking-widest">
-        14 DAY FREE TRIAL
-      </p>
+      <TrialBanner />
     </div>
   );
 };

@@ -28,6 +28,7 @@ import {
   resolveVerificationMessage,
   shouldProceedToDraft,
 } from '../../../shared/identifyFlow';
+import TrialBanner from '../components/TrialBanner';
 
 const LOGO_IMAGE = require('../../assets/img-2482.jpg');
 const LOGO_SIZE = 160;
@@ -517,7 +518,7 @@ export default function IdentifyScreen() {
           </View>
 
           <View style={styles.promoFooter}>
-            <Text style={styles.promoTrial}>Free 14 day trial</Text>
+            <TrialBanner style={styles.promoTrial} variant="uppercase" />
             <Text style={styles.promoTagline}>selling online made easy</Text>
             <Text style={styles.promoSold}>SOLD with KAUF–AI</Text>
           </View>
@@ -783,10 +784,12 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
   },
   promoTrial: {
-    fontSize: 16,
+    fontSize: 13,
     fontWeight: '700',
     color: '#1F2937',
     textAlign: 'center',
+    letterSpacing: 0.5,
+    lineHeight: 18,
   },
   promoTagline: {
     fontSize: 14,
