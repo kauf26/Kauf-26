@@ -1,7 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { ShoppingBag, Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { devLoginWithPin, fetchDevLoginEnabled } from "@/lib/devAuth";
 
 function GoogleIcon() {
   return (
@@ -43,6 +46,14 @@ function AppleIcon() {
 export default function LoginPage() {
   const { isAuthenticated, isLoading, user } = useAuth();
   const [, setLocation] = useLocation();
+  const [devLoginAvailable, setDevLoginAvailable] = useState(false);
+  const [devPin, setDevPin] = useState("");
+  const [devLoading, setDevLoading] = useState(false);
+  const [devError, setDevError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void fetchDevLoginEnabled().then(setDevLoginAvailable);
+  }, []);
 
   useEffect(() => {
     if (isLoading || !isAuthenticated) return;
@@ -54,6 +65,19 @@ export default function LoginPage() {
   }, [isAuthenticated, isLoading, user, setLocation]);
 
   const error = new URLSearchParams(window.location.search).get("error");
+
+  const handleDevLogin = async () => {
+    setDevError(null);
+    setDevLoading(true);
+    try {
+      await devLoginWithPin(devPin.trim());
+      window.location.assign("/");
+    } catch (err) {
+      setDevError(err instanceof Error ? err.message : "Dev login failed");
+    } finally {
+      setDevLoading(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -101,6 +125,38 @@ export default function LoginPage() {
             Sign in with Google
           </a>
         </div>
+
+        {devLoginAvailable && (
+          <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-4 text-left">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-400">
+              Development only
+            </p>
+            <p className="text-xs text-muted-foreground">
+              MOCK_OAUTH_MODE is on. Enter dev PIN to sign in without Google or Apple.
+            </p>
+            <Input
+              type="password"
+              inputMode="numeric"
+              maxLength={8}
+              placeholder="Dev PIN"
+              value={devPin}
+              onChange={(e) => setDevPin(e.target.value)}
+              autoComplete="off"
+            />
+            {devError ? (
+              <p className="text-xs text-red-400">{devError}</p>
+            ) : null}
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full"
+              disabled={devLoading || !devPin.trim()}
+              onClick={() => void handleDevLogin()}
+            >
+              {devLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Dev Login"}
+            </Button>
+          </div>
+        )}
 
         <p className="text-xs text-muted-foreground">
           By signing in you agree to our{" "}

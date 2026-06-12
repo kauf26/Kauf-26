@@ -1,9 +1,12 @@
 import type { Express } from "express";
 import { getUserById } from "./authStorage";
+import { registerDevLoginRoutes } from "./devLogin";
 import { isAuthenticated } from "./setupAuth";
 import type { SessionUser } from "./types";
 
 export function registerAuthRoutes(app: Express): void {
+  registerDevLoginRoutes(app);
+
   app.get("/api/auth/user", isAuthenticated, async (req, res) => {
     try {
       const sessionUser = req.user as SessionUser;

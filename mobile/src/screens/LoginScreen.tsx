@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,14 @@ import {
   ActivityIndicator,
   Image,
   Alert,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as WebBrowser from 'expo-web-browser';
 import type { StackScreenProps } from '@react-navigation/stack';
 import { API_BASE_URL } from '../services/config';
 import type { RootStackParamList } from '../types/navigation';
+import { devLoginWithPin, fetchDevLoginEnabled } from '../services/devAuth';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -36,7 +38,26 @@ async function openOAuth(path: '/api/auth/google' | '/api/auth/apple') {
 }
 
 export default function LoginScreen({ navigation }: Props) {
-  const [loading, setLoading] = useState<'google' | 'apple' | null>(null);
+  const [loading, setLoading] = useState<'google' | 'apple' | 'dev' | null>(null);
+  const [devLoginAvailable, setDevLoginAvailable] = useState(false);
+  const [devPin, setDevPin] = useState('');
+
+  useEffect(() => {
+    void fetchDevLoginEnabled().then(setDevLoginAvailable);
+  }, []);
+
+  const handleDevLogin = async () => {
+    setLoading('dev');
+    try {
+      await devLoginWithPin(devPin.trim());
+      Alert.alert('Dev login', 'Signed in as dev@localhost (mock session saved on device).');
+      navigation.goBack();
+    } catch (err) {
+      Alert.alert('Dev login failed', err instanceof Error ? err.message : 'Invalid PIN');
+    } finally {
+      setLoading(null);
+    }
+  };
 
   const handleGoogle = async () => {
     setLoading('google');
@@ -92,6 +113,37 @@ export default function LoginScreen({ navigation }: Props) {
         <TouchableOpacity style={styles.skipButton} onPress={() => navigation.goBack()}>
           <Text style={styles.skipText}>Continue without account</Text>
         </TouchableOpacity>
+
+        {devLoginAvailable ? (
+          <View style={styles.devBox}>
+            <Text style={styles.devTitle}>Development only</Text>
+            <Text style={styles.devHint}>
+              MOCK_OAUTH_MODE is on. Dev PIN grants a mock server session.
+            </Text>
+            <TextInput
+              style={styles.devInput}
+              value={devPin}
+              onChangeText={setDevPin}
+              placeholder="Dev PIN"
+              placeholderTextColor="#9CA3AF"
+              keyboardType="number-pad"
+              secureTextEntry
+              maxLength={8}
+              autoCapitalize="none"
+            />
+            <TouchableOpacity
+              style={[styles.button, styles.devButton]}
+              onPress={() => void handleDevLogin()}
+              disabled={loading !== null || !devPin.trim()}
+            >
+              {loading === 'dev' ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.devButtonText}>Dev Login</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        ) : null}
       </View>
     </SafeAreaView>
   );
@@ -134,4 +186,35 @@ const styles = StyleSheet.create({
   appleText: { color: '#ffffff', fontSize: 16, fontWeight: '600' },
   skipButton: { marginTop: 8, padding: 12 },
   skipText: { color: '#6B7280', fontSize: 14, fontWeight: '500' },
+  devBox: {
+    width: '100%',
+    maxWidth: 320,
+    marginTop: 16,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    backgroundColor: '#FFFBEB',
+    gap: 8,
+  },
+  devTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#B45309',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  devHint: { fontSize: 12, color: '#78716C', lineHeight: 16 },
+  devInput: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    backgroundColor: '#fff',
+    color: '#111827',
+  },
+  devButton: { backgroundColor: '#B45309', marginTop: 4 },
+  devButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });
