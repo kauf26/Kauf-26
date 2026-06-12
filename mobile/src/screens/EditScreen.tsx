@@ -18,6 +18,7 @@ import type { HomeStackParamList, IdentifyTranslation } from '../types/identify'
 import { IdentifyTheme as T } from '../theme/identifyTheme';
 import { API_BASE_URL } from '../services/config';
 import { saveDraftSnapshotMobile } from '../services/draftPhotos';
+import { userFacingApiError } from '../services/httpResponse';
 
 type Props = StackScreenProps<HomeStackParamList, 'Edit'>;
 
@@ -252,7 +253,7 @@ export default function EditScreen({ route, navigation }: Props) {
     } catch (err) {
       Alert.alert(
         'Could not save draft',
-        err instanceof Error ? err.message : 'Please try again.'
+        userFacingApiError(err, 'Please try again.')
       );
     } finally {
       setIsSaving(false);

@@ -1,4 +1,5 @@
 import { API_BASE_URL } from './config';
+import { parseJsonResponse } from './httpResponse';
 
 export type ListingProduct = {
   id: number;
@@ -52,7 +53,7 @@ async function loadDraftProducts(): Promise<ListingProduct[]> {
     throw new Error(`API Error: ${response.status} ${response.statusText}`);
   }
 
-  const drafts = (await response.json()) as ProductDraftRow[];
+  const drafts = await parseJsonResponse<ProductDraftRow[]>(response);
   return Array.isArray(drafts) ? drafts.map(draftToListingProduct) : [];
 }
 

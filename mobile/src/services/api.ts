@@ -2,6 +2,7 @@
 
 import { fetchProductsWithBackoff } from './productsFetch';
 import { API_BASE_URL } from './config';
+import { parseJsonResponse } from './httpResponse';
 
 export { API_BASE_URL };
 
@@ -40,7 +41,7 @@ export async function apiRequest<T>(
     throw new Error(`API Error: ${response.status} ${response.statusText}`);
   }
   
-  return response.json();
+  return parseJsonResponse<T>(response);
 }
 
 // Product API

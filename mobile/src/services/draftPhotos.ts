@@ -3,6 +3,7 @@ import {
   MAX_DRAFT_IMAGES,
 } from '../../../shared/draftImages';
 import { API_BASE_URL } from './config';
+import { fetchJson, parseJsonResponse } from './httpResponse';
 
 export { MAX_ADD_PHOTOS_PER_REQUEST, MAX_DRAFT_IMAGES };
 
@@ -50,7 +51,7 @@ export async function uploadDraftPhotosMobile(
     },
   });
 
-  const data = (await res.json()) as { urls?: string[]; error?: string };
+  const data = await parseJsonResponse<{ urls?: string[]; error?: string }>(res);
   if (!res.ok) {
     throw new Error(data.error ?? `Upload failed (${res.status})`);
   }
@@ -70,7 +71,7 @@ export async function addPhotosToDraftMobile(
     body: JSON.stringify({ imageUrls }),
   });
 
-  const data = (await res.json()) as AddPhotosResponse & { error?: string };
+  const data = await parseJsonResponse<AddPhotosResponse & { error?: string }>(res);
   if (!res.ok) {
     throw new Error(data.error ?? `Add photos failed (${res.status})`);
   }
@@ -83,19 +84,24 @@ export async function saveDraftSnapshotMobile(input: {
   images: string[];
   attributes: Record<string, unknown>;
 }): Promise<number> {
-  const res = await fetch(`${API_BASE_URL}/api/drafts`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({
-      id: input.draftId ?? undefined,
-      title: input.title,
-      status: 'draft',
-      images: input.images,
-      attributes: input.attributes,
-    }),
-  });
+  const { data: saved, response: res } = await fetchJson<
+    ProductDraftRecord & { error?: string }
+  >(
+    `${API_BASE_URL}/api/drafts`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        id: input.draftId ?? undefined,
+        title: input.title,
+        status: 'draft',
+        images: input.images,
+        attributes: input.attributes,
+      }),
+    },
+    { retries: 1, retryDelayMs: 600 }
+  );
 
-  const saved = (await res.json()) as ProductDraftRecord & { error?: string };
   if (!res.ok || saved.id == null) {
     throw new Error(saved.error ?? `Failed to save draft (${res.status})`);
   }
