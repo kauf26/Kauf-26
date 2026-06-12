@@ -130,7 +130,15 @@ export async function fetchJson<T>(
     try {
       const response = await fetch(url, options);
       const bodyText = await readResponseBody(response);
-      const data = await parseJsonResponse<T>(response, bodyText);
+      let data: T;
+      try {
+        data = await parseJsonResponse<T>(response, bodyText);
+      } catch (parseError) {
+        if (parseError instanceof ApiResponseError) {
+          throw enrichFetchError(parseError, url);
+        }
+        throw parseError;
+      }
       return { data, response };
     } catch (error) {
       lastError = error;
@@ -145,7 +153,7 @@ export async function fetchJson<T>(
       }
 
       if (error instanceof ApiResponseError) {
-        throw enrichFetchError(error, url);
+        throw error;
       }
 
       if (error instanceof TypeError) {

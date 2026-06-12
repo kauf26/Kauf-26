@@ -125,9 +125,7 @@ export async function saveDraftSnapshotMobile(
       message.includes('PayloadTooLarge') ||
       (err instanceof ApiResponseError && err.status === 413)
     ) {
-      throw new Error(
-        'Draft is too large (over 50MB). Please use smaller images or reduce the number of images.'
-      );
+      throw new Error('Draft too large (over 50MB). Use smaller images.');
     }
     if (
       message.includes('HTML') ||
@@ -137,7 +135,7 @@ export async function saveDraftSnapshotMobile(
       (err instanceof ApiResponseError && err.isNetworkError)
     ) {
       throw new Error(
-        'Server error – unable to save draft. Please check your connection or login status.'
+        'Server error – unable to save draft. Check connection or login.'
       );
     }
 
