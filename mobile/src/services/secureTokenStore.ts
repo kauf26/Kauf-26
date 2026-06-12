@@ -14,7 +14,34 @@ export type StoredPlatformTokens = {
 };
 
 function key(marketplace: string, field: string): string {
+  return `oauth_${marketplace}_${field}`;
+}
+
+function legacyKey(marketplace: string, field: string): string {
   return `oauth:${marketplace}:${field}`;
+}
+
+async function readSecureItem(
+  storageKey: string,
+  legacyStorageKey?: string
+): Promise<string | null> {
+  let raw = await SecureStore.getItemAsync(storageKey);
+  if (!raw && legacyStorageKey) {
+    try {
+      raw = await SecureStore.getItemAsync(legacyStorageKey);
+      if (raw) {
+        await SecureStore.setItemAsync(storageKey, raw);
+        try {
+          await SecureStore.deleteItemAsync(legacyStorageKey);
+        } catch {
+          // Best-effort cleanup of legacy key
+        }
+      }
+    } catch {
+      // Legacy key format was invalid on this platform
+    }
+  }
+  return raw;
 }
 
 export async function savePlatformTokens(
@@ -27,7 +54,10 @@ export async function savePlatformTokens(
 export async function loadPlatformTokens(
   marketplace: string
 ): Promise<StoredPlatformTokens | null> {
-  const raw = await SecureStore.getItemAsync(key(marketplace, 'bundle'));
+  const raw = await readSecureItem(
+    key(marketplace, 'bundle'),
+    legacyKey(marketplace, 'bundle')
+  );
   if (!raw) return null;
   try {
     return JSON.parse(raw) as StoredPlatformTokens;
@@ -45,12 +75,14 @@ export async function hasPlatformTokens(marketplace: string): Promise<boolean> {
   return Boolean(tokens?.accessToken);
 }
 
+const SHOPIFY_SHOP_DOMAIN_KEY = key('shopify', 'shopDomain');
+
 export async function saveShopDomain(shopDomain: string): Promise<void> {
-  await SecureStore.setItemAsync('oauth:shopify:shopDomain', shopDomain);
+  await SecureStore.setItemAsync(SHOPIFY_SHOP_DOMAIN_KEY, shopDomain);
 }
 
 export async function loadShopDomain(): Promise<string | null> {
-  return SecureStore.getItemAsync('oauth:shopify:shopDomain');
+  return readSecureItem(SHOPIFY_SHOP_DOMAIN_KEY, legacyKey('shopify', 'shopDomain'));
 }
 
 export type ConnectContext = {
@@ -67,7 +99,10 @@ export async function saveConnectContext(
 }
 
 export async function loadConnectContext(marketplace: string): Promise<ConnectContext | null> {
-  const raw = await SecureStore.getItemAsync(key(marketplace, 'connectContext'));
+  const raw = await readSecureItem(
+    key(marketplace, 'connectContext'),
+    legacyKey(marketplace, 'connectContext')
+  );
   if (!raw) return null;
   try {
     return JSON.parse(raw) as ConnectContext;

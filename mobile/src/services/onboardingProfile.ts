@@ -1,7 +1,9 @@
 import * as SecureStore from 'expo-secure-store';
 import type { MarketplaceUserProfile, OAuthPlatform } from '../types/marketplaceConnect';
 
-const PROFILE_KEY = 'onboarding:profile';
+const PROFILE_KEY = 'onboarding_profile';
+/** @deprecated Colon was invalid for SecureStore — migrated on read */
+const LEGACY_PROFILE_KEY = 'onboarding:profile';
 
 export type OnboardingProfile = {
   name: string;
@@ -12,7 +14,22 @@ export type OnboardingProfile = {
 };
 
 export async function loadOnboardingProfile(): Promise<OnboardingProfile | null> {
-  const raw = await SecureStore.getItemAsync(PROFILE_KEY);
+  let raw = await SecureStore.getItemAsync(PROFILE_KEY);
+  if (!raw) {
+    try {
+      raw = await SecureStore.getItemAsync(LEGACY_PROFILE_KEY);
+      if (raw) {
+        await SecureStore.setItemAsync(PROFILE_KEY, raw);
+        try {
+          await SecureStore.deleteItemAsync(LEGACY_PROFILE_KEY);
+        } catch {
+          // Best-effort cleanup of legacy key
+        }
+      }
+    } catch {
+      // Legacy key format was invalid on this platform
+    }
+  }
   if (!raw) return null;
   try {
     return JSON.parse(raw) as OnboardingProfile;
