@@ -14,8 +14,11 @@ import {
   getMarketplaceBlockedKeywordMap,
   getMarketplaceKeywordPoliciesDocument,
 } from '../shared/marketplaceKeywordBlocker';
+import marketplaceEligibilityRouter from './routes/marketplaceEligibility';
 
 const router = express.Router();
+
+router.use(marketplaceEligibilityRouter);
 
 // POST /api/marketplaces/publish
 // Body: { draftId, marketplaces?: string[], marketplaceIds?: string[], sync?: boolean }
@@ -69,6 +72,9 @@ router.post('/publish', async (req, res) => {
      message.includes('does not support category') ||
      message.includes('does not allow items containing') ||
      message.includes('does not allow') ||
+     message.includes('is not allowed') ||
+     message.includes('is required for listings') ||
+     message.includes('maximum price is') ||
      message.includes('Not supported for')
    ) {
      return res.status(400).json({ error: message });
@@ -166,6 +172,10 @@ router.post('/publish-all', async (req, res) => {
     }
     if (
       message.includes('does not support category') ||
+      message.includes('does not allow') ||
+      message.includes('is not allowed') ||
+      message.includes('is required for listings') ||
+      message.includes('maximum price is') ||
       message.includes('No enabled marketplaces support category')
     ) {
       return res.status(400).json({ error: message });

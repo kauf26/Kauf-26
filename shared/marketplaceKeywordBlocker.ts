@@ -148,7 +148,7 @@ export function buildListingPolicyContext(input: {
   };
 }
 
-/** @alias evaluateMarketplaceCategorySupport */
+/** Category whitelist checks — keyword/price rules live in server eligibility API. */
 export function checkMarketplaceRestrictions(
   marketplaceId: string,
   category: string | undefined | null,
@@ -160,20 +160,6 @@ export function checkMarketplaceRestrictions(
 
   if (!result.supported) {
     return { marketplaceId, ...result, matchedBlockedKeywords };
-  }
-
-  if (matchedBlockedKeywords.length > 0) {
-    const label = marketplaceId.charAt(0).toUpperCase() + marketplaceId.slice(1);
-    const keyword = matchedBlockedKeywords[0];
-    return {
-      marketplaceId,
-      supported: false,
-      unknownCategory: result.unknownCategory,
-      disabledReason: `${label} does not allow items containing '${keyword}'`,
-      policyHint: result.policyHint,
-      warnings: result.warnings,
-      matchedBlockedKeywords,
-    };
   }
 
   return { marketplaceId, ...result, matchedBlockedKeywords };
@@ -208,7 +194,7 @@ export function filterAllowedMarketplaces(
   );
 }
 
-/** Server/mobile: throw when any marketplace blocks keywords or category. */
+/** Server/mobile: throw when any marketplace blocks category whitelist. */
 export function assertMarketplacesAllowListing(
   marketplaceIds: readonly string[],
   category: string | undefined | null,

@@ -1,0 +1,238 @@
+{
+  "version": 1,
+  "marketplaces": {
+    "depop": {
+      "policyHint": "Depop is for fashion, vintage, and creative items — not vehicles, property, or weapons.",
+      "blockedCategories": ["cars", "car", "automobile", "vehicle", "real estate", "property", "services", "service"],
+      "blockedKeywords": [
+        "weapon",
+        "weapons",
+        "gun",
+        "guns",
+        "firearm",
+        "knife",
+        "counterfeit",
+        "replica",
+        "fake designer",
+        "bootleg"
+      ],
+      "blockedItemTypes": ["car", "automobile", "vehicle", "real estate", "weapon", "firearm"],
+      "conditionalRules": [
+        {
+          "id": "depop-luxury-watch-price",
+          "matchKeywords": ["watch", "watches", "rolex", "omega", "cartier", "luxury watch", "submariner"],
+          "minPriceUsd": 500,
+          "message": "Depop: luxury watches over $500 are not allowed"
+        },
+        {
+          "id": "depop-electronics-non-vintage",
+          "matchKeywords": [
+            "electronics",
+            "laptop",
+            "phone",
+            "iphone",
+            "ipad",
+            "tablet",
+            "smartphone",
+            "macbook",
+            "playstation",
+            "xbox",
+            "nintendo switch"
+          ],
+          "allowKeywords": ["vintage"],
+          "message": "Depop: electronics are only allowed when listed as vintage"
+        }
+      ]
+    },
+    "ebay": {
+      "policyHint": "eBay prohibits weapons, live animals, hazardous materials, and counterfeit items.",
+      "blockedKeywords": [
+        "weapon",
+        "weapons",
+        "gun",
+        "guns",
+        "firearm",
+        "ammunition",
+        "live animal",
+        "live animals",
+        "hazardous material",
+        "hazardous materials",
+        "counterfeit",
+        "replica",
+        "fake designer",
+        "bootleg",
+        "illegal drug",
+        "drug paraphernalia"
+      ],
+      "blockedItemTypes": ["weapon", "firearm", "live animal", "hazardous material", "counterfeit"]
+    },
+    "stockx": {
+      "policyHint": "StockX accepts sneakers, streetwear, select electronics, and collectibles — not luxury watches or general fashion.",
+      "allowedKeywords": [
+        "sneaker",
+        "sneakers",
+        "shoe",
+        "shoes",
+        "footwear",
+        "streetwear",
+        "hoodie",
+        "jordan",
+        "yeezy",
+        "dunk",
+        "collectible",
+        "collectibles",
+        "trading card",
+        "smartwatch",
+        "smart watch",
+        "apple watch",
+        "g-shock",
+        "g shock",
+        "electronics"
+      ],
+      "blockedKeywords": [
+        "watch",
+        "watches",
+        "rolex",
+        "omega",
+        "handbag",
+        "furniture",
+        "clothing",
+        "jewelry",
+        "car",
+        "vehicle"
+      ],
+      "conditionalRules": [
+        {
+          "id": "stockx-watch-exception",
+          "matchKeywords": ["watch", "watches"],
+          "allowKeywords": ["smartwatch", "smart watch", "apple watch", "g-shock", "g shock", "fitbit", "garmin"],
+          "message": "StockX does not allow luxury or analog watches (smartwatches may be allowed)"
+        }
+      ]
+    },
+    "poshmark": {
+      "policyHint": "Poshmark is for fashion and home — not vehicles, property, or high-value unauthenticated electronics.",
+      "blockedCategories": ["cars", "car", "automobile", "vehicle", "real estate", "property", "services"],
+      "blockedKeywords": ["weapon", "weapons", "gun", "counterfeit", "replica"],
+      "blockedItemTypes": ["car", "automobile", "vehicle", "real estate"],
+      "conditionalRules": [
+        {
+          "id": "poshmark-high-value-watch",
+          "matchKeywords": ["watch", "watches", "rolex", "omega", "luxury watch"],
+          "minPriceUsd": 500,
+          "message": "Poshmark: luxury watches over $500 are not allowed"
+        },
+        {
+          "id": "poshmark-electronics",
+          "matchKeywords": [
+            "laptop",
+            "phone",
+            "iphone",
+            "ipad",
+            "tablet",
+            "macbook",
+            "television",
+            "tv",
+            "speaker",
+            "headphones"
+          ],
+          "allowKeywords": ["vintage", "smartwatch", "smart watch", "apple watch", "g-shock", "g shock"],
+          "message": "Poshmark: most electronics are not allowed (vintage and select wearables excepted)"
+        }
+      ]
+    },
+    "amazon": {
+      "policyHint": "Amazon restricts counterfeits, hazardous items, and many gated categories.",
+      "blockedKeywords": [
+        "counterfeit",
+        "replica",
+        "fake designer",
+        "bootleg",
+        "weapon",
+        "weapons",
+        "gun",
+        "firearm",
+        "hazardous",
+        "explosive",
+        "illegal drug",
+        "drug paraphernalia"
+      ],
+      "blockedItemTypes": ["counterfeit", "weapon", "hazardous material"]
+    },
+    "etsy": {
+      "policyHint": "Etsy requires handmade, vintage (20+ years), or craft supplies — not mass-produced or new electronics.",
+      "blockedKeywords": [
+        "mass produced",
+        "mass-produced",
+        "factory made",
+        "dropship",
+        "dropshipping",
+        "aliexpress",
+        "counterfeit",
+        "replica"
+      ],
+      "conditionalRules": [
+        {
+          "id": "etsy-electronics-non-vintage",
+          "matchKeywords": [
+            "electronics",
+            "laptop",
+            "phone",
+            "iphone",
+            "ipad",
+            "tablet",
+            "smartphone",
+            "macbook",
+            "television",
+            "tv"
+          ],
+          "allowKeywords": ["vintage", "antique", "retro"],
+          "message": "Etsy: new electronics are not allowed (vintage items may qualify)"
+        },
+        {
+          "id": "etsy-mass-produced-clothing",
+          "matchKeywords": ["new with tags", "nwt", "brand new", "fast fashion"],
+          "allowKeywords": ["handmade", "hand made", "vintage", "antique", "custom", "supplies"],
+          "message": "Etsy: mass-produced new items are not allowed — list as handmade, vintage, or supplies"
+        }
+      ]
+    },
+    "wayfair": {
+      "policyHint": "Wayfair accepts home and furniture items only.",
+      "allowedKeywords": [
+        "home",
+        "furniture",
+        "furnishing",
+        "decor",
+        "kitchen",
+        "bedding",
+        "rug",
+        "lamp",
+        "sofa",
+        "chair",
+        "table"
+      ],
+      "blockedKeywords": ["watch", "watches", "sneaker", "sneakers", "clothing", "electronics", "jewelry", "handbag"]
+    },
+    "newegg": {
+      "policyHint": "Newegg accepts electronics and computer gear — not apparel or furniture.",
+      "allowedKeywords": [
+        "electronics",
+        "computer",
+        "laptop",
+        "gpu",
+        "cpu",
+        "motherboard",
+        "monitor",
+        "keyboard",
+        "mouse",
+        "ssd",
+        "hard drive",
+        "router",
+        "phone",
+        "tablet"
+      ],
+      "blockedKeywords": ["clothing", "furniture", "handbag", "jewelry", "apparel", "dress", "watch", "watches"]
+    }
+  }
+}

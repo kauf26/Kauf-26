@@ -24,14 +24,15 @@ import {
 } from '../../../shared/marketplaceChannels';
 import {
   UNKNOWN_CATEGORY_WARNING,
-  buildListingPolicyContext,
-  checkMarketplaceRestrictions,
-  filterAllowedMarketplaces,
   isUnknownProductCategory,
-  setMarketplacePoliciesOverride,
-  type MarketplacePoliciesDocument,
 } from '../../../shared/marketplaceKeywordBlocker';
 import PublishPinModal from '../components/PublishPinModal';
+
+type EligibilityResult = {
+  marketplaceId: string;
+  allowed: boolean;
+  reason: string | null;
+};
 import { isRequiresAuthForPublish } from '../auth/publishAuth';
 
 type Props = StackScreenProps<HomeStackParamList, 'SelectMarketplaces'>;
@@ -60,20 +61,12 @@ export default function SelectMarketplacesScreen({ route, navigation }: Props) {
   const [selected, setSelected] = useState<string[]>([...DEFAULT_IDENTIFY_MARKETPLACES]);
   const [translateInternational, setTranslateInternational] = useState(true);
   const [publishing, setPublishing] = useState(false);
-  const [policiesLoading, setPoliciesLoading] = useState(true);
+  const [eligibilityLoading, setEligibilityLoading] = useState(true);
+  const [eligibility, setEligibility] = useState<Record<string, EligibilityResult>>({});
   const [publishAuthVisible, setPublishAuthVisible] = useState(false);
   const [publishAuthRequired, setPublishAuthRequired] = useState(true);
 
   const productCategory = listing.category?.trim() ?? '';
-  const categoryContext = useMemo(
-    () =>
-      buildListingPolicyContext({
-        title: listing.title,
-        description: listing.description,
-        price: listing.price,
-      }),
-    [listing.title, listing.description, listing.price]
-  );
   const unknownCategory = isUnknownProductCategory(productCategory);
 
   useEffect(() => {
@@ -84,40 +77,58 @@ export default function SelectMarketplacesScreen({ route, navigation }: Props) {
   useEffect(() => {
     let cancelled = false;
 
-    const loadKeywordPolicies = async () => {
+    const loadEligibility = async () => {
+      setEligibilityLoading(true);
       try {
-        const res = await fetch(`${API_BASE_URL}/api/marketplaces/blocked-keywords`, {
-          headers: { Accept: 'application/json' },
+        const res = await fetch(`${API_BASE_URL}/api/marketplaces/check-eligibility`, {
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            title: listing.title,
+            description: listing.description,
+            price: listing.price,
+            category: productCategory,
+            condition: listing.condition,
+            brand: listing.brand,
+            marketplaceIds: ALL_MARKETPLACE_IDS,
+          }),
         });
         if (!res.ok) return;
-        const body = (await res.json()) as {
-          version?: number;
-          policies?: MarketplacePoliciesDocument['marketplaces'];
-        };
-        if (cancelled || !body.policies) return;
-        setMarketplacePoliciesOverride({
-          version: body.version ?? 1,
-          marketplaces: body.policies,
-        });
+        const body = (await res.json()) as { results?: EligibilityResult[] };
+        if (cancelled || !body.results) return;
+        const next: Record<string, EligibilityResult> = {};
+        for (const row of body.results) {
+          next[row.marketplaceId] = row;
+        }
+        setEligibility(next);
       } catch {
-        // Bundled shared policies remain the fallback.
+        // All marketplaces remain selectable if the server is unreachable.
       } finally {
-        if (!cancelled) setPoliciesLoading(false);
+        if (!cancelled) setEligibilityLoading(false);
       }
     };
 
-    void loadKeywordPolicies();
+    void loadEligibility();
     return () => {
       cancelled = true;
-      setMarketplacePoliciesOverride(null);
     };
-  }, []);
+  }, [
+    listing.title,
+    listing.description,
+    listing.price,
+    productCategory,
+    listing.condition,
+    listing.brand,
+  ]);
 
   useEffect(() => {
     setSelected((prev) =>
-      filterAllowedMarketplaces(prev, productCategory, categoryContext)
+      prev.filter((id) => eligibility[id]?.allowed !== false)
     );
-  }, [productCategory, categoryContext]);
+  }, [eligibility]);
 
   const selectedSet = useMemo(() => new Set(selected), [selected]);
 
@@ -126,17 +137,16 @@ export default function SelectMarketplacesScreen({ route, navigation }: Props) {
     void setTranslateInternationalEnabled(value);
   };
 
+  const getEligibilityReason = (id: string): string | null => {
+    const row = eligibility[id];
+    if (!row || row.allowed) return null;
+    return row.reason;
+  };
+
   const toggleMarketplace = (id: string) => {
-    const restriction = checkMarketplaceRestrictions(
-      id,
-      productCategory,
-      categoryContext
-    );
-    if (!restriction.supported) {
-      Alert.alert(
-        'Not allowed',
-        [restriction.disabledReason, restriction.policyHint].filter(Boolean).join('\n\n')
-      );
+    const blockReason = getEligibilityReason(id);
+    if (blockReason) {
+      Alert.alert('Not allowed', blockReason);
       return;
     }
 
@@ -146,11 +156,9 @@ export default function SelectMarketplacesScreen({ route, navigation }: Props) {
   };
 
   const selectAllSupported = (markets: { id: string; label: string }[]) => {
-    const supported = filterAllowedMarketplaces(
-      markets.map((m) => m.id),
-      productCategory,
-      categoryContext
-    );
+    const supported = markets
+      .map((m) => m.id)
+      .filter((id) => eligibility[id]?.allowed !== false);
     setSelected((prev) => [...new Set([...prev, ...supported])]);
   };
 
@@ -168,12 +176,8 @@ export default function SelectMarketplacesScreen({ route, navigation }: Props) {
       <View style={styles.card}>
         {markets.map((marketplace) => {
           const active = selectedSet.has(marketplace.id);
-          const restriction = checkMarketplaceRestrictions(
-            marketplace.id,
-            productCategory,
-            categoryContext
-          );
-          const isDisabled = !restriction.supported;
+          const blockReason = getEligibilityReason(marketplace.id);
+          const isDisabled = blockReason != null;
 
           return (
             <TouchableOpacity
@@ -197,20 +201,8 @@ export default function SelectMarketplacesScreen({ route, navigation }: Props) {
                   {isDisabled ? '🔒 ' : ''}
                   {marketplace.label}
                 </Text>
-                {isDisabled ? (
-                  <Text style={styles.restrictionText}>
-                    {restriction.matchedBlockedKeywords?.length
-                      ? `${marketplace.label} does not allow items containing '${restriction.matchedBlockedKeywords[0]}'`
-                      : restriction.disabledReason ?? restriction.policyHint}
-                  </Text>
-                ) : null}
-                {isDisabled && restriction.policyHint && restriction.disabledReason ? (
-                  <Text style={styles.policyHintText}>{restriction.policyHint}</Text>
-                ) : null}
-                {!isDisabled &&
-                restriction.warnings &&
-                restriction.warnings.length > 0 ? (
-                  <Text style={styles.warningText}>⚠ {restriction.warnings[0]}</Text>
+                {isDisabled && blockReason ? (
+                  <Text style={styles.restrictionText}>{blockReason}</Text>
                 ) : null}
               </View>
               <Text
@@ -230,11 +222,7 @@ export default function SelectMarketplacesScreen({ route, navigation }: Props) {
   );
 
   const runPublish = async () => {
-    const allowedSelected = filterAllowedMarketplaces(
-      selected,
-      productCategory,
-      categoryContext
-    );
+    const allowedSelected = selected.filter((id) => eligibility[id]?.allowed !== false);
 
     if (allowedSelected.length === 0) {
       Alert.alert(
@@ -293,10 +281,8 @@ export default function SelectMarketplacesScreen({ route, navigation }: Props) {
     void runPublish();
   };
 
-  const supportedSelectedCount = filterAllowedMarketplaces(
-    selected,
-    productCategory,
-    categoryContext
+  const supportedSelectedCount = selected.filter(
+    (id) => eligibility[id]?.allowed !== false
   ).length;
 
   return (
@@ -313,10 +299,10 @@ export default function SelectMarketplacesScreen({ route, navigation }: Props) {
           </View>
         ) : null}
 
-        {policiesLoading ? (
+        {eligibilityLoading ? (
           <View style={styles.policiesLoadingRow}>
             <ActivityIndicator size="small" color="#6B7280" />
-            <Text style={styles.policiesLoadingText}>Loading marketplace rules…</Text>
+            <Text style={styles.policiesLoadingText}>Checking marketplace eligibility…</Text>
           </View>
         ) : null}
 

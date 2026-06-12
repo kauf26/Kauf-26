@@ -1,0 +1,204 @@
+{
+  "version": 1,
+  "genericBlockReason": "This website does not support the item you're trying to sell or publish.",
+  "marketplaces": {
+    "depop": {
+      "messages": {
+        "blockedCategory": "Depop does not support cars or vehicle parts.",
+        "blockedItemType": "Depop does not support this item type.",
+        "blockedKeyword": "Depop does not support cars or vehicle parts.",
+        "maxPrice": "Depop does not support items above the maximum allowed price.",
+        "requireAnyAttribute": "Depop only supports vintage, handmade, and fashion items."
+      },
+      "keywordReasons": {
+        "car": "Depop does not support cars or vehicle parts.",
+        "vehicle": "Depop does not support cars or vehicle parts.",
+        "automobile": "Depop does not support cars or vehicle parts.",
+        "house": "Depop does not support real estate listings.",
+        "property": "Depop does not support real estate listings.",
+        "real estate": "Depop does not support real estate listings.",
+        "weapon": "Depop does not support weapons or prohibited items.",
+        "weapons": "Depop does not support weapons or prohibited items.",
+        "gun": "Depop does not support weapons or prohibited items.",
+        "firearm": "Depop does not support weapons or prohibited items."
+      },
+      "blockedCategories": ["Cars", "Real Estate", "Weapons"],
+      "blockedKeywords": [
+        "car",
+        "vehicle",
+        "automobile",
+        "house",
+        "property",
+        "real estate",
+        "weapon",
+        "weapons",
+        "gun",
+        "firearm",
+        "counterfeit",
+        "replica"
+      ],
+      "blockedItemTypes": ["cars", "real estate", "weapons", "vehicles"],
+      "conditionalPriceRules": [
+        {
+          "matchKeywords": ["watch", "watches", "rolex", "omega", "cartier", "luxury watch"],
+          "maxPrice": 500,
+          "reason": "Depop does not support luxury watches over $500."
+        }
+      ],
+      "conditionalKeywordRules": [
+        {
+          "matchKeywords": ["electronics", "laptop", "phone", "iphone", "ipad", "tablet", "smartphone"],
+          "unlessKeywords": ["vintage"],
+          "reason": "Depop only supports electronics when listed as vintage."
+        }
+      ]
+    },
+    "stockx": {
+      "messages": {
+        "blockedKeyword": "StockX does not support watches.",
+        "allowedItemTypes": "StockX does not support the item you're trying to sell or publish.",
+        "generic": "StockX does not support the item you're trying to sell or publish."
+      },
+      "keywordReasons": {
+        "watch": "StockX does not support watches.",
+        "watches": "StockX does not support watches.",
+        "rolex": "StockX does not support watches.",
+        "handbag": "StockX does not support handbags.",
+        "handbags": "StockX does not support handbags.",
+        "furniture": "StockX does not support furniture.",
+        "car": "StockX does not support vehicles."
+      },
+      "allowedItemTypes": [
+        "sneakers",
+        "sneaker",
+        "streetwear",
+        "hoodie",
+        "electronics",
+        "collectibles",
+        "trading card",
+        "smartwatch",
+        "smart watch"
+      ],
+      "blockedKeywords": ["watch", "watches", "rolex", "handbag", "handbags", "furniture", "car"],
+      "keywordExceptions": [
+        "smartwatch",
+        "smart watch",
+        "apple watch",
+        "g-shock",
+        "g shock",
+        "fitbit",
+        "garmin"
+      ]
+    },
+    "ebay": {
+      "messages": {
+        "blockedKeyword": "eBay does not support prohibited or restricted items.",
+        "blockedItemType": "eBay does not support prohibited or restricted items.",
+        "generic": "eBay does not support the item you're trying to sell or publish."
+      },
+      "keywordReasons": {
+        "weapon": "eBay does not support weapons or firearms.",
+        "weapons": "eBay does not support weapons or firearms.",
+        "gun": "eBay does not support weapons or firearms.",
+        "live animal": "eBay does not support live animals.",
+        "hazardous material": "eBay does not support hazardous materials.",
+        "counterfeit": "eBay does not support counterfeit items."
+      },
+      "blockedKeywords": [
+        "weapon",
+        "weapons",
+        "gun",
+        "guns",
+        "firearm",
+        "ammunition",
+        "live animal",
+        "live animals",
+        "hazardous material",
+        "hazardous materials",
+        "illegal drug",
+        "counterfeit",
+        "replica",
+        "bootleg"
+      ],
+      "blockedItemTypes": ["weapons", "live animals", "hazardous materials"]
+    },
+    "poshmark": {
+      "messages": {
+        "blockedCategory": "Poshmark does not support cars or vehicle parts.",
+        "blockedKeyword": "Poshmark does not support cars or vehicle parts.",
+        "blockedItemType": "Poshmark does not support this item type.",
+        "generic": "Poshmark does not support the item you're trying to sell or publish."
+      },
+      "keywordReasons": {
+        "car": "Poshmark does not support cars or vehicle parts.",
+        "engine": "Poshmark does not support cars or vehicle parts.",
+        "part": "Poshmark does not support cars or vehicle parts.",
+        "vehicle": "Poshmark does not support cars or vehicle parts.",
+        "automobile": "Poshmark does not support cars or vehicle parts."
+      },
+      "blockedCategories": ["Cars", "Real Estate"],
+      "blockedKeywords": ["car", "engine", "part", "vehicle", "automobile", "property", "real estate"],
+      "blockedItemTypes": ["cars", "vehicles", "real estate"],
+      "conditionalPriceRules": [
+        {
+          "matchKeywords": ["watch", "watches", "rolex", "omega", "luxury watch"],
+          "maxPrice": 500,
+          "reason": "Poshmark does not support luxury watches over $500."
+        }
+      ],
+      "conditionalKeywordRules": [
+        {
+          "matchKeywords": ["laptop", "phone", "iphone", "ipad", "tablet", "macbook", "television", "tv"],
+          "unlessKeywords": ["vintage", "smartwatch", "smart watch", "apple watch", "g-shock", "g shock"],
+          "reason": "Poshmark does not support most electronics."
+        }
+      ]
+    },
+    "etsy": {
+      "messages": {
+        "blockedKeyword": "Etsy only supports vintage, handmade, and craft supply items.",
+        "requireAnyAttribute": "Etsy only supports vintage, handmade, or craft supply items.",
+        "generic": "Etsy does not support the item you're trying to sell or publish."
+      },
+      "keywordReasons": {
+        "mass produced": "Etsy does not support mass-produced items.",
+        "mass-produced": "Etsy does not support mass-produced items.",
+        "factory made": "Etsy does not support factory-made items.",
+        "factory-made": "Etsy does not support factory-made items.",
+        "dropship": "Etsy does not support dropshipped items."
+      },
+      "blockedKeywords": ["mass produced", "mass-produced", "factory made", "factory-made", "dropship"],
+      "requireAnyAttribute": {
+        "attributes": ["isVintage", "isHandmade"],
+        "fallbackKeywords": ["vintage", "handmade", "hand made", "antique", "supplies", "craft supplies"],
+        "reason": "Etsy only supports vintage, handmade, or craft supply items."
+      }
+    },
+    "amazon": {
+      "messages": {
+        "blockedKeyword": "Amazon does not support restricted or prohibited items.",
+        "blockedItemType": "Amazon does not support restricted or prohibited items.",
+        "generic": "Amazon does not support the item you're trying to sell or publish."
+      },
+      "keywordReasons": {
+        "counterfeit": "Amazon does not support counterfeit items.",
+        "hazardous": "Amazon does not support hazardous items.",
+        "weapon": "Amazon does not support weapons or firearms."
+      },
+      "blockedKeywords": [
+        "counterfeit",
+        "replica",
+        "fake designer",
+        "bootleg",
+        "hazardous",
+        "explosive",
+        "weapon",
+        "weapons",
+        "gun",
+        "illegal drug"
+      ],
+      "blockedItemTypes": ["counterfeit", "hazardous materials", "weapons"]
+    },
+    "shopify": {}
+  }
+}

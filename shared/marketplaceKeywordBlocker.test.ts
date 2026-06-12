@@ -14,26 +14,11 @@ describe("marketplaceKeywordBlocker", () => {
     expect(policies.poshmark?.allowedKeywords).toContain("watch");
   });
 
-  it("blocks StockX for explicit blocked keywords in title", () => {
-    const result = checkMarketplaceRestrictions("stockx", "Accessories", {
-      title: "Rolex Submariner Watch",
+  it("blocks StockX for non-footwear categories via whitelist", () => {
+    const result = checkMarketplaceRestrictions("stockx", "Furniture", {
+      title: "Oak Dining Table",
     });
     expect(result.supported).toBe(false);
-    expect(result.matchedBlockedKeywords).toContain("rolex");
-  });
-
-  it("blocks StockX for watch listings", () => {
-    expect(
-      isKeywordBlocked("stockx", "Watches", {
-        title: "Rolex Submariner Watch",
-        description: "Luxury dive watch",
-      })
-    ).toBe(true);
-
-    const message = getMarketplaceRestrictionMessage("stockx", "Watches", {
-      title: "Rolex Watch",
-    });
-    expect(message).toContain("Not supported");
   });
 
   it("allows StockX for sneaker listings", () => {
@@ -43,15 +28,14 @@ describe("marketplaceKeywordBlocker", () => {
     expect(result.supported).toBe(true);
   });
 
-  it("filterAllowedMarketplaces removes blocked marketplaces", () => {
+  it("filterAllowedMarketplaces removes category-incompatible marketplaces", () => {
     const filtered = filterAllowedMarketplaces(
       ["ebay", "stockx", "poshmark", "wayfair"],
-      "Watches",
-      { title: "Vintage Watch" }
+      "Furniture",
+      { title: "Oak Dining Table" }
     );
     expect(filtered).toContain("ebay");
-    expect(filtered).toContain("poshmark");
+    expect(filtered).toContain("wayfair");
     expect(filtered).not.toContain("stockx");
-    expect(filtered).not.toContain("wayfair");
   });
 });

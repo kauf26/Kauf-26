@@ -6,9 +6,12 @@ import {
 import { hasConnection } from "./oauthConnectionStorage";
 import type { ListingPolicyContext } from "../../shared/marketplaceCategorySupport";
 import {
-  assertMarketplacesAllowListing,
-  filterAllowedMarketplaces,
-} from "../../shared/marketplaceKeywordBlocker";
+  assertMarketplacesEligible,
+  eligibilityDraftFromFields,
+  eligibilityDraftFromPublishPayload,
+  filterEligibleMarketplaces,
+  type EligibilityDraft,
+} from "./marketplaceEligibility";
 import {
   logPreListingPolicyWarnings,
   validatePreListingPolicies,
@@ -71,7 +74,19 @@ export function extractCategoryFromDraftAttributes(
   ).trim();
 }
 
-/** Validate marketplace IDs against category + keyword rules before publish. */
+function toEligibilityDraft(
+  category: string | undefined | null,
+  context?: ListingPolicyContext
+): EligibilityDraft {
+  return eligibilityDraftFromFields({
+    category: category ?? undefined,
+    title: context?.title,
+    description: context?.description,
+    price: context?.priceUsd,
+  });
+}
+
+/** Validate marketplace IDs against server eligibility rules before publish. */
 export function validateMarketplacesForProductCategory(
   marketplaceIds: readonly string[],
   category: string | undefined | null,
@@ -83,7 +98,15 @@ export function validateMarketplacesForProductCategory(
     context
   );
   logPreListingPolicyWarnings(warnings);
-  assertMarketplacesAllowListing(marketplaceIds, category, context);
+  assertMarketplacesEligible(marketplaceIds, toEligibilityDraft(category, context));
+}
+
+/** Validate using full draft payload (title, description, price, attributes). */
+export function validateMarketplacesForDraft(
+  marketplaceIds: readonly string[],
+  draft: EligibilityDraft
+): void {
+  assertMarketplacesEligible(marketplaceIds, draft);
 }
 
 /** Pre-listing validation with structured warn vs reject results. */
@@ -103,5 +126,10 @@ export function filterMarketplacesForProductCategory(
   category: string | undefined | null,
   context?: ListingPolicyContext
 ): string[] {
-  return filterAllowedMarketplaces(marketplaceIds, category, context);
+  return filterEligibleMarketplaces(
+    marketplaceIds,
+    toEligibilityDraft(category, context)
+  );
 }
+
+export { eligibilityDraftFromPublishPayload };

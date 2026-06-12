@@ -20,7 +20,8 @@ import { registerMarketplaceListing } from "./inventoryService";
 import {
   extractCategoryFromDraftAttributes,
   filterMarketplacesForProductCategory,
-  validateMarketplacesForProductCategory,
+  eligibilityDraftFromPublishPayload,
+  validateMarketplacesForDraft,
 } from "./listingService";
 import { draftPrice } from "./adapters/adapterUtils";
 import { isInternationalChannelMarketplace } from "../../shared/marketplaceChannels";
@@ -209,6 +210,7 @@ export async function publishDraft(
     description: String(payload.attributes.description ?? ""),
     priceUsd: draftPrice(payload),
   };
+  const listingDraft = eligibilityDraftFromPublishPayload(payload);
 
   if (marketplaceNames == null) {
     marketplaces = filterMarketplacesForProductCategory(
@@ -217,11 +219,7 @@ export async function publishDraft(
       categoryContext
     );
   } else {
-    validateMarketplacesForProductCategory(
-      marketplaces,
-      category,
-      categoryContext
-    );
+    validateMarketplacesForDraft(marketplaces, listingDraft);
   }
 
   if (marketplaces.length === 0) {
