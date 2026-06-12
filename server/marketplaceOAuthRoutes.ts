@@ -10,6 +10,10 @@ import {
   listProviderConnectionStatus,
   type OAuthProviderId,
 } from "./services/oauthService";
+import {
+  classifyOAuthCallbackError,
+  logOAuthCallbackError,
+} from "./services/oauth/callbackErrors";
 
 const router = express.Router();
 
@@ -62,9 +66,9 @@ router.get("/:marketplace/callback", async (req, res) => {
     const { redirectUrl } = await handleLegacyCallback(marketplace, req);
     return res.redirect(redirectUrl);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "OAuth callback failed";
-    console.error(`[OAuth] ${marketplace} callback failed:`, message);
-    return res.redirect(oauthFailureRedirect(marketplace, message, returnTo));
+    const info = classifyOAuthCallbackError(error);
+    logOAuthCallbackError(`${marketplace} callback`, error, info);
+    return res.redirect(oauthFailureRedirect(marketplace, info.message, returnTo));
   }
 });
 

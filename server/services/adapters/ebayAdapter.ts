@@ -13,6 +13,7 @@ import {
   publishEbayInventoryListing,
   type EbayInventoryListing,
 } from "../ebayApi";
+import { isMockOAuthMode } from "../oauth/mockOAuth";
 
 export function formatEbayListing(draft: DraftPublishPayload): FormattedListing {
   const a = draft.attributes ?? {};
@@ -69,7 +70,7 @@ export async function publishToEbay(
       listingId: result.listingId,
       listingUrl: result.listingUrl,
       message: result.message,
-      dryRun: false,
+      dryRun: isMockOAuthMode(),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);

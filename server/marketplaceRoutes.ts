@@ -9,6 +9,11 @@ import {
 } from './config/marketplaces';
 import { publishDraft, publishDraftToAll } from './services/publishEngine';
 import { marketplaceEnvConfigured } from './services/marketplaceCredentials';
+import {
+  getBlockedKeywords,
+  getMarketplaceBlockedKeywordMap,
+  getMarketplaceKeywordPoliciesDocument,
+} from '../shared/marketplaceKeywordBlocker';
 
 const router = express.Router();
 
@@ -162,6 +167,17 @@ router.post('/publish-all', async (req, res) => {
     }
     return res.status(500).json({ error: message });
   }
+});
+
+// GET /api/marketplaces/blocked-keywords
+router.get('/blocked-keywords', (_req, res) => {
+  const document = getMarketplaceKeywordPoliciesDocument();
+  return res.json({
+    version: document.version,
+    marketplaces: getBlockedKeywords(),
+    blockedKeywords: getMarketplaceBlockedKeywordMap(),
+    policies: document.marketplaces,
+  });
 });
 
 // GET /api/marketplaces/config

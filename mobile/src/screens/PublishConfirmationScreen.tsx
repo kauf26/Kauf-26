@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -6,10 +6,13 @@ import {
   ScrollView,
   TouchableOpacity,
   Linking,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { HomeStackParamList, PublishOutcome } from '../types/navigation';
+import { connectMarketplaceViaServer } from '../services/serverMarketplaceOAuth';
 
 type Props = StackScreenProps<HomeStackParamList, 'PublishConfirmation'>;
 
@@ -23,12 +26,49 @@ function outcomeLabel(outcome: PublishOutcome): { text: string; color: string; b
   return { text: 'Published', color: '#047857', bg: '#D1FAE5' };
 }
 
+function isEbayAuthFailure(outcome: PublishOutcome): boolean {
+  if (outcome.marketplace.toLowerCase() !== 'ebay' || outcome.success) {
+    return false;
+  }
+  const text = `${outcome.message} ${outcome.error ?? ''}`.toLowerCase();
+  return (
+    text.includes('401') ||
+    text.includes('invalid token') ||
+    text.includes('unauthorized') ||
+    text.includes('oauth token') ||
+    text.includes('connect ebay') ||
+    text.includes('token missing') ||
+    text.includes('token invalid') ||
+    text.includes('expired')
+  );
+}
+
 export default function PublishConfirmationScreen({ route, navigation }: Props) {
   const { report } = route.params;
   const outcomes = report.outcomes ?? [];
+  const [reconnectingEbay, setReconnectingEbay] = useState(false);
   const published = outcomes.filter((o) => o.success && !o.dryRun).length;
   const dryRun = outcomes.filter((o) => o.success && o.dryRun).length;
   const failed = outcomes.filter((o) => !o.success).length;
+
+  const handleReconnectEbay = async () => {
+    setReconnectingEbay(true);
+    try {
+      const result = await connectMarketplaceViaServer('ebay');
+      if (result.ok) {
+        Alert.alert('eBay reconnected', 'Your eBay account is linked again. Retry publishing.');
+      } else {
+        Alert.alert('Reconnect failed', result.message);
+      }
+    } catch (err) {
+      Alert.alert(
+        'Reconnect failed',
+        err instanceof Error ? err.message : 'Could not reconnect eBay'
+      );
+    } finally {
+      setReconnectingEbay(false);
+    }
+  };
 
   if (outcomes.length === 0) {
     return (
@@ -68,6 +108,7 @@ export default function PublishConfirmationScreen({ route, navigation }: Props) 
 
         {outcomes.map((outcome) => {
           const badge = outcomeLabel(outcome);
+          const showReconnect = isEbayAuthFailure(outcome);
           return (
             <View key={outcome.marketplace} style={styles.outcomeCard}>
               <View style={styles.outcomeHeader}>
@@ -77,6 +118,19 @@ export default function PublishConfirmationScreen({ route, navigation }: Props) 
                 </View>
               </View>
               <Text style={styles.message}>{outcome.message}</Text>
+              {showReconnect ? (
+                <TouchableOpacity
+                  style={styles.reconnectButton}
+                  onPress={() => void handleReconnectEbay()}
+                  disabled={reconnectingEbay}
+                >
+                  {reconnectingEbay ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.reconnectButtonText}>Reconnect eBay</Text>
+                  )}
+                </TouchableOpacity>
+              ) : null}
               {outcome.listingUrl ? (
                 <TouchableOpacity
                   onPress={() => void Linking.openURL(outcome.listingUrl!)}
@@ -153,6 +207,16 @@ const styles = StyleSheet.create({
   badge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
   badgeText: { fontSize: 11, fontWeight: '700' },
   message: { fontSize: 14, color: '#6B7280', lineHeight: 20 },
+  reconnectButton: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#DC2626',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    minWidth: 140,
+    alignItems: 'center',
+  },
+  reconnectButtonText: { color: '#fff', fontWeight: '700', fontSize: 13 },
   linkButton: { alignSelf: 'flex-start' },
   linkText: { color: '#2563EB', fontSize: 13, fontWeight: '600' },
   actions: { flexDirection: 'row', gap: 10, marginTop: 8 },

@@ -36,10 +36,11 @@ import {
 } from '../../../shared/productDescription';
 import {
   UNKNOWN_CATEGORY_WARNING,
-  evaluateMarketplaceCategorySupport,
-  filterSupportedMarketplaces,
+  buildListingPolicyContext,
+  checkMarketplaceRestrictions,
+  filterAllowedMarketplaces,
   isUnknownProductCategory,
-} from '../../../shared/marketplaceCategorySupport';
+} from '../../../shared/marketplaceKeywordBlocker';
 
 const MOBILE_PUBLISH_PLATFORMS = new Set(['etsy', 'shopify', 'ebay']);
 
@@ -214,18 +215,14 @@ export default function HomeScreen() {
   };
 
   const categoryContext = useMemo(
-    () => ({
-      title,
-      description,
-      priceUsd: parseFloat(price) || null,
-    }),
+    () => buildListingPolicyContext({ title, description, price }),
     [title, description, price]
   );
   const unknownCategory = isUnknownProductCategory(category);
 
   useEffect(() => {
     setSelectedMarketplaces((prev) =>
-      filterSupportedMarketplaces(prev, category, categoryContext)
+      filterAllowedMarketplaces(prev, category, categoryContext)
     );
   }, [category, categoryContext]);
 
@@ -347,7 +344,7 @@ export default function HomeScreen() {
   };
 
   const toggleMarketplace = (id: string) => {
-    const support = evaluateMarketplaceCategorySupport(
+    const support = checkMarketplaceRestrictions(
       id,
       category,
       categoryContext
@@ -366,7 +363,7 @@ export default function HomeScreen() {
   };
 
   const selectAllSupported = (marketplaces: typeof MARKETPLACES) => {
-    const supported = filterSupportedMarketplaces(
+    const supported = filterAllowedMarketplaces(
       marketplaces.map((m) => m.id),
       category,
       categoryContext
@@ -378,7 +375,7 @@ export default function HomeScreen() {
     marketplace: (typeof MARKETPLACES)[number]
   ) => {
     const isSelected = selectedMarketplaces.includes(marketplace.id);
-    const support = evaluateMarketplaceCategorySupport(
+    const support = checkMarketplaceRestrictions(
       marketplace.id,
       category,
       categoryContext
@@ -420,7 +417,7 @@ export default function HomeScreen() {
 
   const supportedMarketplaceCount = useMemo(
     () =>
-      filterSupportedMarketplaces(
+      filterAllowedMarketplaces(
         selectedMarketplaces,
         category,
         categoryContext
@@ -429,7 +426,7 @@ export default function HomeScreen() {
   );
 
   const handleCreateListing = async () => {
-    const supportedSelected = filterSupportedMarketplaces(
+    const supportedSelected = filterAllowedMarketplaces(
       selectedMarketplaces,
       category,
       categoryContext

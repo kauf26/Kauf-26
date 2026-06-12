@@ -21,10 +21,10 @@ import {
 } from "@shared/productDescription";
 import {
   UNKNOWN_CATEGORY_WARNING,
-  evaluateMarketplaceCategorySupport,
-  filterSupportedMarketplaces,
+  checkMarketplaceRestrictions,
+  filterAllowedMarketplaces,
   isUnknownProductCategory,
-} from "@shared/marketplaceCategorySupport";
+} from "@shared/marketplaceKeywordBlocker";
 import { AutoTranslateRow } from "@/components/AutoTranslateRow";
 import {
   getTranslateInternationalEnabled,
@@ -172,12 +172,12 @@ export default function SelectMarketplaces() {
   useEffect(() => {
     if (!draft) return;
     setSelected((prev) =>
-      filterSupportedMarketplaces(prev, productCategory, categoryContext)
+      filterAllowedMarketplaces(prev, productCategory, categoryContext)
     );
   }, [draft, productCategory, categoryContext]);
 
   const toggle = (id: Marketplace) => {
-    const support = evaluateMarketplaceCategorySupport(
+    const support = checkMarketplaceRestrictions(
       id,
       productCategory,
       categoryContext
@@ -190,7 +190,7 @@ export default function SelectMarketplaces() {
   };
 
   const selectAllSupported = (markets: readonly { id: Marketplace }[]) => {
-    const supported = filterSupportedMarketplaces(
+    const supported = filterAllowedMarketplaces(
       markets.map((m) => m.id),
       productCategory,
       categoryContext
@@ -242,7 +242,7 @@ export default function SelectMarketplaces() {
         )}
         {markets.map((m) => {
           const isSelected = selected.includes(m.id);
-          const support = evaluateMarketplaceCategorySupport(
+          const support = checkMarketplaceRestrictions(
             m.id,
             productCategory,
             categoryContext
@@ -511,7 +511,7 @@ export default function SelectMarketplaces() {
               setPublishError(null);
               setPublishJobId(null);
               saveListingSession(draft);
-              const supportedSelected = filterSupportedMarketplaces(
+              const supportedSelected = filterAllowedMarketplaces(
                 selected,
                 productCategory,
                 categoryContext

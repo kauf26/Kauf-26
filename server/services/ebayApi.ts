@@ -6,6 +6,12 @@ import {
   getAccessTokenForListingPublish,
   isMarketplaceConnectedForPublish,
 } from "./listingService";
+import { isMockOAuthMode } from "./oauth/mockOAuth";
+import {
+  loadConnectionTokens,
+  saveConnectionTokens,
+} from "./oauthConnectionStorage";
+import { refreshToken } from "./oauthService";
 
 export type MarketplaceConnectionResult = {
   ok: boolean;
@@ -16,6 +22,18 @@ export type MarketplaceConnectionResult = {
 };
 
 const EBAY_OAUTH_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.inventory";
+
+let warnedMissingEbayRefreshToken = false;
+
+function warnMissingEbayRefreshToken(): void {
+  if (warnedMissingEbayRefreshToken) return;
+  if (!env("EBAY_REFRESH_TOKEN")) {
+    console.warn(
+      "[eBay] EBAY_REFRESH_TOKEN not set — publish uses OAuth-stored refresh tokens only"
+    );
+  }
+  warnedMissingEbayRefreshToken = true;
+}
 
 export function isEbaySandbox(): boolean {
   return env("EBAY_SANDBOX") === "true";
@@ -36,6 +54,7 @@ export function getEbayCategoryId(): string {
 }
 
 export function isEbayConfigured(): boolean {
+  if (isMockOAuthMode()) return true;
   return (
     Boolean(env("EBAY_CLIENT_ID") || env("EBAY_APP_ID")) &&
     Boolean(env("EBAY_CLIENT_SECRET") || env("EBAY_CERT_ID"))
@@ -47,8 +66,8 @@ async function refreshEbayAccessTokenFromEnv(
 ): Promise<string> {
   const clientId = env("EBAY_CLIENT_ID") || env("EBAY_APP_ID");
   const clientSecret = env("EBAY_CLIENT_SECRET") || env("EBAY_CERT_ID");
-  const refreshToken = env("EBAY_REFRESH_TOKEN");
-  if (!clientId || !clientSecret || !refreshToken) {
+  const refreshTokenValue = env("EBAY_REFRESH_TOKEN");
+  if (!clientId || !clientSecret || !refreshTokenValue) {
     throw new Error("EBAY_REFRESH_TOKEN not configured");
   }
 
@@ -61,7 +80,7 @@ async function refreshEbayAccessTokenFromEnv(
     },
     body: new URLSearchParams({
       grant_type: "refresh_token",
-      refresh_token: refreshToken,
+      refresh_token: refreshTokenValue,
       scope: EBAY_OAUTH_SCOPE,
     }),
   });
@@ -75,9 +94,54 @@ async function refreshEbayAccessTokenFromEnv(
   return data.access_token;
 }
 
+async function forceRefreshEbayAccessToken(
+  fetchImpl: typeof fetch = fetch
+): Promise<string | null> {
+  warnMissingEbayRefreshToken();
+
+  if (isMockOAuthMode()) {
+    return `mock_ebay_access_${Date.now()}`;
+  }
+
+  const stored = await loadConnectionTokens("ebay", null);
+  if (stored?.refreshToken) {
+    try {
+      const refreshed = await refreshToken("ebay", stored.refreshToken, {
+        userId: null,
+        shopDomain: stored.shopDomain,
+      });
+      await saveConnectionTokens(
+        "ebay",
+        { ...stored, ...refreshed },
+        null
+      );
+      return refreshed.accessToken;
+    } catch (error) {
+      console.error("[eBay] OAuth refresh failed:", error);
+    }
+  }
+
+  if (env("EBAY_REFRESH_TOKEN")) {
+    try {
+      return await refreshEbayAccessTokenFromEnv(fetchImpl);
+    } catch (error) {
+      console.error("[eBay] Env refresh token failed:", error);
+    }
+  }
+
+  return null;
+}
+
 async function resolveEbayAccessToken(
   fetchImpl: typeof fetch = fetch
 ): Promise<string> {
+  warnMissingEbayRefreshToken();
+
+  if (isMockOAuthMode()) {
+    const mock = await getAccessTokenForListingPublish("ebay", null);
+    return mock ?? `mock_ebay_access_${Date.now()}`;
+  }
+
   const fromOAuth = await getAccessTokenForListingPublish("ebay", null);
   if (fromOAuth) return fromOAuth;
 
@@ -90,6 +154,36 @@ async function resolveEbayAccessToken(
   );
 }
 
+async function ebayApiFetch(
+  url: string,
+  init: RequestInit,
+  fetchImpl: typeof fetch = fetch,
+  allowRetry = true
+): Promise<Response> {
+  const token = await resolveEbayAccessToken(fetchImpl);
+  const headers = {
+    ...(init.headers as Record<string, string> | undefined),
+    Authorization: `Bearer ${token}`,
+  };
+
+  let response = await fetchImpl(url, { ...init, headers });
+  if (response.status !== 401 || !allowRetry) {
+    return response;
+  }
+
+  console.warn("[eBay] API returned 401 — attempting token refresh and retry");
+  const refreshed = await forceRefreshEbayAccessToken(fetchImpl);
+  if (!refreshed) {
+    return response;
+  }
+
+  response = await fetchImpl(url, {
+    ...init,
+    headers: { ...headers, Authorization: `Bearer ${refreshed}` },
+  });
+  return response;
+}
+
 export async function verifyEbayConnection(
   fetchImpl: typeof fetch = fetch
 ): Promise<MarketplaceConnectionResult> {
@@ -100,6 +194,15 @@ export async function verifyEbayConnection(
       configured: false,
       status: 0,
       message: "EBAY_CLIENT_ID / EBAY_CLIENT_SECRET not set.",
+    };
+  }
+
+  if (isMockOAuthMode()) {
+    return {
+      ok: true,
+      configured: true,
+      status: 200,
+      message: "eBay connected via mock OAuth (MOCK_OAUTH_MODE).",
     };
   }
 
@@ -154,11 +257,18 @@ export async function publishEbayInventoryListing(
   listing: EbayInventoryListing,
   fetchImpl: typeof fetch = fetch
 ): Promise<EbayPublishResult> {
-  const token = await resolveEbayAccessToken(fetchImpl);
+  if (isMockOAuthMode()) {
+    const listingId = `mock-ebay-${Date.now()}`;
+    return {
+      listingId,
+      message: "eBay mock publish succeeded (MOCK_OAUTH_MODE)",
+      listingUrl: `https://www.ebay.com/itm/${listingId}`,
+    };
+  }
+
   const baseUrl = resolveEbayBaseUrl();
   const sku = listing.sku;
-  const headers = {
-    Authorization: `Bearer ${token}`,
+  const jsonHeaders = {
     "Content-Type": "application/json",
     "Content-Language": "en-US",
   };
@@ -175,9 +285,10 @@ export async function publishEbayInventoryListing(
     },
   };
 
-  const invRes = await fetchImpl(
+  const invRes = await ebayApiFetch(
     `${baseUrl}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`,
-    { method: "PUT", headers, body: JSON.stringify(inventoryBody) }
+    { method: "PUT", headers: jsonHeaders, body: JSON.stringify(inventoryBody) },
+    fetchImpl
   );
   if (!invRes.ok) {
     const text = await invRes.text();
@@ -203,11 +314,11 @@ export async function publishEbayInventoryListing(
     },
   };
 
-  const offerRes = await fetchImpl(`${baseUrl}/sell/inventory/v1/offer`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(offerBody),
-  });
+  const offerRes = await ebayApiFetch(
+    `${baseUrl}/sell/inventory/v1/offer`,
+    { method: "POST", headers: jsonHeaders, body: JSON.stringify(offerBody) },
+    fetchImpl
+  );
   if (!offerRes.ok) {
     const text = await offerRes.text();
     throw new Error(
@@ -224,9 +335,10 @@ export async function publishEbayInventoryListing(
     };
   }
 
-  const pubRes = await fetchImpl(
+  const pubRes = await ebayApiFetch(
     `${baseUrl}/sell/inventory/v1/offer/${offerId}/publish`,
-    { method: "POST", headers }
+    { method: "POST", headers: jsonHeaders },
+    fetchImpl
   );
   if (!pubRes.ok) {
     const text = await pubRes.text();

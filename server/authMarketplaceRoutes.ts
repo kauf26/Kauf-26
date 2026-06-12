@@ -17,7 +17,40 @@ import {
   type OAuthProviderId,
 } from "./services/oauthService";
 import { isMockOAuthMode } from "./services/oauth/mockOAuth";
+import {
+  classifyOAuthCallbackError,
+  logOAuthCallbackError,
+} from "./services/oauth/callbackErrors";
 import { RESERVED_AUTH_PATHS } from "./services/oauth/types";
+
+function wantsJsonOAuthResponse(req: express.Request): boolean {
+  if (req.query.format === "json") return true;
+  const accept = String(req.headers.accept ?? "");
+  return accept.includes("application/json");
+}
+
+function respondOAuthCallbackError(
+  req: express.Request,
+  res: express.Response,
+  provider: string,
+  returnTo: "web" | "mobile",
+  error: unknown
+): express.Response {
+  const info = classifyOAuthCallbackError(error);
+  logOAuthCallbackError("unified callback", error, info);
+
+  if (wantsJsonOAuthResponse(req)) {
+    return res.status(info.status).json({
+      ok: false,
+      error: info.message,
+      kind: info.kind,
+      provider,
+      mockMode: isMockOAuthMode(),
+    });
+  }
+
+  return res.redirect(oauthFailureRedirect(provider, info.message, returnTo));
+}
 
 const router = express.Router();
 
@@ -61,12 +94,22 @@ router.get("/callback", async (req, res) => {
 
   try {
     const { redirectUrl } = await handleUnifiedCallback(req);
+    if (wantsJsonOAuthResponse(req)) {
+      return res.status(200).json({
+        ok: true,
+        redirectUrl,
+        provider: provider ?? "unknown",
+        mockMode: isMockOAuthMode(),
+      });
+    }
     return res.redirect(redirectUrl);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "OAuth callback failed";
-    console.error("[OAuth] unified callback failed:", message);
-    return res.redirect(
-      oauthFailureRedirect(provider ?? "unknown", message, returnTo)
+    return respondOAuthCallbackError(
+      req,
+      res,
+      provider ?? "unknown",
+      returnTo,
+      error
     );
   }
 });

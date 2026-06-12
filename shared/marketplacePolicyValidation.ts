@@ -34,6 +34,19 @@ export type MarketplacePoliciesDocument = {
 
 export const MARKETPLACE_POLICIES = policiesDocument as MarketplacePoliciesDocument;
 
+let marketplacePoliciesOverride: MarketplacePoliciesDocument | null = null;
+
+/** Optional runtime policies (e.g. from GET /api/marketplaces/blocked-keywords). */
+export function setMarketplacePoliciesOverride(
+  document: MarketplacePoliciesDocument | null
+): void {
+  marketplacePoliciesOverride = document;
+}
+
+function activeMarketplacePolicies(): MarketplacePoliciesDocument {
+  return marketplacePoliciesOverride ?? MARKETPLACE_POLICIES;
+}
+
 export type ListingPolicyContext = CategoryContext & {
   priceUsd?: number | null;
 };
@@ -57,7 +70,7 @@ export function getMarketplacePolicy(
   marketplaceId: string
 ): MarketplacePolicy | null {
   return (
-    MARKETPLACE_POLICIES.marketplaces[marketplaceId.toLowerCase()] ?? null
+    activeMarketplacePolicies().marketplaces[marketplaceId.toLowerCase()] ?? null
   );
 }
 

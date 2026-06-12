@@ -532,7 +532,9 @@ export async function handleUnifiedCallback(
     shopDomain: pending.shopDomain,
   });
 
-  await saveConnectionTokens(provider, tokens, pending.userId);
+  if (!isMockOAuthMode()) {
+    await saveConnectionTokens(provider, tokens, pending.userId);
+  }
   delete req.session.oauthPending;
 
   const redirectUrl = successRedirect(provider, pending.returnTo);
@@ -562,7 +564,9 @@ export async function handleLegacyCallback(
     shopDomain: pending.shopDomain,
   });
 
-  await saveConnectionTokens(provider, tokens, pending.userId);
+  if (!isMockOAuthMode()) {
+    await saveConnectionTokens(provider, tokens, pending.userId);
+  }
   delete req.session.oauthPending;
 
   return { redirectUrl: successRedirect(provider, pending.returnTo) };

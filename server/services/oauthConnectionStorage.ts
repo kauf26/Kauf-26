@@ -62,46 +62,63 @@ export async function saveConnectionTokens(
     throw new Error(`Unsupported OAuth provider: ${provider}`);
   }
 
-  const encrypted = encryptJson(tokensToPayload(tokens));
-  const tokenExpiresAt = tokens.expiresAt ? new Date(tokens.expiresAt) : null;
-
-  const existing = await db
-    .select({ id: marketplaceConnections.id })
-    .from(marketplaceConnections)
-    .where(and(eq(marketplaceConnections.provider, id), userScope(userId)));
-
-  if (existing[0]) {
-    await db
-      .update(marketplaceConnections)
-      .set({
-        encryptedPayload: encrypted.ciphertext,
-        iv: encrypted.iv,
-        authTag: encrypted.authTag,
-        tokenExpiresAt,
-        scope: tokens.scope ?? null,
-        marketplaceShopId: tokens.marketplaceShopId ?? null,
-        shopDomain: tokens.shopDomain ?? null,
-        accountLabel: tokens.accountLabel ?? null,
-        connected: true,
-        updatedAt: new Date(),
-      })
-      .where(eq(marketplaceConnections.id, existing[0].id));
-    return;
+  let encrypted;
+  try {
+    encrypted = encryptJson(tokensToPayload(tokens));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      message.includes("SESSION_ENCRYPTION_KEY")
+        ? message
+        : `Failed to encrypt OAuth tokens: ${message}`
+    );
   }
 
-  await db.insert(marketplaceConnections).values({
-    userId,
-    provider: id,
-    encryptedPayload: encrypted.ciphertext,
-    iv: encrypted.iv,
-    authTag: encrypted.authTag,
-    tokenExpiresAt,
-    scope: tokens.scope ?? null,
-    marketplaceShopId: tokens.marketplaceShopId ?? null,
-    shopDomain: tokens.shopDomain ?? null,
-    accountLabel: tokens.accountLabel ?? null,
-    connected: true,
-  });
+  const tokenExpiresAt = tokens.expiresAt ? new Date(tokens.expiresAt) : null;
+
+  let existing;
+  try {
+    existing = await db
+      .select({ id: marketplaceConnections.id })
+      .from(marketplaceConnections)
+      .where(and(eq(marketplaceConnections.provider, id), userScope(userId)));
+
+    if (existing[0]) {
+      await db
+        .update(marketplaceConnections)
+        .set({
+          encryptedPayload: encrypted.ciphertext,
+          iv: encrypted.iv,
+          authTag: encrypted.authTag,
+          tokenExpiresAt,
+          scope: tokens.scope ?? null,
+          marketplaceShopId: tokens.marketplaceShopId ?? null,
+          shopDomain: tokens.shopDomain ?? null,
+          accountLabel: tokens.accountLabel ?? null,
+          connected: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(marketplaceConnections.id, existing[0].id));
+      return;
+    }
+
+    await db.insert(marketplaceConnections).values({
+      userId,
+      provider: id,
+      encryptedPayload: encrypted.ciphertext,
+      iv: encrypted.iv,
+      authTag: encrypted.authTag,
+      tokenExpiresAt,
+      scope: tokens.scope ?? null,
+      marketplaceShopId: tokens.marketplaceShopId ?? null,
+      shopDomain: tokens.shopDomain ?? null,
+      accountLabel: tokens.accountLabel ?? null,
+      connected: true,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`Failed to save OAuth connection to database: ${message}`);
+  }
 }
 
 export async function loadConnectionTokens(

@@ -53,14 +53,17 @@ export async function connectMarketplaceViaServer(
       return { ok: true, message: 'Account linked successfully.' };
     }
     const reason = parsed.searchParams.get('reason') ?? 'Connection failed';
-    return { ok: false, message: reason };
+    return {
+      ok: false,
+      message: `OAuth failed: ${reason} – check backend logs`,
+    };
   }
 
   if (result.type === 'cancel' || result.type === 'dismiss') {
     throw new Error('Connection cancelled');
   }
 
-  throw new Error('OAuth failed — try again');
+  throw new Error('OAuth failed: unknown error – check backend logs');
 }
 
 export async function disconnectMarketplaceViaServer(marketplaceId: string): Promise<void> {
