@@ -8,6 +8,7 @@ import {
 } from "./listingService";
 import { isMockOAuthMode } from "./oauth/mockOAuth";
 import {
+  deleteConnectionTokens,
   loadConnectionTokens,
   saveConnectionTokens,
 } from "./oauthConnectionStorage";
@@ -21,7 +22,17 @@ export type MarketplaceConnectionResult = {
   detail?: unknown;
 };
 
+export class EbayAuthError extends Error {
+  readonly code = "EBAY_INVALID_ACCESS_TOKEN";
+
+  constructor(message = "Invalid access token — reconnect eBay in Connections") {
+    super(message);
+    this.name = "EbayAuthError";
+  }
+}
+
 const EBAY_OAUTH_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.inventory";
+const REFRESH_BUFFER_MS = 5 * 60 * 1000;
 
 let warnedMissingEbayRefreshToken = false;
 
@@ -61,6 +72,13 @@ export function isEbayConfigured(): boolean {
   );
 }
 
+function isStoredTokenExpired(expiresAt?: string | null): boolean {
+  if (!expiresAt) return false;
+  const parsed = Date.parse(expiresAt);
+  if (Number.isNaN(parsed)) return false;
+  return parsed <= Date.now() + REFRESH_BUFFER_MS;
+}
+
 async function refreshEbayAccessTokenFromEnv(
   fetchImpl: typeof fetch = fetch
 ): Promise<string> {
@@ -87,6 +105,11 @@ async function refreshEbayAccessTokenFromEnv(
 
   if (!res.ok) {
     const text = await res.text();
+    if (res.status === 401) {
+      throw new EbayAuthError(
+        `Invalid access token — eBay refresh rejected (401): ${text.slice(0, 120)}`
+      );
+    }
     throw new Error(`eBay OAuth failed (${res.status}): ${text.slice(0, 200)}`);
   }
 
@@ -94,9 +117,33 @@ async function refreshEbayAccessTokenFromEnv(
   return data.access_token;
 }
 
+async function refreshEbayTokenFromStorage(
+  fetchImpl: typeof fetch = fetch
+): Promise<string> {
+  const stored = await loadConnectionTokens("ebay", null);
+  if (!stored?.refreshToken) {
+    throw new EbayAuthError("Invalid access token — no eBay refresh token stored");
+  }
+
+  try {
+    const refreshed = await refreshToken("ebay", stored.refreshToken, {
+      userId: null,
+      shopDomain: stored.shopDomain,
+    });
+    await saveConnectionTokens("ebay", { ...stored, ...refreshed }, null);
+    return refreshed.accessToken;
+  } catch (error) {
+    console.error("[eBay] OAuth refresh failed — revoking stored tokens:", error);
+    await deleteConnectionTokens("ebay", null);
+    throw new EbayAuthError(
+      error instanceof Error ? error.message : "Invalid access token — reconnect eBay"
+    );
+  }
+}
+
 async function forceRefreshEbayAccessToken(
   fetchImpl: typeof fetch = fetch
-): Promise<string | null> {
+): Promise<string> {
   warnMissingEbayRefreshToken();
 
   if (isMockOAuthMode()) {
@@ -105,31 +152,15 @@ async function forceRefreshEbayAccessToken(
 
   const stored = await loadConnectionTokens("ebay", null);
   if (stored?.refreshToken) {
-    try {
-      const refreshed = await refreshToken("ebay", stored.refreshToken, {
-        userId: null,
-        shopDomain: stored.shopDomain,
-      });
-      await saveConnectionTokens(
-        "ebay",
-        { ...stored, ...refreshed },
-        null
-      );
-      return refreshed.accessToken;
-    } catch (error) {
-      console.error("[eBay] OAuth refresh failed:", error);
-    }
+    return refreshEbayTokenFromStorage(fetchImpl);
   }
 
   if (env("EBAY_REFRESH_TOKEN")) {
-    try {
-      return await refreshEbayAccessTokenFromEnv(fetchImpl);
-    } catch (error) {
-      console.error("[eBay] Env refresh token failed:", error);
-    }
+    return refreshEbayAccessTokenFromEnv(fetchImpl);
   }
 
-  return null;
+  await deleteConnectionTokens("ebay", null);
+  throw new EbayAuthError();
 }
 
 async function resolveEbayAccessToken(
@@ -142,6 +173,15 @@ async function resolveEbayAccessToken(
     return mock ?? `mock_ebay_access_${Date.now()}`;
   }
 
+  const stored = await loadConnectionTokens("ebay", null);
+  if (stored?.accessToken && !isStoredTokenExpired(stored.expiresAt)) {
+    return stored.accessToken;
+  }
+
+  if (stored?.refreshToken || isStoredTokenExpired(stored?.expiresAt)) {
+    return forceRefreshEbayAccessToken(fetchImpl);
+  }
+
   const fromOAuth = await getAccessTokenForListingPublish("ebay", null);
   if (fromOAuth) return fromOAuth;
 
@@ -149,38 +189,45 @@ async function resolveEbayAccessToken(
     return refreshEbayAccessTokenFromEnv(fetchImpl);
   }
 
-  throw new Error(
+  throw new EbayAuthError(
     "Connect eBay in Settings before publishing (OAuth token missing or expired)."
   );
 }
 
-async function ebayApiFetch(
+async function callEbayApi(
   url: string,
   init: RequestInit,
-  fetchImpl: typeof fetch = fetch,
-  allowRetry = true
+  fetchImpl: typeof fetch = fetch
 ): Promise<Response> {
-  const token = await resolveEbayAccessToken(fetchImpl);
+  let token = await resolveEbayAccessToken(fetchImpl);
   const headers = {
     ...(init.headers as Record<string, string> | undefined),
     Authorization: `Bearer ${token}`,
   };
 
   let response = await fetchImpl(url, { ...init, headers });
-  if (response.status !== 401 || !allowRetry) {
+  if (response.status !== 401) {
     return response;
   }
 
-  console.warn("[eBay] API returned 401 — attempting token refresh and retry");
-  const refreshed = await forceRefreshEbayAccessToken(fetchImpl);
-  if (!refreshed) {
-    return response;
+  console.warn("[eBay] API returned 401 — refreshing token and retrying once");
+  try {
+    token = await forceRefreshEbayAccessToken(fetchImpl);
+  } catch (error) {
+    if (error instanceof EbayAuthError) throw error;
+    throw new EbayAuthError();
   }
 
   response = await fetchImpl(url, {
     ...init,
-    headers: { ...headers, Authorization: `Bearer ${refreshed}` },
+    headers: { ...headers, Authorization: `Bearer ${token}` },
   });
+
+  if (response.status === 401) {
+    await deleteConnectionTokens("ebay", null);
+    throw new EbayAuthError();
+  }
+
   return response;
 }
 
@@ -215,6 +262,14 @@ export async function verifyEbayConnection(
       message: "eBay connected via server OAuth.",
     };
   } catch (error) {
+    if (error instanceof EbayAuthError) {
+      return {
+        ok: false,
+        configured: true,
+        status: 401,
+        message: error.message,
+      };
+    }
     const connected = await isMarketplaceConnectedForPublish("ebay", null);
     if (connected) {
       return {
@@ -285,7 +340,7 @@ export async function publishEbayInventoryListing(
     },
   };
 
-  const invRes = await ebayApiFetch(
+  const invRes = await callEbayApi(
     `${baseUrl}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`,
     { method: "PUT", headers: jsonHeaders, body: JSON.stringify(inventoryBody) },
     fetchImpl
@@ -314,7 +369,7 @@ export async function publishEbayInventoryListing(
     },
   };
 
-  const offerRes = await ebayApiFetch(
+  const offerRes = await callEbayApi(
     `${baseUrl}/sell/inventory/v1/offer`,
     { method: "POST", headers: jsonHeaders, body: JSON.stringify(offerBody) },
     fetchImpl
@@ -335,7 +390,7 @@ export async function publishEbayInventoryListing(
     };
   }
 
-  const pubRes = await ebayApiFetch(
+  const pubRes = await callEbayApi(
     `${baseUrl}/sell/inventory/v1/offer/${offerId}/publish`,
     { method: "POST", headers: jsonHeaders },
     fetchImpl

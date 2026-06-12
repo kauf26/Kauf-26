@@ -199,7 +199,9 @@ export default function SelectMarketplacesScreen({ route, navigation }: Props) {
                 </Text>
                 {isDisabled ? (
                   <Text style={styles.restrictionText}>
-                    {restriction.disabledReason ?? restriction.policyHint}
+                    {restriction.matchedBlockedKeywords?.length
+                      ? `${marketplace.label} does not allow items containing '${restriction.matchedBlockedKeywords[0]}'`
+                      : restriction.disabledReason ?? restriction.policyHint}
                   </Text>
                 ) : null}
                 {isDisabled && restriction.policyHint && restriction.disabledReason ? (

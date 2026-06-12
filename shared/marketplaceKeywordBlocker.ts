@@ -164,12 +164,12 @@ export function checkMarketplaceRestrictions(
 
   if (matchedBlockedKeywords.length > 0) {
     const label = marketplaceId.charAt(0).toUpperCase() + marketplaceId.slice(1);
-    const keywords = matchedBlockedKeywords.slice(0, 3).join("', '");
+    const keyword = matchedBlockedKeywords[0];
     return {
       marketplaceId,
       supported: false,
       unknownCategory: result.unknownCategory,
-      disabledReason: `${label} does not allow '${keywords}' items`,
+      disabledReason: `${label} does not allow items containing '${keyword}'`,
       policyHint: result.policyHint,
       warnings: result.warnings,
       matchedBlockedKeywords,
@@ -203,5 +203,24 @@ export function filterAllowedMarketplaces(
   category: string | undefined | null,
   context?: ListingPolicyContext
 ): string[] {
-  return filterSupportedMarketplaces(marketplaceIds, category, context);
+  return marketplaceIds.filter(
+    (id) => checkMarketplaceRestrictions(id, category, context).supported
+  );
+}
+
+/** Server/mobile: throw when any marketplace blocks keywords or category. */
+export function assertMarketplacesAllowListing(
+  marketplaceIds: readonly string[],
+  category: string | undefined | null,
+  context?: ListingPolicyContext
+): void {
+  for (const marketplaceId of marketplaceIds) {
+    const result = checkMarketplaceRestrictions(marketplaceId, category, context);
+    if (!result.supported) {
+      throw new Error(
+        result.disabledReason ??
+          formatMarketplaceCategoryError(marketplaceId, category)
+      );
+    }
+  }
 }

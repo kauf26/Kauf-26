@@ -46,7 +46,7 @@ export type RootStackParamList = {
 
 export type MainTabParamList = {
   Home: NavigatorScreenParams<HomeStackParamList>;
-  Connections: undefined;
+  Connections: { reconnectEbay?: boolean } | undefined;
   Listings: undefined;
   Inventory: { draftId?: number } | undefined;
   Settings: NavigatorScreenParams<SettingsStackParamList>;

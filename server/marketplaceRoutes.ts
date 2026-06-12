@@ -65,7 +65,12 @@ router.post('/publish', async (req, res) => {
    if (message.includes('not found')) {
      return res.status(404).json({ error: message });
    }
-   if (message.includes('does not support category')) {
+   if (
+     message.includes('does not support category') ||
+     message.includes('does not allow items containing') ||
+     message.includes('does not allow') ||
+     message.includes('Not supported for')
+   ) {
      return res.status(400).json({ error: message });
    }
    return res.status(500).json({ error: message });

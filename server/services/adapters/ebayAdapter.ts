@@ -7,6 +7,7 @@ import type { DraftPublishPayload } from "../../publishToMarketplaces";
 import { draftImageCount, draftPrice } from "./adapterUtils";
 import type { AdapterPublishResult, FetchFn, FormattedListing } from "./types";
 import {
+  EbayAuthError,
   getEbayCategoryId,
   getEbayMarketplaceId,
   isEbayConfigured as isEbayServiceConfigured,
@@ -73,6 +74,9 @@ export async function publishToEbay(
       dryRun: isMockOAuthMode(),
     };
   } catch (error) {
+    if (error instanceof EbayAuthError) {
+      throw error;
+    }
     const message = error instanceof Error ? error.message : String(error);
     if (message.includes("Connect eBay")) {
       return {

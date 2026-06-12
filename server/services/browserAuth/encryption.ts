@@ -3,12 +3,27 @@ import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12;
 
+let devFallbackEncryptionKey: Buffer | null = null;
+let loggedDevEncryptionFallback = false;
+
 function encryptionKey(): Buffer {
   const raw = process.env.SESSION_ENCRYPTION_KEY;
   if (!raw) {
-    throw new Error(
-      "SESSION_ENCRYPTION_KEY is required (32-byte key as 64-char hex or base64)"
-    );
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "SESSION_ENCRYPTION_KEY is required (32-byte key as 64-char hex or base64)"
+      );
+    }
+    if (!devFallbackEncryptionKey) {
+      devFallbackEncryptionKey = randomBytes(32);
+      if (!loggedDevEncryptionFallback) {
+        console.warn(
+          "[encryption] SESSION_ENCRYPTION_KEY not set — using ephemeral dev key (OAuth tokens will not survive server restart)"
+        );
+        loggedDevEncryptionFallback = true;
+      }
+    }
+    return devFallbackEncryptionKey;
   }
   if (/^[0-9a-f]{64}$/i.test(raw)) {
     return Buffer.from(raw, "hex");

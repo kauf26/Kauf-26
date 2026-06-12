@@ -38,18 +38,30 @@ function respondOAuthCallbackError(
 ): express.Response {
   const info = classifyOAuthCallbackError(error);
   logOAuthCallbackError("unified callback", error, info);
+  const details = info.message;
 
   if (wantsJsonOAuthResponse(req)) {
     return res.status(info.status).json({
       ok: false,
-      error: info.message,
+      error: "OAuth failed",
+      details,
       kind: info.kind,
       provider,
       mockMode: isMockOAuthMode(),
     });
   }
 
-  return res.redirect(oauthFailureRedirect(provider, info.message, returnTo));
+  if (returnTo === "mobile") {
+    return res.redirect(oauthFailureRedirect(provider, details, returnTo));
+  }
+
+  return res.status(info.status).json({
+    error: "OAuth failed",
+    details,
+    kind: info.kind,
+    provider,
+    mockMode: isMockOAuthMode(),
+  });
 }
 
 const router = express.Router();
@@ -75,42 +87,41 @@ router.get("/connections", async (req, res) => {
 });
 
 router.get("/callback", async (req, res) => {
-  const returnTo =
-    req.session.oauthPending?.returnTo === "mobile" ? "mobile" : "web";
-  const provider =
-    req.session.oauthPending?.provider ??
-    (() => {
-      try {
-        const state = typeof req.query.state === "string" ? req.query.state : "";
-        if (!state) return null;
-        const decoded = JSON.parse(
-          Buffer.from(state, "base64url").toString("utf8")
-        ) as { p?: OAuthProviderId };
-        return decoded.p ?? null;
-      } catch {
-        return null;
-      }
-    })();
+  let returnTo: "web" | "mobile" = "web";
+  let provider: string = "unknown";
 
   try {
+    returnTo =
+      req.session.oauthPending?.returnTo === "mobile" ? "mobile" : "web";
+    provider =
+      req.session.oauthPending?.provider ??
+      (() => {
+        try {
+          const state = typeof req.query.state === "string" ? req.query.state : "";
+          if (!state) return "unknown";
+          const decoded = JSON.parse(
+            Buffer.from(state, "base64url").toString("utf8")
+          ) as { p?: OAuthProviderId };
+          return decoded.p ?? "unknown";
+        } catch {
+          const code = typeof req.query.code === "string" ? req.query.code : "";
+          if (code.startsWith("mock_")) return code.slice("mock_".length);
+          return "unknown";
+        }
+      })();
+
     const { redirectUrl } = await handleUnifiedCallback(req);
     if (wantsJsonOAuthResponse(req)) {
       return res.status(200).json({
         ok: true,
         redirectUrl,
-        provider: provider ?? "unknown",
+        provider,
         mockMode: isMockOAuthMode(),
       });
     }
     return res.redirect(redirectUrl);
   } catch (error) {
-    return respondOAuthCallbackError(
-      req,
-      res,
-      provider ?? "unknown",
-      returnTo,
-      error
-    );
+    return respondOAuthCallbackError(req, res, provider, returnTo, error);
   }
 });
 

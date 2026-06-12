@@ -494,6 +494,41 @@ export async function handleUnifiedCallback(
   req: Request
 ): Promise<{ redirectUrl: string; provider: OAuthProviderId }> {
   const stateRaw = typeof req.query.state === "string" ? req.query.state : "";
+  const code = typeof req.query.code === "string" ? req.query.code : "";
+  const oauthError = typeof req.query.error === "string" ? req.query.error : null;
+  if (oauthError) throw new Error(oauthError);
+
+  /** MOCK_OAUTH_MODE: mock_* codes bypass session DB/encryption requirements. */
+  if (isMockOAuthMode() && code.startsWith("mock_")) {
+    let provider: OAuthProviderId | null = null;
+    try {
+      provider = decodeOAuthState(stateRaw).p;
+    } catch {
+      const fromCode = code.slice("mock_".length).toLowerCase();
+      if (isUniversalOAuthProvider(fromCode)) {
+        provider = fromCode;
+      }
+    }
+
+    const pending = resolvePendingSession(req);
+    if (!provider && pending) {
+      provider = pending.provider;
+    }
+    if (!provider || !isUniversalOAuthProvider(provider)) {
+      throw new Error("Invalid mock OAuth provider");
+    }
+
+    await exchangeCode(provider, code, pending?.userId ?? null, {
+      redirectUri: getUnifiedOAuthRedirectUri(),
+      codeVerifier: pending?.codeVerifier,
+      shopDomain: pending?.shopDomain,
+    });
+
+    const returnTo = pending?.returnTo ?? "web";
+    delete req.session.oauthPending;
+    return { redirectUrl: successRedirect(provider, returnTo), provider };
+  }
+
   let provider: OAuthProviderId;
   let decoded: EncodedOAuthState;
 
@@ -520,10 +555,6 @@ export async function handleUnifiedCallback(
     validateShopifyCallbackHmac(req);
   }
 
-  const error = typeof req.query.error === "string" ? req.query.error : null;
-  if (error) throw new Error(error);
-
-  const code = typeof req.query.code === "string" ? req.query.code : "";
   if (!code) throw new Error("Missing authorization code");
 
   const tokens = await exchangeCode(provider, code, pending.userId, {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -6,13 +6,10 @@ import {
   ScrollView,
   TouchableOpacity,
   Linking,
-  ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { HomeStackParamList, PublishOutcome } from '../types/navigation';
-import { connectMarketplaceViaServer } from '../services/serverMarketplaceOAuth';
 
 type Props = StackScreenProps<HomeStackParamList, 'PublishConfirmation'>;
 
@@ -33,10 +30,12 @@ function isEbayAuthFailure(outcome: PublishOutcome): boolean {
   const text = `${outcome.message} ${outcome.error ?? ''}`.toLowerCase();
   return (
     text.includes('401') ||
+    text.includes('invalid access token') ||
     text.includes('invalid token') ||
     text.includes('unauthorized') ||
     text.includes('oauth token') ||
     text.includes('connect ebay') ||
+    text.includes('reconnect ebay') ||
     text.includes('token missing') ||
     text.includes('token invalid') ||
     text.includes('expired')
@@ -46,28 +45,12 @@ function isEbayAuthFailure(outcome: PublishOutcome): boolean {
 export default function PublishConfirmationScreen({ route, navigation }: Props) {
   const { report } = route.params;
   const outcomes = report.outcomes ?? [];
-  const [reconnectingEbay, setReconnectingEbay] = useState(false);
   const published = outcomes.filter((o) => o.success && !o.dryRun).length;
   const dryRun = outcomes.filter((o) => o.success && o.dryRun).length;
   const failed = outcomes.filter((o) => !o.success).length;
 
-  const handleReconnectEbay = async () => {
-    setReconnectingEbay(true);
-    try {
-      const result = await connectMarketplaceViaServer('ebay');
-      if (result.ok) {
-        Alert.alert('eBay reconnected', 'Your eBay account is linked again. Retry publishing.');
-      } else {
-        Alert.alert('Reconnect failed', result.message);
-      }
-    } catch (err) {
-      Alert.alert(
-        'Reconnect failed',
-        err instanceof Error ? err.message : 'Could not reconnect eBay'
-      );
-    } finally {
-      setReconnectingEbay(false);
-    }
+  const handleReconnectEbay = () => {
+    navigation.getParent()?.navigate('Connections', { reconnectEbay: true });
   };
 
   if (outcomes.length === 0) {
@@ -121,14 +104,9 @@ export default function PublishConfirmationScreen({ route, navigation }: Props) 
               {showReconnect ? (
                 <TouchableOpacity
                   style={styles.reconnectButton}
-                  onPress={() => void handleReconnectEbay()}
-                  disabled={reconnectingEbay}
+                  onPress={handleReconnectEbay}
                 >
-                  {reconnectingEbay ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <Text style={styles.reconnectButtonText}>Reconnect eBay</Text>
-                  )}
+                  <Text style={styles.reconnectButtonText}>Reconnect eBay</Text>
                 </TouchableOpacity>
               ) : null}
               {outcome.listingUrl ? (

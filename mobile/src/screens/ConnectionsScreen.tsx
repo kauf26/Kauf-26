@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import {
   View,
   Text,
@@ -37,10 +38,14 @@ import {
   loadShopDomain,
 } from '../services/secureTokenStore';
 import type { ProviderDisplayMeta } from '../types/marketplaceConnect';
+import type { MainTabParamList } from '../types/navigation';
 
 type ConnectFields = Record<string, { shopDomain?: string; siteUrl?: string; baseUrl?: string }>;
 
 export default function ConnectionsScreen() {
+  const route = useRoute<RouteProp<MainTabParamList, 'Connections'>>();
+  const navigation = useNavigation();
+  const reconnectEbayStarted = useRef(false);
   const [providers, setProviders] = useState<ProviderDisplayMeta[]>([]);
   const [statuses, setStatuses] = useState<Record<string, { ok: boolean; message: string }>>({});
   const [loading, setLoading] = useState<string | null>(null);
@@ -140,6 +145,55 @@ export default function ConnectionsScreen() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    if (!route.params?.reconnectEbay || reconnectEbayStarted.current || providers.length === 0) {
+      return;
+    }
+    const ebay = providers.find((p) => p.id === 'ebay' && p.oauthSupported);
+    if (!ebay) return;
+
+    reconnectEbayStarted.current = true;
+    navigation.setParams({ reconnectEbay: undefined });
+
+    let cancelled = false;
+    void (async () => {
+      setLoading('ebay');
+      setOauthNotice(null);
+      try {
+        const result = await connectMarketplaceViaServer('ebay');
+        if (cancelled) return;
+        if (!result.ok) {
+          throw new Error(result.message);
+        }
+        Alert.alert('eBay reconnected', result.message);
+        await refresh();
+      } catch (err) {
+        if (cancelled) return;
+        if (isOAuthCancelledError(err)) {
+          setOauthNotice({
+            kind: 'cancel',
+            platform: 'ebay',
+            message:
+              'Connection cancelled. Tap Connect to try again — your password is never stored in this app.',
+          });
+          return;
+        }
+        const message = err instanceof Error ? err.message : 'Unknown error';
+        setOauthNotice({
+          kind: 'error',
+          platform: 'ebay',
+          message: `${message} Tap Connect to try again.`,
+        });
+      } finally {
+        if (!cancelled) setLoading(null);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [route.params?.reconnectEbay, providers, navigation, refresh]);
 
   const persistProfile = async (next: OnboardingProfile) => {
     setProfile(next);

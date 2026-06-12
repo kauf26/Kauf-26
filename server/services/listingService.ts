@@ -4,10 +4,11 @@ import {
   type OAuthProviderId,
 } from "./oauthService";
 import { hasConnection } from "./oauthConnectionStorage";
+import type { ListingPolicyContext } from "../../shared/marketplaceCategorySupport";
 import {
-  filterSupportedMarketplaces,
-  type ListingPolicyContext,
-} from "../../shared/marketplaceCategorySupport";
+  assertMarketplacesAllowListing,
+  filterAllowedMarketplaces,
+} from "../../shared/marketplaceKeywordBlocker";
 import {
   logPreListingPolicyWarnings,
   validatePreListingPolicies,
@@ -70,22 +71,19 @@ export function extractCategoryFromDraftAttributes(
   ).trim();
 }
 
-/** Validate marketplace IDs against product category before publish. Logs warn-only policy hits. */
+/** Validate marketplace IDs against category + keyword rules before publish. */
 export function validateMarketplacesForProductCategory(
   marketplaceIds: readonly string[],
   category: string | undefined | null,
   context?: ListingPolicyContext
 ): void {
-  const { warnings, rejected } = validatePreListingPolicies(
+  const { warnings } = validatePreListingPolicies(
     marketplaceIds,
     category,
     context
   );
   logPreListingPolicyWarnings(warnings);
-
-  if (rejected.length > 0) {
-    throw new Error(rejected[0].reason);
-  }
+  assertMarketplacesAllowListing(marketplaceIds, category, context);
 }
 
 /** Pre-listing validation with structured warn vs reject results. */
@@ -105,5 +103,5 @@ export function filterMarketplacesForProductCategory(
   category: string | undefined | null,
   context?: ListingPolicyContext
 ): string[] {
-  return filterSupportedMarketplaces(marketplaceIds, category, context);
+  return filterAllowedMarketplaces(marketplaceIds, category, context);
 }
