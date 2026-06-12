@@ -1,27 +1,43 @@
 import { API_BASE_URL } from './config';
 
-const JSON_CONTENT_TYPES = /^(application\/(json|.*\+json)|text\/json)/i;
-
 export class ApiResponseError extends Error {
   readonly status: number;
   readonly isHtmlResponse: boolean;
   readonly isNetworkError: boolean;
+  readonly bodyPreview: string;
+  readonly url?: string;
 
   constructor(
     message: string,
-    options: { status?: number; isHtmlResponse?: boolean; isNetworkError?: boolean } = {}
+    options: {
+      status?: number;
+      isHtmlResponse?: boolean;
+      isNetworkError?: boolean;
+      bodyPreview?: string;
+      url?: string;
+    } = {}
   ) {
     super(message);
     this.name = 'ApiResponseError';
     this.status = options.status ?? 0;
     this.isHtmlResponse = options.isHtmlResponse ?? false;
     this.isNetworkError = options.isNetworkError ?? false;
+    this.bodyPreview = options.bodyPreview ?? '';
+    this.url = options.url;
   }
 }
 
 function looksLikeHtml(text: string): boolean {
   const trimmed = text.trimStart();
   return trimmed.startsWith('<!') || trimmed.startsWith('<html') || trimmed.startsWith('<HTML');
+}
+
+function isApplicationJson(contentType: string): boolean {
+  return /application\/json/i.test(contentType);
+}
+
+function bodyPreview(text: string, max = 200): string {
+  return text.slice(0, max).replace(/\s+/g, ' ').trim();
 }
 
 function apiReachabilityHint(): string {
@@ -36,43 +52,69 @@ export async function readResponseBody(response: Response): Promise<string> {
   }
 }
 
+function logNonJsonResponse(
+  status: number,
+  contentType: string,
+  preview: string
+): void {
+  // @ts-ignore - __DEV__ is defined by React Native
+  if (typeof __DEV__ !== 'undefined' && __DEV__) {
+    console.warn(
+      `[API] Non-JSON response (status ${status}, Content-Type: ${contentType || 'none'}):`,
+      preview
+    );
+  }
+}
+
 export async function parseJsonResponse<T>(
   response: Response,
   bodyText?: string
 ): Promise<T> {
   const text = bodyText ?? (await readResponseBody(response));
   const contentType = response.headers.get('content-type') ?? '';
-  const isJson =
-    JSON_CONTENT_TYPES.test(contentType) ||
-    (text.length > 0 && !looksLikeHtml(text));
+  const status = response.status;
+  const preview = bodyPreview(text);
 
-  if (!isJson) {
-    if (looksLikeHtml(text)) {
-      throw new ApiResponseError(
-        `Server returned a web page instead of JSON. ${apiReachabilityHint()}`,
-        { status: response.status, isHtmlResponse: true }
-      );
+  if (!isApplicationJson(contentType)) {
+    logNonJsonResponse(status, contentType, preview);
+
+    if (looksLikeHtml(text) || /text\/html/i.test(contentType)) {
+      throw new ApiResponseError(`Server returned HTML (status ${status}). Expected JSON.`, {
+        status,
+        isHtmlResponse: true,
+        bodyPreview: preview,
+      });
     }
-    if (!text.trim()) {
-      throw new ApiResponseError(
-        `Empty response from server (${response.status}). ${apiReachabilityHint()}`,
-        { status: response.status }
-      );
-    }
+
     throw new ApiResponseError(
-      `Unexpected response format (${response.status}). ${apiReachabilityHint()}`,
-      { status: response.status }
+      `Server returned non-JSON content (status ${status}, Content-Type: ${contentType || 'none'}). Expected JSON.`,
+      { status, bodyPreview: preview }
     );
   }
 
   try {
     return JSON.parse(text) as T;
   } catch {
-    throw new ApiResponseError(
-      `Invalid JSON from server (${response.status}). ${apiReachabilityHint()}`,
-      { status: response.status }
-    );
+    logNonJsonResponse(status, contentType, preview);
+    throw new ApiResponseError(`Invalid JSON from server (status ${status}). Expected JSON.`, {
+      status,
+      bodyPreview: preview,
+    });
   }
+}
+
+function enrichFetchError(error: ApiResponseError, url: string): ApiResponseError {
+  const previewSuffix = error.bodyPreview ? ` Response preview: "${error.bodyPreview}"` : '';
+  return new ApiResponseError(
+    `${error.message} Request: ${url}. Status: ${error.status}.${previewSuffix} ${apiReachabilityHint()}`,
+    {
+      status: error.status,
+      isHtmlResponse: error.isHtmlResponse,
+      isNetworkError: error.isNetworkError,
+      bodyPreview: error.bodyPreview,
+      url,
+    }
+  );
 }
 
 export async function fetchJson<T>(
@@ -87,10 +129,12 @@ export async function fetchJson<T>(
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     try {
       const response = await fetch(url, options);
-      const data = await parseJsonResponse<T>(response);
+      const bodyText = await readResponseBody(response);
+      const data = await parseJsonResponse<T>(response, bodyText);
       return { data, response };
     } catch (error) {
       lastError = error;
+
       const isRetryableNetwork =
         error instanceof TypeError ||
         (error instanceof ApiResponseError && error.isNetworkError);
@@ -99,6 +143,18 @@ export async function fetchJson<T>(
         await new Promise((resolve) => setTimeout(resolve, retryDelayMs * (attempt + 1)));
         continue;
       }
+
+      if (error instanceof ApiResponseError) {
+        throw enrichFetchError(error, url);
+      }
+
+      if (error instanceof TypeError) {
+        throw new ApiResponseError(`Could not reach the server. Request: ${url}. ${apiReachabilityHint()}`, {
+          isNetworkError: true,
+          url,
+        });
+      }
+
       throw error;
     }
   }
@@ -108,10 +164,13 @@ export async function fetchJson<T>(
 
 export function userFacingApiError(error: unknown, fallback: string): string {
   if (error instanceof ApiResponseError) {
-    return error.message;
+    if (error.isHtmlResponse || error.isNetworkError) {
+      return fallback;
+    }
+    return error.message || fallback;
   }
   if (error instanceof TypeError) {
-    return `Could not reach the server. ${apiReachabilityHint()}`;
+    return fallback;
   }
   if (error instanceof Error && error.message.trim()) {
     return error.message;

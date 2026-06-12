@@ -3,7 +3,7 @@ import {
   MAX_DRAFT_IMAGES,
 } from '../../../shared/draftImages';
 import { API_BASE_URL } from './config';
-import { fetchJson, parseJsonResponse } from './httpResponse';
+import { fetchJson, parseJsonResponse, ApiResponseError } from './httpResponse';
 
 export { MAX_ADD_PHOTOS_PER_REQUEST, MAX_DRAFT_IMAGES };
 
@@ -78,34 +78,48 @@ export async function addPhotosToDraftMobile(
   return data;
 }
 
+const SAVE_DRAFT_USER_MESSAGE =
+  'Failed to save draft. Check your connection or login status.';
+
 export async function saveDraftSnapshotMobile(input: {
   draftId?: number | null;
   title: string;
   images: string[];
   attributes: Record<string, unknown>;
 }): Promise<number> {
-  const { data: saved, response: res } = await fetchJson<
-    ProductDraftRecord & { error?: string }
-  >(
-    `${API_BASE_URL}/api/drafts`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        id: input.draftId ?? undefined,
-        title: input.title,
-        status: 'draft',
-        images: input.images,
-        attributes: input.attributes,
-      }),
-    },
-    { retries: 1, retryDelayMs: 600 }
-  );
+  try {
+    const { data: saved, response: res } = await fetchJson<
+      ProductDraftRecord & { error?: string }
+    >(
+      `${API_BASE_URL}/api/drafts`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          id: input.draftId ?? undefined,
+          title: input.title,
+          status: 'draft',
+          images: input.images,
+          attributes: input.attributes,
+        }),
+      },
+      { retries: 1, retryDelayMs: 600 }
+    );
 
-  if (!res.ok || saved.id == null) {
-    throw new Error(saved.error ?? `Failed to save draft (${res.status})`);
+    if (!res.ok || saved.id == null) {
+      throw new Error(saved.error ?? `Failed to save draft (${res.status})`);
+    }
+    return saved.id;
+  } catch (error) {
+    // @ts-ignore - __DEV__ is defined by React Native
+    if (typeof __DEV__ !== 'undefined' && __DEV__) {
+      console.warn('[saveDraftSnapshotMobile]', error);
+    }
+    if (error instanceof ApiResponseError || error instanceof TypeError) {
+      throw new Error(SAVE_DRAFT_USER_MESSAGE);
+    }
+    throw error instanceof Error ? error : new Error(SAVE_DRAFT_USER_MESSAGE);
   }
-  return saved.id;
 }
 
 export function draftImagesFromRecord(draft: ProductDraftRecord): string[] {
