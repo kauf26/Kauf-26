@@ -1,14 +1,12 @@
 import { fetchOptionalEndpoint } from "./stableFetch";
+import type { PublishedListing } from "../../shared/publishedListings";
 
-export type DashboardListing = {
-  id: number;
-  marketplace: string;
-  status: string;
-};
+export type { PublishedListing };
+export type DashboardListing = PublishedListing;
 
 export const LISTINGS_QUERY_KEY = ["listings"] as const;
 
-export function fetchListings(): Promise<DashboardListing[]> {
+export function fetchListings(): Promise<PublishedListing[]> {
   return fetchOptionalEndpoint(
     LISTINGS_QUERY_KEY.join("/"),
     "/api/listings",

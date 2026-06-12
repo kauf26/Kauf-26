@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,20 +8,15 @@ import {
   Image,
   RefreshControl,
   Alert,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { API_BASE_URL } from '../services/api';
-
-interface Listing {
-  id: number;
-  title: string;
-  price: number;
-  imageUrl?: string;
-  marketplace: string;
-  status: string;
-  createdAt: string;
-}
+import {
+  fetchPublishedListings,
+  type PublishedListing,
+} from '../services/publishedListings';
+import { truncateListingUrl } from '../../../shared/marketplaceListingUrl';
 
 const MARKETPLACE_COLORS: Record<string, string> = {
   aliexpress: '#e62e04',
@@ -53,54 +48,40 @@ const MARKETPLACE_COLORS: Record<string, string> = {
 };
 
 export default function ListingsScreen() {
-  const [listings, setListings] = useState<Listing[]>([]);
+  const [listings, setListings] = useState<PublishedListing[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchListings();
+  const loadListings = useCallback(async () => {
+    try {
+      const data = await fetchPublishedListings();
+      setListings(data);
+    } catch (error) {
+      console.error('Failed to fetch published listings', error);
+    }
   }, []);
 
-  const fetchListings = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/listings`);
-      if (response.ok) {
-        const data = await response.json();
-        setListings(data);
-      }
-    } catch (error) {
-      console.error('Failed to fetch listings');
-    }
-  };
+  useEffect(() => {
+    void loadListings();
+  }, [loadListings]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchListings();
+    await loadListings();
     setRefreshing(false);
   };
 
-  const handleDelete = (id: number) => {
-    Alert.alert(
-      'Delete Listing',
-      'Are you sure you want to delete this listing?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await fetch(`${API_BASE_URL}/api/listings/${id}`, {
-                method: 'DELETE',
-              });
-              setListings((prev) => prev.filter((l) => l.id !== id));
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete listing');
-            }
-          },
-        },
-      ]
-    );
+  const openListingUrl = async (url: string) => {
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        Alert.alert('Cannot open link', url);
+        return;
+      }
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert('Cannot open link', 'Please try again in your browser.');
+    }
   };
 
   const filteredListings = filter
@@ -112,7 +93,7 @@ export default function ListingsScreen() {
     return acc;
   }, {} as Record<string, number>);
 
-  const renderListing = ({ item }: { item: Listing }) => (
+  const renderListing = ({ item }: { item: PublishedListing }) => (
     <View style={styles.listingCard}>
       {item.imageUrl ? (
         <Image source={{ uri: item.imageUrl }} style={styles.listingImage} />
@@ -122,10 +103,12 @@ export default function ListingsScreen() {
         </View>
       )}
       <View style={styles.listingContent}>
-        <Text style={styles.listingTitle} numberOfLines={1}>
+        <Text style={styles.listingTitle} numberOfLines={2}>
           {item.title}
         </Text>
-        <Text style={styles.listingPrice}>${item.price.toFixed(2)}</Text>
+        <Text style={styles.listingPrice}>
+          {item.currency} {item.price}
+        </Text>
         <View style={styles.listingMeta}>
           <View
             style={[
@@ -144,13 +127,32 @@ export default function ListingsScreen() {
             <Text style={styles.statusText}>{item.status}</Text>
           </View>
         </View>
+        {item.listingUrl ? (
+          <TouchableOpacity
+            style={styles.viewListingButton}
+            activeOpacity={0.65}
+            onPress={() => void openListingUrl(item.listingUrl!)}
+          >
+            <Ionicons name="open-outline" size={14} color="#93c5fd" />
+            <Text style={styles.viewListingText}>View live listing</Text>
+          </TouchableOpacity>
+        ) : null}
+        {item.listingUrl ? (
+          <TouchableOpacity
+            activeOpacity={0.65}
+            onPress={() => void openListingUrl(item.listingUrl!)}
+          >
+            <Text style={styles.listingUrlText} numberOfLines={1}>
+              {truncateListingUrl(item.listingUrl, 42)}
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <Text style={styles.listingUrlMissing}>
+            Live URL unavailable
+            {item.marketplaceListingId ? ` · ID ${item.marketplaceListingId}` : ''}
+          </Text>
+        )}
       </View>
-      <TouchableOpacity
-        style={styles.deleteButton}
-        onPress={() => handleDelete(item.id)}
-      >
-        <Ionicons name="trash-outline" size={20} color="#ef4444" />
-      </TouchableOpacity>
     </View>
   );
 
@@ -175,9 +177,9 @@ export default function ListingsScreen() {
         ListEmptyComponent={
           <View style={styles.emptyState}>
             <Ionicons name="list-outline" size={48} color="#6b7280" />
-            <Text style={styles.emptyText}>No listings yet</Text>
+            <Text style={styles.emptyText}>No published listings yet</Text>
             <Text style={styles.emptySubtext}>
-              Upload a product to create your first listing
+              Publish a product to marketplaces to see live links here
             </Text>
           </View>
         }
@@ -271,7 +273,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     marginBottom: 12,
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   listingImage: {
     width: 60,
@@ -306,6 +308,7 @@ const styles = StyleSheet.create({
   listingMeta: {
     flexDirection: 'row',
     gap: 8,
+    marginBottom: 8,
   },
   marketplaceBadge: {
     paddingHorizontal: 8,
@@ -334,8 +337,28 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textTransform: 'capitalize',
   },
-  deleteButton: {
-    padding: 8,
+  viewListingButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    marginBottom: 4,
+  },
+  viewListingText: {
+    color: '#93c5fd',
+    fontSize: 13,
+    fontWeight: '700',
+    textDecorationLine: 'underline',
+  },
+  listingUrlText: {
+    color: '#6b7280',
+    fontSize: 12,
+    textDecorationLine: 'underline',
+  },
+  listingUrlMissing: {
+    color: '#6b7280',
+    fontSize: 12,
+    fontStyle: 'italic',
   },
   emptyState: {
     alignItems: 'center',
@@ -351,5 +374,7 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     fontSize: 14,
     marginTop: 8,
+    textAlign: 'center',
+    paddingHorizontal: 24,
   },
 });

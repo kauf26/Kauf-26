@@ -66,7 +66,7 @@ export default function MainNavigator() {
       <Tab.Screen
         name="Listings"
         component={ListingsScreen}
-        options={{ title: 'Listings' }}
+        options={{ title: 'Published Products' }}
       />
       <Tab.Screen
         name="Inventory"

@@ -6,6 +6,7 @@ import {
   products,
   sales,
 } from "../shared/schema";
+import { fetchPublishedListings } from "./services/publishedListingsService";
 import {
   FULFILLMENT_STATUSES,
   PAYMENT_STATUSES,
@@ -84,17 +85,7 @@ function serializeSale(row: {
 
 router.get("/listings", async (_req, res) => {
   try {
-    const rows = await db
-      .select({
-        id: listings.id,
-        marketplace: listings.marketplace,
-        status: listings.status,
-        productId: listings.productId,
-        translatedTitle: listings.translatedTitle,
-      })
-      .from(listings)
-      .orderBy(desc(listings.createdAt));
-
+    const rows = await fetchPublishedListings();
     return res.status(200).json(rows);
   } catch (error) {
     console.error("[KAUF26] Error fetching listings:", error);
