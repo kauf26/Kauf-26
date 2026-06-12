@@ -519,8 +519,7 @@ export default function IdentifyScreen() {
 
           <View style={styles.promoFooter}>
             <TrialBanner style={styles.promoTrial} variant="uppercase" />
-            <Text style={styles.promoTagline}>selling online made easy</Text>
-            <Text style={styles.promoSold}>SOLD with KAUF–AI</Text>
+            <Text style={styles.promoSold}>Sold with KAUF</Text>
           </View>
         </View>
       </ScrollView>
@@ -779,9 +778,10 @@ const styles = StyleSheet.create({
   promoFooter: {
     width: '100%',
     alignItems: 'center',
-    marginTop: 30,
+    marginTop: 20,
     paddingHorizontal: 12,
-    paddingBottom: 10,
+    paddingBottom: 4,
+    gap: 6,
   },
   promoTrial: {
     fontSize: 13,
@@ -791,19 +791,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     lineHeight: 18,
   },
-  promoTagline: {
-    fontSize: 14,
-    fontWeight: '400',
-    color: PALETTE.body,
-    textAlign: 'center',
-    marginTop: 6,
-  },
   promoSold: {
     fontSize: 14,
     fontWeight: '600',
     color: PALETTE.purple,
     textAlign: 'center',
-    marginTop: 12,
   },
   buttonDisabled: { opacity: 0.4 },
   cameraContainer: { flex: 1, backgroundColor: '#000' },
