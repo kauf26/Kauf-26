@@ -28,6 +28,7 @@ import {
   type SaleTimelineFilter,
 } from '../../../shared/saleStatus';
 import ShippingLabelScreen from './ShippingLabelScreen';
+import OrderPrintLabelButton from '../components/OrderPrintLabelButton';
 
 const STATUS_FILTERS = Object.keys(SALE_STATUS_FILTER_LABELS) as SaleStatusFilter[];
 
@@ -183,9 +184,7 @@ export default function SalesScreen() {
           )}
         </View>
 
-        <TouchableOpacity style={styles.labelButton} onPress={() => setShippingSale(item)}>
-          <Text style={styles.labelButtonText}>Create Shipping Label</Text>
-        </TouchableOpacity>
+        <OrderPrintLabelButton sale={item} onPress={setShippingSale} />
         <Text style={styles.saleDate}>
           {item.saleDate ? new Date(item.saleDate).toLocaleDateString() : '—'}
         </Text>

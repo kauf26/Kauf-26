@@ -32,6 +32,7 @@ import {
   type ShippingRate,
 } from '../services/shipping';
 import { printShippingLabelPdfUri } from '../services/labelPrint';
+import { fetchSaleLabelContext } from '../services/shippingLabelContext';
 import {
   formatAddressBlock,
   formatCarrierService,
@@ -149,7 +150,31 @@ export default function ShippingLabelScreen({ sale, onClose, onComplete }: Props
   }, []);
 
   useEffect(() => {
-    setToAddress(parseBuyerAddress(sale.buyerInfo));
+    let cancelled = false;
+    void fetchSaleLabelContext(sale.id)
+      .then((ctx) => {
+        if (cancelled) return;
+        setToAddress(ctx.toAddress);
+        setFromAddress((prev) => mergeShipFromAddress(prev, ctx.fromAddress));
+        if (ctx.defaultPackage.weightLbs != null) {
+          setWeightLbs(String(ctx.defaultPackage.weightLbs));
+        }
+        if (ctx.defaultPackage.lengthIn != null) {
+          setLengthIn(String(ctx.defaultPackage.lengthIn));
+        }
+        if (ctx.defaultPackage.widthIn != null) {
+          setWidthIn(String(ctx.defaultPackage.widthIn));
+        }
+        if (ctx.defaultPackage.heightIn != null) {
+          setHeightIn(String(ctx.defaultPackage.heightIn));
+        }
+      })
+      .catch(() => {
+        setToAddress(parseBuyerAddress(sale.buyerInfo));
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [sale.id, sale.buyerInfo]);
 
   useEffect(() => {

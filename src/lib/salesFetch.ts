@@ -5,6 +5,7 @@ import type {
 } from "../../shared/saleStatus";
 import { mergeShipFromAddress } from "../../shared/shippingValidation";
 import { SHIP_FROM_STORAGE_KEY, type StoredShipFromAddress } from "../../shared/shippingStorage";
+import { parseBuyerAddress as parseBuyerAddressShared } from "../../shared/shippingAddresses";
 
 export {
   getPrintLabelBlockReason,
@@ -232,15 +233,7 @@ export async function generateShippingLabel(input: {
 }
 
 export function parseBuyerAddress(buyerInfo: string | null | undefined): ShippingAddress {
-  if (!buyerInfo?.trim()) {
-    return { name: "Buyer", line1: "", city: "", state: "", postalCode: "", country: "US" };
-  }
-  try {
-    const parsed = JSON.parse(buyerInfo) as ShippingAddress;
-    return parsed;
-  } catch {
-    return { name: buyerInfo, line1: "", city: "", state: "", postalCode: "", country: "US" };
-  }
+  return parseBuyerAddressShared(buyerInfo);
 }
 
 export const DEFAULT_FROM_ADDRESS: ShippingAddress = {

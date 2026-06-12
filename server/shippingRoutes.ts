@@ -1,7 +1,7 @@
 import express from "express";
 import { db } from "./db";
-import { sales, listings, products } from "../shared/schema";
-import { eq } from "drizzle-orm";
+import { sales, listings, products, shippingLabels } from "../shared/schema";
+import { desc, eq } from "drizzle-orm";
 import {
   createShippingLabelRecord,
   listShippingLabels,
@@ -20,6 +20,7 @@ import {
   isShippingWeightValid,
 } from "../shared/shippingValidation";
 import { sendShippingLabelEmail } from "./services/shippingEmailService";
+import { parseBuyerAddress } from "../shared/shippingAddresses";
 
 const router = express.Router();
 
@@ -76,6 +77,65 @@ function normalizeLabelPackage(body: Record<string, unknown>): PackageDetailsJso
     ),
   };
 }
+
+router.get("/sales/:saleId/label-context", async (req, res) => {
+  try {
+    const saleId = Number(req.params.saleId);
+    if (!Number.isFinite(saleId) || saleId <= 0) {
+      return res.status(400).json({ error: "Invalid sale ID." });
+    }
+
+    const [saleRow] = await db
+      .select({
+        id: sales.id,
+        buyerInfo: sales.buyerInfo,
+        productTitle: products.name,
+        marketplace: listings.platform,
+      })
+      .from(sales)
+      .innerJoin(listings, eq(sales.listingId, listings.id))
+      .innerJoin(products, eq(listings.productId, products.id))
+      .where(eq(sales.id, saleId));
+
+    if (!saleRow) {
+      return res.status(404).json({ error: "Sale not found." });
+    }
+
+    const existing = await db
+      .select({
+        trackingNumber: shippingLabels.trackingNumber,
+        labelPdfUrl: shippingLabels.labelPdfUrl,
+        service: shippingLabels.service,
+      })
+      .from(shippingLabels)
+      .where(eq(shippingLabels.saleId, saleId))
+      .orderBy(desc(shippingLabels.createdAt))
+      .limit(1);
+
+    const fromAddress = defaultFromAddress();
+    const toAddress = parseBuyerAddress(saleRow.buyerInfo);
+
+    return res.status(200).json({
+      saleId,
+      productTitle: saleRow.productTitle,
+      marketplace: saleRow.marketplace,
+      buyerInfo: saleRow.buyerInfo,
+      fromAddress,
+      toAddress,
+      defaultPackage: {
+        weightLbs: 1,
+        weightOz: 0,
+        lengthIn: 10,
+        widthIn: 10,
+        heightIn: 10,
+      },
+      existingLabel: existing[0] ?? null,
+    });
+  } catch (error) {
+    console.error("[KAUF26] Error loading sale label context:", error);
+    return res.status(500).json({ error: "Failed to load sale label context" });
+  }
+});
 
 router.post("/rates", async (req, res) => {
   try {

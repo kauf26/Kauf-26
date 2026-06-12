@@ -22,7 +22,7 @@ import {
   type SaleTimelineFilter,
 } from "../../shared/saleStatus";
 import AppTabNav from "@/components/AppTabNav";
-import { Link } from "wouter";
+import { PrintShippingLabelButton } from "@/components/PrintShippingLabelButton";
 import {
   Loader2,
   DollarSign,
@@ -31,7 +31,6 @@ import {
   CreditCard,
   Package,
   Truck,
-  Printer,
 } from "lucide-react";
 
 function paymentBadgeVariant(
@@ -410,12 +409,8 @@ function SaleCard({
               Mark Accepted
             </Button>
           )}
-          <Button size="sm" variant="secondary" asChild>
-            <Link href={`/dashboard/shipping?saleId=${sale.id}`}>
-              <Printer className="w-3 h-3 mr-1" />
-              Print Label
-            </Link>
-          </Button>
+          <PrintShippingLabelButton saleId={sale.id} mode="quick" />
+          <PrintShippingLabelButton saleId={sale.id} mode="wizard" variant="outline" />
         </div>
 
         {(sale.shippedAt || sale.deliveredAt || sale.acceptedAt) && (

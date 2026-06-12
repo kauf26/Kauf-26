@@ -25,6 +25,10 @@ import {
 import { Loader2, Package, Printer, Info } from "lucide-react";
 import { ShippingLabelSummary } from "@/components/ShippingLabelSummary";
 import { printShippingLabelPdf } from "@/lib/printShippingLabel";
+import {
+  downloadShippingLabelPdf,
+  shippingLabelContentFromApiResponse,
+} from "@/lib/shippingLabelPdfClient";
 
 function readSaleIdFromSearch(): number | null {
   const params = new URLSearchParams(window.location.search);
@@ -268,6 +272,26 @@ export default function ShippingLabelsPage() {
           selectedRate?.deliveryDays ??
           null
       );
+
+      const pdfContent = shippingLabelContentFromApiResponse({
+        fromAddress: result.fromAddress ?? resolvedFrom,
+        toAddress: result.toAddress ?? toAddress,
+        packageDetails: {
+          weightLbs: parseFloat(weightLbs) || 1,
+          lengthIn: parseFloat(lengthIn) || 10,
+          widthIn: parseFloat(widthIn) || 10,
+          heightIn: parseFloat(heightIn) || 10,
+        },
+        carrier: result.carrier ?? selectedRate?.carrier,
+        service: result.service ?? selectedService,
+        trackingNumber: result.trackingNumber,
+        estimatedDelivery:
+          result.estimatedDelivery ??
+          selectedRate?.deliveryDate ??
+          selectedRate?.deliveryDays,
+      });
+      downloadShippingLabelPdf(pdfContent);
+
       toast({ title: "Label generated", description: `Tracking ${result.trackingNumber}` });
     } catch (err) {
       toast({
