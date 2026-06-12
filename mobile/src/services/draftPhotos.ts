@@ -78,15 +78,16 @@ export async function addPhotosToDraftMobile(
   return data;
 }
 
-const SAVE_DRAFT_USER_MESSAGE =
-  'Failed to save draft. Check your connection or login status.';
-
-export async function saveDraftSnapshotMobile(input: {
+export type SaveDraftSnapshotInput = {
   draftId?: number | null;
   title: string;
   images: string[];
   attributes: Record<string, unknown>;
-}): Promise<number> {
+};
+
+export async function saveDraftSnapshotMobile(
+  input: SaveDraftSnapshotInput
+): Promise<ProductDraftRecord> {
   try {
     const { data: saved, response: res } = await fetchJson<
       ProductDraftRecord & { error?: string }
@@ -106,19 +107,45 @@ export async function saveDraftSnapshotMobile(input: {
       { retries: 1, retryDelayMs: 600 }
     );
 
+    if (res.status === 413) {
+      throw new Error('PayloadTooLarge');
+    }
+    if (saved.error) {
+      throw new Error(saved.error);
+    }
     if (!res.ok || saved.id == null) {
       throw new Error(saved.error ?? `Failed to save draft (${res.status})`);
     }
-    return saved.id;
-  } catch (error) {
+    return saved;
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+
+    if (
+      message.includes('413') ||
+      message.includes('PayloadTooLarge') ||
+      (err instanceof ApiResponseError && err.status === 413)
+    ) {
+      throw new Error(
+        'Draft is too large (over 50MB). Please use smaller images or reduce the number of images.'
+      );
+    }
+    if (
+      message.includes('HTML') ||
+      message.includes('Expected JSON') ||
+      (err instanceof ApiResponseError && err.isHtmlResponse) ||
+      err instanceof TypeError ||
+      (err instanceof ApiResponseError && err.isNetworkError)
+    ) {
+      throw new Error(
+        'Server error – unable to save draft. Please check your connection or login status.'
+      );
+    }
+
     // @ts-ignore - __DEV__ is defined by React Native
     if (typeof __DEV__ !== 'undefined' && __DEV__) {
-      console.warn('[saveDraftSnapshotMobile]', error);
+      console.warn('[saveDraftSnapshotMobile]', err);
     }
-    if (error instanceof ApiResponseError || error instanceof TypeError) {
-      throw new Error(SAVE_DRAFT_USER_MESSAGE);
-    }
-    throw error instanceof Error ? error : new Error(SAVE_DRAFT_USER_MESSAGE);
+    throw new Error(`Failed to save draft: ${message}`);
   }
 }
 

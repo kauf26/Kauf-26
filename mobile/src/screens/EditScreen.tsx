@@ -222,16 +222,16 @@ export default function EditScreen({ route, navigation }: Props) {
           ? [previewUri]
           : [];
 
-      const savedDraftId = await saveDraftSnapshotMobile({
+      const savedDraft = await saveDraftSnapshotMobile({
         draftId,
         title: title.trim() || 'Untitled draft',
         images,
         attributes: buildDraftAttributes(images),
       });
-      setDraftId(savedDraftId);
+      setDraftId(savedDraft.id);
 
       navigation.navigate('SelectMarketplaces', {
-        draftId: savedDraftId,
+        draftId: savedDraft.id,
         listing: {
           title: title.trim(),
           description: description.trim(),

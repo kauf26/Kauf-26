@@ -198,7 +198,7 @@ export default function HomeScreen() {
   const ensureDraftId = async (): Promise<number> => {
     if (draftId != null) return draftId;
     const images = galleryImages.length > 0 ? galleryImages : image ? [image] : [];
-    const id = await saveDraftSnapshotMobile({
+    const saved = await saveDraftSnapshotMobile({
       draftId,
       title: title || 'Untitled draft',
       images,
@@ -209,8 +209,8 @@ export default function HomeScreen() {
         recommendedPrice: parseFloat(price) || 0,
       },
     });
-    setDraftId(id);
-    return id;
+    setDraftId(saved.id);
+    return saved.id;
   };
 
   const categoryContext = useMemo(
