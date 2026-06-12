@@ -68,6 +68,11 @@ export async function loadPlatformTokens(
 
 export async function deletePlatformTokens(marketplace: string): Promise<void> {
   await SecureStore.deleteItemAsync(key(marketplace, 'bundle'));
+  try {
+    await SecureStore.deleteItemAsync(legacyKey(marketplace, 'bundle'));
+  } catch {
+    // Legacy key format was invalid on this platform
+  }
 }
 
 export async function hasPlatformTokens(marketplace: string): Promise<boolean> {

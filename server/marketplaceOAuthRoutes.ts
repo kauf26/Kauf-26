@@ -56,7 +56,7 @@ router.get("/:marketplace/authorize", (req, res) => {
 router.get("/:marketplace/callback", async (req, res) => {
   const marketplace = String(req.params.marketplace).toLowerCase();
   if (!isUniversalOAuthProvider(marketplace)) {
-    return res.status(400).send("Unsupported marketplace");
+    return res.status(400).json({ error: "Unsupported marketplace" });
   }
 
   const returnTo =
@@ -68,7 +68,15 @@ router.get("/:marketplace/callback", async (req, res) => {
   } catch (error) {
     const info = classifyOAuthCallbackError(error);
     logOAuthCallbackError(`${marketplace} callback`, error, info);
-    return res.redirect(oauthFailureRedirect(marketplace, info.message, returnTo));
+    if (returnTo === "mobile") {
+      return res.redirect(oauthFailureRedirect(marketplace, info.message, returnTo));
+    }
+    return res.status(info.status).json({
+      error: "OAuth failed",
+      details: info.message,
+      kind: info.kind,
+      provider: marketplace,
+    });
   }
 });
 

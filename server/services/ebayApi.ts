@@ -22,10 +22,14 @@ export type MarketplaceConnectionResult = {
   detail?: unknown;
 };
 
-export class EbayAuthError extends Error {
-  readonly code = "EBAY_INVALID_ACCESS_TOKEN";
+export const EBAY_TOKEN_EXPIRED = "EBAY_TOKEN_EXPIRED";
 
-  constructor(message = "Invalid access token — reconnect eBay in Connections") {
+export class EbayAuthError extends Error {
+  readonly code = EBAY_TOKEN_EXPIRED;
+
+  constructor(
+    message = `${EBAY_TOKEN_EXPIRED}: Invalid access token — reconnect eBay in Connections`
+  ) {
     super(message);
     this.name = "EbayAuthError";
   }
@@ -107,7 +111,7 @@ async function refreshEbayAccessTokenFromEnv(
     const text = await res.text();
     if (res.status === 401) {
       throw new EbayAuthError(
-        `Invalid access token — eBay refresh rejected (401): ${text.slice(0, 120)}`
+        `${EBAY_TOKEN_EXPIRED}: Invalid access token — eBay refresh rejected (401): ${text.slice(0, 120)}`
       );
     }
     throw new Error(`eBay OAuth failed (${res.status}): ${text.slice(0, 200)}`);
@@ -136,7 +140,11 @@ async function refreshEbayTokenFromStorage(
     console.error("[eBay] OAuth refresh failed — revoking stored tokens:", error);
     await deleteConnectionTokens("ebay", null);
     throw new EbayAuthError(
-      error instanceof Error ? error.message : "Invalid access token — reconnect eBay"
+      error instanceof Error
+        ? error.message.includes(EBAY_TOKEN_EXPIRED)
+          ? error.message
+          : `${EBAY_TOKEN_EXPIRED}: Invalid access token — reconnect eBay`
+        : `${EBAY_TOKEN_EXPIRED}: Invalid access token — reconnect eBay`
     );
   }
 }

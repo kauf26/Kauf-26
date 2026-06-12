@@ -576,15 +576,28 @@ export async function handleLegacyCallback(
   provider: OAuthProviderId,
   req: Request
 ): Promise<{ redirectUrl: string }> {
+  const code = typeof req.query.code === "string" ? req.query.code : "";
+  const oauthError = typeof req.query.error === "string" ? req.query.error : null;
+  if (oauthError) throw new Error(oauthError);
+
+  /** MOCK_OAUTH_MODE: mock_* codes bypass session DB/encryption requirements. */
+  if (isMockOAuthMode() && code.startsWith("mock_")) {
+    const pending = resolvePendingSession(req);
+    await exchangeCode(provider, code, pending?.userId ?? null, {
+      redirectUri: getLegacyOAuthRedirectUri(provider),
+      codeVerifier: pending?.codeVerifier,
+      shopDomain: pending?.shopDomain,
+    });
+    const returnTo = pending?.returnTo ?? "web";
+    delete req.session.oauthPending;
+    return { redirectUrl: successRedirect(provider, returnTo) };
+  }
+
   const pending = resolvePendingSession(req);
   if (!pending || pending.provider !== provider) {
     throw new Error("OAuth session expired — start connect again");
   }
 
-  const error = typeof req.query.error === "string" ? req.query.error : null;
-  if (error) throw new Error(error);
-
-  const code = typeof req.query.code === "string" ? req.query.code : "";
   const state = typeof req.query.state === "string" ? req.query.state : "";
   if (!code) throw new Error("Missing authorization code");
   if (state !== pending.state) throw new Error("Invalid OAuth state");

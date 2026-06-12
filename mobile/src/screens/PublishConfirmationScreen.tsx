@@ -29,6 +29,7 @@ function isEbayAuthFailure(outcome: PublishOutcome): boolean {
   }
   const text = `${outcome.message} ${outcome.error ?? ''}`.toLowerCase();
   return (
+    text.includes('ebay_token_expired') ||
     text.includes('401') ||
     text.includes('invalid access token') ||
     text.includes('invalid token') ||
