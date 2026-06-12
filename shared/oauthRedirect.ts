@@ -38,6 +38,24 @@ export function assertRedirectUriMatches(
   return configuredUri ?? canonical;
 }
 
+/**
+ * Non-throwing redirect resolver for public OAuth config.
+ * Server .env may list a web callback URL; mobile always uses the canonical deep link.
+ */
+export function resolveOAuthRedirectUri(
+  marketplaceId: string,
+  configuredUri: string | undefined
+): string {
+  const canonical = getOAuthRedirectUri(marketplaceId);
+  if (configuredUri && configuredUri !== canonical) {
+    console.warn(
+      `[OAuth] ${marketplaceId}: ignoring redirect override "${configuredUri}" — mobile uses "${canonical}"`
+    );
+    return canonical;
+  }
+  return configuredUri ?? canonical;
+}
+
 /** All marketplace redirect URIs for documentation and validation. */
 export function getAllMarketplaceRedirectUris(marketplaceIds: string[]): Record<string, string> {
   return Object.fromEntries(marketplaceIds.map((id) => [id, getOAuthRedirectUri(id)]));

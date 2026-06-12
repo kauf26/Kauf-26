@@ -52,3 +52,23 @@ export function getLegacyMarketplaceOAuthConfigs(): MarketplaceOAuthConfig[] {
     requiresBaseUrl: p.requiresBaseUrl,
   }));
 }
+
+/** Safe payload for GET /api/marketplaces/oauth-config (never throws). */
+export function buildMarketplaceOAuthConfigResponse() {
+  const providers = getAllMarketplaceOAuthConfigs();
+  const configured = getMarketplaceOAuthConfigs();
+  return {
+    providers,
+    configured,
+    /** @deprecated use `providers` */
+    marketplaces: configured.map((p) => ({
+      marketplace: p.id,
+      clientId: p.clientId,
+      scopes: p.scopes.join(" "),
+      redirectUri: p.redirectUri,
+      authorizeUrl: p.authUrl,
+      tokenUrl: p.tokenUrl,
+      requiresShopDomain: p.requiresShopDomain,
+    })),
+  };
+}

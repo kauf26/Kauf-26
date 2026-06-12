@@ -6,7 +6,7 @@ import {
   MARKETPLACE_OAUTH_MANIFEST,
   getOAuthManifestEntry,
 } from "./marketplaceOAuthManifest";
-import { assertRedirectUriMatches, getOAuthRedirectUri } from "./oauthRedirect";
+import { getOAuthRedirectUri, resolveOAuthRedirectUri } from "./oauthRedirect";
 import type {
   MarketplaceOAuthManifestEntry,
   MarketplaceOAuthProviderConfig,
@@ -74,13 +74,43 @@ function resolveRedirectOverride(entry: MarketplaceOAuthManifestEntry, env: EnvR
   return undefined;
 }
 
+function fallbackProviderConfig(
+  entry: MarketplaceOAuthManifestEntry,
+  errorMessage: string
+): MarketplaceOAuthProviderConfig {
+  return {
+    id: entry.id,
+    name: entry.name,
+    authUrl: entry.authUrl,
+    tokenUrl: entry.tokenUrl,
+    userInfoUrl: entry.userInfoUrl,
+    clientId: "",
+    scopes: entry.scopes,
+    redirectUri: getOAuthRedirectUri(entry.id),
+    oauthFlow: entry.oauthFlow,
+    oauthSupported: entry.oauthSupported,
+    tokenExchange: entry.tokenExchange,
+    userInfoAuth: entry.userInfoAuth,
+    userInfoMapping: entry.userInfoMapping,
+    requiresShopDomain: entry.requiresShopDomain,
+    requiresSiteUrl: entry.requiresSiteUrl,
+    requiresBaseUrl: entry.requiresBaseUrl,
+    urlPlaceholders: entry.urlPlaceholders,
+    usePkce: entry.usePkce,
+    notes: errorMessage,
+    developerPortalUrl: entry.developerPortalUrl,
+    redirectUriRegistrationHint: entry.redirectUriRegistrationHint,
+    configured: false,
+  };
+}
+
 export function manifestEntryToProviderConfig(
   entry: MarketplaceOAuthManifestEntry,
   env: EnvReader = defaultEnv
 ): MarketplaceOAuthProviderConfig {
   const clientId = resolveClientId(entry, env) ?? "";
   const redirectOverride = resolveRedirectOverride(entry, env);
-  const redirectUri = assertRedirectUriMatches(entry.id, redirectOverride);
+  const redirectUri = resolveOAuthRedirectUri(entry.id, redirectOverride);
 
   return {
     id: entry.id,
@@ -112,7 +142,19 @@ export function manifestEntryToProviderConfig(
 export function getAllMarketplaceOAuthProviders(
   env: EnvReader = defaultEnv
 ): MarketplaceOAuthProviderConfig[] {
-  return MARKETPLACE_OAUTH_MANIFEST.map((entry) => manifestEntryToProviderConfig(entry, env));
+  return MARKETPLACE_OAUTH_MANIFEST.map((entry) => {
+    try {
+      return manifestEntryToProviderConfig(entry, env);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to resolve OAuth config";
+      console.error(`[OAuth] config build failed for ${entry.id}:`, error);
+      if (error instanceof Error && error.stack) {
+        console.error(error.stack);
+      }
+      return fallbackProviderConfig(entry, message);
+    }
+  });
 }
 
 /** OAuth-capable providers with client id set — ready for mobile one-tap connect. */
