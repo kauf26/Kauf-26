@@ -86,6 +86,7 @@
     "express-session": "^1.19.0",
     "framer-motion": "^12.23.24",
     "input-otp": "^1.4.2",
+    "jspdf": "^3.0.1",
     "lodash": "^4.18.1",
     "lucide-react": "^0.545.0",
     "memoizee": "^0.4.17",
