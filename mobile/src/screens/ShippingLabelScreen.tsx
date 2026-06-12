@@ -31,6 +31,11 @@ import {
   type ShippingAddress,
   type ShippingRate,
 } from '../services/shipping';
+import { printShippingLabelPdfUri } from '../services/labelPrint';
+import {
+  formatAddressBlock,
+  formatCarrierService,
+} from '../../../shared/shippingLabelTemplate';
 
 type Props = {
   sale: MobileSale;
@@ -129,6 +134,10 @@ export default function ShippingLabelScreen({ sale, onClose, onComplete }: Props
   const [selectedService, setSelectedService] = useState('');
   const [labelUrl, setLabelUrl] = useState<string | null>(null);
   const [trackingNumber, setTrackingNumber] = useState<string | null>(null);
+  const [labelCarrier, setLabelCarrier] = useState<string | null>(null);
+  const [labelServiceName, setLabelServiceName] = useState<string | null>(null);
+  const [labelEstimatedDelivery, setLabelEstimatedDelivery] = useState<string | null>(null);
+  const [printing, setPrinting] = useState(false);
   const [emailTo, setEmailTo] = useState('');
   const [loadingRates, setLoadingRates] = useState(false);
   const [generating, setGenerating] = useState(false);
@@ -237,6 +246,7 @@ export default function ShippingLabelScreen({ sale, onClose, onComplete }: Props
     }
     setGenerating(true);
     try {
+      const selectedRate = rates.find((r) => r.rateId === selectedRateId);
       const result = await generateShippingLabel({
         saleId: sale.id,
         fromAddress: resolvedFrom,
@@ -247,8 +257,11 @@ export default function ShippingLabelScreen({ sale, onClose, onComplete }: Props
           widthIn: parseFloat(widthIn) || 10,
           heightIn: parseFloat(heightIn) || 10,
         },
-        service: selectedService || rates.find((r) => r.rateId === selectedRateId)?.service || '',
+        service: selectedService || selectedRate?.service || '',
         rateId: selectedRateId,
+        carrier: selectedRate?.carrier,
+        estimatedDelivery:
+          selectedRate?.deliveryDate ?? selectedRate?.deliveryDays ?? undefined,
       });
       try {
         await markShippingLabelCreated(sale.id);
@@ -257,12 +270,45 @@ export default function ShippingLabelScreen({ sale, onClose, onComplete }: Props
       }
       setLabelUrl(result.labelUrl);
       setTrackingNumber(result.trackingNumber);
+      setLabelCarrier(result.carrier ?? selectedRate?.carrier ?? null);
+      setLabelServiceName(result.service ?? selectedService);
+      setLabelEstimatedDelivery(
+        result.estimatedDelivery ??
+          selectedRate?.deliveryDate ??
+          selectedRate?.deliveryDays ??
+          null
+      );
       setPdfModalVisible(true);
       onComplete();
     } catch (error) {
       Alert.alert('Label failed', error instanceof Error ? error.message : 'Try again');
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handlePrintLabel = async () => {
+    if (!labelUrl || !trackingNumber) return;
+    setPrinting(true);
+    try {
+      await printShippingLabelPdfUri(labelUrl, {
+        fromAddress: resolvedFrom,
+        toAddress,
+        packageDetails: {
+          weightLbs: parseFloat(weightLbs) || 1,
+          lengthIn: parseFloat(lengthIn) || 10,
+          widthIn: parseFloat(widthIn) || 10,
+          heightIn: parseFloat(heightIn) || 10,
+        },
+        carrier: labelCarrier ?? 'Carrier',
+        service: labelServiceName ?? selectedService,
+        trackingNumber,
+        estimatedDelivery: labelEstimatedDelivery ?? undefined,
+      });
+    } catch (error) {
+      Alert.alert('Print failed', error instanceof Error ? error.message : 'Try again');
+    } finally {
+      setPrinting(false);
     }
   };
 
@@ -408,6 +454,35 @@ export default function ShippingLabelScreen({ sale, onClose, onComplete }: Props
 
         {labelUrl ? (
           <>
+            <View style={styles.labelSummary}>
+              <Text style={styles.summaryTitle}>Label summary</Text>
+              <Text style={styles.summaryHeading}>Ship to</Text>
+              <Text style={styles.summaryText}>{formatAddressBlock(toAddress)}</Text>
+              <Text style={styles.summaryHeading}>From / return</Text>
+              <Text style={styles.summaryText}>{formatAddressBlock(resolvedFrom)}</Text>
+              {(labelCarrier || labelServiceName) && (
+                <Text style={styles.summaryMeta}>
+                  {formatCarrierService(labelCarrier ?? '', labelServiceName ?? '')}
+                </Text>
+              )}
+              {labelEstimatedDelivery ? (
+                <Text style={styles.summaryMeta}>Est. delivery: {labelEstimatedDelivery}</Text>
+              ) : null}
+              {trackingNumber ? (
+                <Text style={styles.summaryMeta}>Tracking: {trackingNumber}</Text>
+              ) : null}
+            </View>
+            <TouchableOpacity
+              style={[styles.primaryButton, printing && styles.buttonDisabled]}
+              onPress={() => void handlePrintLabel()}
+              disabled={printing}
+            >
+              {printing ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.buttonText}>Print Label</Text>
+              )}
+            </TouchableOpacity>
             <TouchableOpacity style={styles.secondaryButton} onPress={() => setPdfModalVisible(true)}>
               <Text style={styles.buttonText}>Preview PDF</Text>
             </TouchableOpacity>
@@ -536,4 +611,23 @@ const styles = StyleSheet.create({
   modalTitle: { color: '#fff', fontWeight: '600', flex: 1 },
   modalClose: { color: '#3b82f6', fontWeight: '600' },
   webview: { flex: 1, backgroundColor: '#111827' },
+  labelSummary: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#374151',
+    backgroundColor: '#111827',
+    gap: 4,
+  },
+  summaryTitle: { color: '#fff', fontWeight: '700', fontSize: 15, marginBottom: 4 },
+  summaryHeading: {
+    color: '#9ca3af',
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    marginTop: 6,
+  },
+  summaryText: { color: '#e5e7eb', fontSize: 13, lineHeight: 18 },
+  summaryMeta: { color: '#93c5fd', fontSize: 12, marginTop: 2 },
 });

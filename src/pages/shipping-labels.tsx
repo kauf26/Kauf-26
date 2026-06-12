@@ -23,6 +23,8 @@ import {
   type ShippingRate,
 } from "@/lib/salesFetch";
 import { Loader2, Package, Printer, Info } from "lucide-react";
+import { ShippingLabelSummary } from "@/components/ShippingLabelSummary";
+import { printShippingLabelPdf } from "@/lib/printShippingLabel";
 
 function readSaleIdFromSearch(): number | null {
   const params = new URLSearchParams(window.location.search);
@@ -111,6 +113,11 @@ export default function ShippingLabelsPage() {
   const [selectedService, setSelectedService] = useState("");
   const [labelUrl, setLabelUrl] = useState<string | null>(null);
   const [trackingNumber, setTrackingNumber] = useState<string | null>(null);
+  const [labelFromAddress, setLabelFromAddress] = useState<ShippingAddress | null>(null);
+  const [labelToAddress, setLabelToAddress] = useState<ShippingAddress | null>(null);
+  const [labelCarrier, setLabelCarrier] = useState<string | null>(null);
+  const [labelService, setLabelService] = useState<string | null>(null);
+  const [labelEstimatedDelivery, setLabelEstimatedDelivery] = useState<string | null>(null);
   const [isLoadingRates, setIsLoadingRates] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [emailTo, setEmailTo] = useState("");
@@ -227,6 +234,7 @@ export default function ShippingLabelsPage() {
 
     setIsGenerating(true);
     try {
+      const selectedRate = rates.find((r) => r.rateId === selectedRateId);
       const result = await generateShippingLabel({
         ...(hasSale ? { saleId } : {}),
         fromAddress: resolvedFrom,
@@ -237,14 +245,29 @@ export default function ShippingLabelsPage() {
           widthIn: parseFloat(widthIn) || 10,
           heightIn: parseFloat(heightIn) || 10,
         },
-        service: selectedService || rates.find((r) => r.rateId === selectedRateId)?.service || "",
+        service: selectedService || selectedRate?.service || "",
         rateId: selectedRateId,
+        carrier: selectedRate?.carrier,
+        estimatedDelivery:
+          selectedRate?.deliveryDate ??
+          selectedRate?.deliveryDays ??
+          undefined,
       });
       if (hasSale) {
         await markShippingLabelCreated(saleId);
       }
       setLabelUrl(result.labelPdfUrl);
       setTrackingNumber(result.trackingNumber);
+      setLabelFromAddress(result.fromAddress ?? resolvedFrom);
+      setLabelToAddress(result.toAddress ?? toAddress);
+      setLabelCarrier(result.carrier ?? selectedRate?.carrier ?? null);
+      setLabelService(result.service ?? selectedService);
+      setLabelEstimatedDelivery(
+        result.estimatedDelivery ??
+          selectedRate?.deliveryDate ??
+          selectedRate?.deliveryDays ??
+          null
+      );
       toast({ title: "Label generated", description: `Tracking ${result.trackingNumber}` });
     } catch (err) {
       toast({
@@ -462,11 +485,14 @@ export default function ShippingLabelsPage() {
               <CardTitle className="text-lg">Label ready</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              {trackingNumber && (
-                <p className="text-sm text-muted-foreground">
-                  Tracking: <span className="font-mono text-foreground">{trackingNumber}</span>
-                </p>
-              )}
+              <ShippingLabelSummary
+                fromAddress={labelFromAddress ?? resolvedFrom}
+                toAddress={labelToAddress ?? toAddress}
+                carrier={labelCarrier}
+                service={labelService}
+                trackingNumber={trackingNumber}
+                estimatedDelivery={labelEstimatedDelivery}
+              />
               <div className="rounded-md border overflow-hidden bg-muted/30">
                 <object
                   data={labelUrl}
@@ -480,6 +506,10 @@ export default function ShippingLabelsPage() {
                 </object>
               </div>
               <div className="flex flex-wrap gap-3">
+                <Button onClick={() => printShippingLabelPdf(labelUrl)}>
+                  <Printer className="w-4 h-4 mr-2" />
+                  Print Label
+                </Button>
                 <Button asChild>
                   <a href={labelUrl} target="_blank" rel="noopener noreferrer" download>
                     Download PDF

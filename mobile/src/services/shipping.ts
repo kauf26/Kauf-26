@@ -165,7 +165,19 @@ export async function generateShippingLabel(input: {
   packageDetails: { weightLbs: number; lengthIn: number; widthIn: number; heightIn: number };
   service: string;
   rateId?: string;
-}): Promise<{ labelPdfUrl: string; labelUrl: string; trackingNumber: string }> {
+  carrier?: string;
+  estimatedDelivery?: string;
+  deliveryDate?: string;
+}): Promise<{
+  labelPdfUrl: string;
+  labelUrl: string;
+  trackingNumber: string;
+  fromAddress?: ShippingAddress;
+  toAddress?: ShippingAddress;
+  carrier?: string | null;
+  service?: string;
+  estimatedDelivery?: string | null;
+}> {
   const res = await fetch(`${API_BASE_URL}/api/shipping/label`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -175,6 +187,11 @@ export async function generateShippingLabel(input: {
     labelPdfUrl?: string;
     labelUrl?: string;
     trackingNumber?: string;
+    fromAddress?: ShippingAddress;
+    toAddress?: ShippingAddress;
+    carrier?: string | null;
+    service?: string;
+    estimatedDelivery?: string | null;
     error?: string;
   };
   if (!res.ok) throw new Error(data.error ?? 'Failed to generate label');
@@ -183,6 +200,11 @@ export async function generateShippingLabel(input: {
     labelPdfUrl: url.startsWith('http') ? url : `${API_BASE_URL}${url}`,
     labelUrl: url.startsWith('http') ? url : `${API_BASE_URL}${url}`,
     trackingNumber: data.trackingNumber ?? '1Z9999999999',
+    fromAddress: data.fromAddress,
+    toAddress: data.toAddress,
+    carrier: data.carrier,
+    service: data.service,
+    estimatedDelivery: data.estimatedDelivery,
   };
 }
 

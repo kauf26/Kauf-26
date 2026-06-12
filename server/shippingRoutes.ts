@@ -114,6 +114,10 @@ router.post("/label", async (req, res) => {
       toAddress,
       service,
       rateId,
+      carrier,
+      estimatedDelivery,
+      estimatedDeliveryDate,
+      deliveryDate,
     } = body;
 
     const defaultFrom = defaultFromAddress();
@@ -123,6 +127,10 @@ router.post("/label", async (req, res) => {
     const selectedService = String(
       service ?? rateId ?? "USPS Priority Mail"
     );
+    const selectedCarrier = String(carrier ?? "").trim();
+    const estDelivery = String(
+      estimatedDelivery ?? estimatedDeliveryDate ?? deliveryDate ?? ""
+    ).trim();
 
     if (!isShippingAddressComplete(from) || !isShippingAddressComplete(to)) {
       return res.status(400).json({
@@ -138,6 +146,16 @@ router.post("/label", async (req, res) => {
     const parsedSaleId = Number(saleId);
     const hasSaleId = Number.isFinite(parsedSaleId) && parsedSaleId > 0;
 
+    const labelInput = {
+      fromAddress: from,
+      toAddress: to,
+      packageDetails: pkg,
+      carrier: selectedCarrier || undefined,
+      service: selectedService,
+      estimatedDelivery: estDelivery || undefined,
+      shipDate: new Date().toLocaleDateString(),
+    };
+
     if (hasSaleId) {
       const [saleRow] = await db
         .select({
@@ -152,11 +170,7 @@ router.post("/label", async (req, res) => {
       if (saleRow) {
         const label = await createShippingLabelRecord({
           saleId: parsedSaleId,
-          fromAddress: from,
-          toAddress: to,
-          packageDetails: pkg,
-          service: selectedService,
-          trackingNumber: "1Z9999999999",
+          ...labelInput,
         });
 
         return res.status(201).json({
@@ -164,28 +178,64 @@ router.post("/label", async (req, res) => {
           trackingNumber: label.trackingNumber,
           labelPdfUrl: label.labelPdfUrl,
           labelUrl: label.labelPdfUrl,
+          fromAddress: from,
+          toAddress: to,
+          carrier: selectedCarrier || null,
+          service: selectedService,
+          estimatedDelivery: estDelivery || null,
           productTitle: saleRow.productTitle,
         });
       }
     }
 
-    const pdf = await generateMockLabelPdf({
-      fromAddress: from,
-      toAddress: to,
-      packageDetails: pkg,
-      service: selectedService,
-      trackingNumber: "1Z9999999999",
-    });
+    const pdf = await generateMockLabelPdf(labelInput);
 
     return res.status(201).json({
-      trackingNumber: "1Z9999999999",
+      trackingNumber: pdf.trackingNumber,
       labelPdfUrl: pdf.url,
       labelUrl: pdf.url,
+      fromAddress: from,
+      toAddress: to,
+      carrier: selectedCarrier || null,
+      service: selectedService,
+      estimatedDelivery: estDelivery || null,
       mockOnly: true,
     });
   } catch (error) {
     console.error("[KAUF26] Error generating shipping label:", error);
     return res.status(500).json({ error: "Failed to generate shipping label" });
+  }
+});
+
+router.post("/label/preview-html", async (req, res) => {
+  try {
+    const body = req.body ?? {};
+    const from = (body.fromAddress as AddressJson) ?? defaultFromAddress();
+    const to = (body.toAddress as AddressJson) ?? {};
+    const pkg = normalizeLabelPackage(body);
+    const service = String(body.service ?? "USPS Priority Mail");
+    const carrier = String(body.carrier ?? "").trim();
+    const trackingNumber = String(body.trackingNumber ?? "").trim();
+    const estimatedDelivery = String(
+      body.estimatedDelivery ?? body.estimatedDeliveryDate ?? body.deliveryDate ?? ""
+    ).trim();
+
+    const { generateLabelHtml } = await import("./services/shippingLabelPdf");
+    const html = generateLabelHtml({
+      fromAddress: from,
+      toAddress: to,
+      packageDetails: pkg,
+      carrier: carrier || undefined,
+      service,
+      trackingNumber: trackingNumber || undefined,
+      estimatedDelivery: estimatedDelivery || undefined,
+      shipDate: new Date().toLocaleDateString(),
+    });
+
+    return res.status(200).json({ html });
+  } catch (error) {
+    console.error("[KAUF26] Error building label HTML:", error);
+    return res.status(500).json({ error: "Failed to build label preview" });
   }
 });
 

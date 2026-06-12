@@ -23,17 +23,24 @@ export async function createShippingLabelRecord(input: {
   fromAddress: AddressJson;
   toAddress: AddressJson;
   packageDetails: PackageDetailsJson;
+  carrier?: string;
   service: string;
   trackingNumber?: string;
+  estimatedDelivery?: string;
+  shipDate?: string;
 }): Promise<typeof shippingLabels.$inferSelect> {
-  const trackingNumber = input.trackingNumber ?? "1Z9999999999";
   const pdf = await generateMockLabelPdf({
     fromAddress: input.fromAddress,
     toAddress: input.toAddress,
     packageDetails: input.packageDetails,
+    carrier: input.carrier,
     service: input.service,
-    trackingNumber,
+    trackingNumber: input.trackingNumber,
+    estimatedDelivery: input.estimatedDelivery,
+    shipDate: input.shipDate,
   });
+
+  const trackingNumber = pdf.trackingNumber;
 
   const [row] = await db
     .insert(shippingLabels)
