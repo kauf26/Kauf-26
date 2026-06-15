@@ -3,8 +3,13 @@ import { and, eq, isNull, or, type SQL } from "drizzle-orm";
 import { productDrafts } from "../../shared/schema";
 import type { SessionUser } from "./types";
 
+/** Unset NODE_ENV defaults to development so local servers don't require sessions. */
+export function getNodeEnv(): string {
+  return process.env.NODE_ENV?.trim() || "development";
+}
+
 export function isProductionAuthRequired(): boolean {
-  return process.env.NODE_ENV === "production";
+  return getNodeEnv() === "production";
 }
 
 /** Require session auth in production; allow open access in development. */

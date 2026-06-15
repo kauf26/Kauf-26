@@ -47,6 +47,13 @@ describe("requireAuthInProduction", () => {
     expect(next).toHaveBeenCalled();
   });
 
+  it("allows unauthenticated requests when NODE_ENV is unset", () => {
+    delete process.env.NODE_ENV;
+    const next = vi.fn();
+    requireAuthInProduction(mockReq(), mockRes(), next);
+    expect(next).toHaveBeenCalled();
+  });
+
   it("returns 401 in production without session", () => {
     process.env.NODE_ENV = "production";
     const next = vi.fn();

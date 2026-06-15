@@ -23,7 +23,7 @@ import {
 
 const router = express.Router();
 
-router.use(requireAuthInProduction);
+/** Per-route only — do not router.use() here; this router mounts at /api and would block all /api/* paths. */
 
 const STRIPPED_ATTRIBUTE_KEYS = [
   "productUrl",
@@ -95,7 +95,7 @@ function syncDraftImageAttributes(
 }
 
 // --- 1. SAVE OR UPDATE A DRAFT (POST) ---
-router.post("/drafts", async (req, res) => {
+router.post("/drafts", requireAuthInProduction, async (req, res) => {
  console.log("[KAUF26] Draft received in productsRoutes:", req.body);
 
  try {
@@ -169,7 +169,7 @@ router.post("/drafts", async (req, res) => {
 });
 
 // --- 2. FETCH ALL SAVED DRAFTS (GET) ---
-router.get("/drafts/count", async (req, res) => {
+router.get("/drafts/count", requireAuthInProduction, async (req, res) => {
  try {
    const visibility = draftVisibilityCondition(req);
    const baseQuery = db
@@ -192,7 +192,7 @@ router.get("/drafts/count", async (req, res) => {
  }
 });
 
-router.get("/drafts", async (req, res) => {
+router.get("/drafts", requireAuthInProduction, async (req, res) => {
  try {
    const visibility = draftVisibilityCondition(req);
    const baseQuery = db.select().from(productDrafts);
@@ -208,7 +208,7 @@ router.get("/drafts", async (req, res) => {
 });
 
 // --- 3. PROCESS CAMERA IMAGE WITH SCRAPERS (POST) ---
-router.post("/scrape-from-camera", async (req, res) => {
+router.post("/scrape-from-camera", requireAuthInProduction, async (req, res) => {
  console.log("[KAUF26] Camera image received for scraping");
 
  try {
@@ -262,7 +262,7 @@ router.post("/scrape-from-camera", async (req, res) => {
 });
 
 // --- 4. GET DRAFTS READY FOR MARKETPLACE POSTING (GET) ---
-router.get("/drafts/ready-for-posting", async (req, res) => {
+router.get("/drafts/ready-for-posting", requireAuthInProduction, async (req, res) => {
  try {
    const visibility = draftVisibilityCondition(req);
    const statusFilter = inArray(productDrafts.status, ["ready_for_posting", "requires_review"]);
@@ -286,7 +286,7 @@ router.get("/drafts/ready-for-posting", async (req, res) => {
 });
 
 // --- 5. POST A DRAFT TO MARKETPLACES (POST) ---
-router.post("/drafts/:id/post-to-marketplaces", async (req, res) => {
+router.post("/drafts/:id/post-to-marketplaces", requireAuthInProduction, async (req, res) => {
  try {
    const draftId = req.params.id;
    const { marketplaces } = req.body;
@@ -366,6 +366,7 @@ router.post("/drafts/:id/post-to-marketplaces", async (req, res) => {
 // --- 6. UPLOAD DRAFT PHOTOS (multipart) ---
 router.post(
   "/drafts/:id/upload-photos",
+  requireAuthInProduction,
   (req, res, next) => {
     draftPhotoUpload.array("images", 5)(req, res, (err) => {
       if (err) {
@@ -420,7 +421,7 @@ router.post(
 );
 
 // --- 7. ADD PHOTO URLS TO DRAFT (POST) ---
-router.post("/drafts/:id/add-photos", async (req, res) => {
+router.post("/drafts/:id/add-photos", requireAuthInProduction, async (req, res) => {
   try {
     const draftId = Number(req.params.id);
     if (!Number.isFinite(draftId)) {
@@ -501,7 +502,7 @@ router.post("/drafts/:id/add-photos", async (req, res) => {
 });
 
 // --- 8. GET DRAFT BY ID (GET) ---
-router.get("/drafts/:id", async (req, res) => {
+router.get("/drafts/:id", requireAuthInProduction, async (req, res) => {
  try {
    const draftId = req.params.id;
    const [draft] = await db.select()
@@ -520,7 +521,7 @@ router.get("/drafts/:id", async (req, res) => {
 });
 
 // --- 9. PARTIAL DRAFT UPDATE (PATCH) ---
-router.patch("/drafts/:id", async (req, res) => {
+router.patch("/drafts/:id", requireAuthInProduction, async (req, res) => {
  try {
    const draftId = Number(req.params.id);
    const [existingDraft] = await db.select()
@@ -558,7 +559,7 @@ router.patch("/drafts/:id", async (req, res) => {
 });
 
 // --- 10. UPDATE DRAFT STATUS (PATCH) ---
-router.patch("/drafts/:id/status", async (req, res) => {
+router.patch("/drafts/:id/status", requireAuthInProduction, async (req, res) => {
  try {
    const draftId = req.params.id;
    const { status } = req.body;
@@ -593,7 +594,7 @@ router.patch("/drafts/:id/status", async (req, res) => {
 });
 
 // --- 11. DELETE DRAFT (DELETE) ---
-router.delete("/drafts/:id", async (req, res) => {
+router.delete("/drafts/:id", requireAuthInProduction, async (req, res) => {
  try {
    const draftId = req.params.id;
    const [deletedDraft] = await db.delete(productDrafts)
