@@ -26,7 +26,6 @@ import {
 import { syncUserProfileToBackend } from '../services/userProfile';
 import { loadProviderRegistry, nonOAuthStatusMessage, authMethodLabel, MARKETPLACE_COUNT } from '../services/providerRegistry';
 import {
-  connectMarketplaceViaServer,
   disconnectMarketplaceViaServer,
   fetchServerOAuthConnections,
   usesServerOAuth,
@@ -161,12 +160,12 @@ export default function ConnectionsScreen() {
       setLoading('ebay');
       setOauthNotice(null);
       try {
-        const result = await connectMarketplaceViaServer('ebay');
+        const result = await connectPlatform('ebay');
         if (cancelled) return;
-        if (!result.ok) {
-          throw new Error(result.message);
-        }
-        Alert.alert('eBay reconnected', result.message);
+        Alert.alert(
+          'eBay reconnected',
+          result.profile.accountLabel ?? 'Account linked successfully.'
+        );
         await refresh();
       } catch (err) {
         if (cancelled) return;
@@ -215,7 +214,7 @@ export default function ConnectionsScreen() {
       Alert.alert(
         CREDENTIALS_NOT_CONFIGURED,
         getConnectBlockedReason(p.id, false) ??
-          `Set ${p.name} client credentials on the server (and mobile/.env secrets if required).`
+          `Set ${p.name} client credentials on the server.`
       );
       return;
     }
@@ -224,30 +223,6 @@ export default function ConnectionsScreen() {
     setOauthNotice(null);
     const fields = connectFields[p.id] ?? {};
     try {
-      if (usesServerOAuth(p.id)) {
-        const result = await connectMarketplaceViaServer(p.id, {
-          shopDomain: fields.shopDomain,
-        });
-        if (!result.ok) {
-          throw new Error(result.message);
-        }
-        const connections = await fetchServerOAuthConnections();
-        const row = connections.find((c) => c.marketplace === p.id);
-        if (row?.accountLabel) {
-          const merged = await mergeProfileFromMarketplace({
-            marketplace: p.id,
-            name: row.accountLabel,
-            email: profile.email,
-            accountLabel: row.accountLabel,
-          });
-          setProfile(merged);
-          await persistProfile(merged);
-        }
-        Alert.alert(`${p.name} connected`, result.message);
-        await refresh();
-        return;
-      }
-
       const result = await connectPlatform(p.id, fields);
       const merged = await mergeProfileFromMarketplace(result.profile);
       setProfile(merged);
@@ -293,9 +268,8 @@ export default function ConnectionsScreen() {
   const handleDisconnect = async (id: string) => {
     if (usesServerOAuth(id)) {
       await disconnectMarketplaceViaServer(id);
-    } else {
-      await deletePlatformTokens(id);
     }
+    await deletePlatformTokens(id);
     await refresh();
   };
 

@@ -64,12 +64,7 @@ eas secret:create --name EXPO_PUBLIC_TERMS_URL --value https://yourdomain.com/te
 
 Deploy the web app first so those URLs return HTTP 200 before submitting to the stores.
 
-Optional on-device OAuth secrets (only if using legacy device token exchange):
-
-```bash
-eas secret:create --name EXPO_PUBLIC_EBAY_CLIENT_SECRET --value YOUR_EBAY_SECRET --type string
-eas secret:create --name EXPO_PUBLIC_SHOPIFY_CLIENT_SECRET --value YOUR_SHOPIFY_SECRET --type string
-```
+OAuth client secrets are configured on the **server** only. The mobile app exchanges authorization codes via `POST /api/auth/:marketplace/exchange` — do not add `EXPO_PUBLIC_*_SECRET` to EAS secrets.
 
 Validate before building:
 

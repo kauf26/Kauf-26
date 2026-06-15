@@ -12,9 +12,8 @@ import {
 } from '../services/onboardingProfile';
 import { loadProviderRegistry } from '../services/providerRegistry';
 import {
-  connectMarketplaceViaServer,
-  disconnectMarketplaceViaServer,
   fetchServerOAuthConnections,
+  disconnectMarketplaceViaServer,
   usesServerOAuth,
 } from '../services/serverMarketplaceOAuth';
 import {
@@ -100,6 +99,14 @@ export function useMarketplaceConnections(options?: {
         continue;
       }
 
+      // Legacy on-device tokens (pre-migration) — prefer server status when available
+      const serverRow = serverById.get(p.id);
+      if (serverRow?.connected) {
+        const label = serverRow.accountLabel ?? serverRow.shopDomain ?? 'Connected';
+        next[p.id] = { ok: true, message: label };
+        continue;
+      }
+
       const connected = await hasPlatformTokens(p.id);
       if (!connected) {
         next[p.id] = {
@@ -167,30 +174,6 @@ export function useMarketplaceConnections(options?: {
     const fields = connectFields[p.id] ?? {};
 
     try {
-      if (usesServerOAuth(p.id)) {
-        const result = await connectMarketplaceViaServer(p.id, {
-          shopDomain: fields.shopDomain,
-        });
-        if (!result.ok) throw new Error(result.message);
-
-        const connections = await fetchServerOAuthConnections();
-        const row = connections.find((c) => c.marketplace === p.id);
-        if (row?.accountLabel) {
-          const merged = await mergeProfileFromMarketplace({
-            marketplace: p.id,
-            name: row.accountLabel,
-            email: profile.email,
-            accountLabel: row.accountLabel,
-          });
-          setProfile(merged);
-          await persistProfile(merged);
-        }
-
-        if (!quiet) Alert.alert(`${p.name} connected`, result.message);
-        await refresh();
-        return true;
-      }
-
       const result = await connectPlatform(p.id, fields);
       const merged = await mergeProfileFromMarketplace(result.profile);
       setProfile(merged);
@@ -234,9 +217,8 @@ export function useMarketplaceConnections(options?: {
   const handleDisconnect = async (id: string) => {
     if (usesServerOAuth(id)) {
       await disconnectMarketplaceViaServer(id);
-    } else {
-      await deletePlatformTokens(id);
     }
+    await deletePlatformTokens(id);
     await refresh();
   };
 

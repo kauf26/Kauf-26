@@ -1,76 +1,66 @@
 /**
- * Server-side universal OAuth connect for Etsy, eBay, Shopify, and Amazon.
+ * Device-side marketplace connection helpers.
+ * The server never stores marketplace OAuth tokens.
  */
-import * as WebBrowser from 'expo-web-browser';
-import { API_BASE_URL } from './config';
+import { getOAuthManifestEntry } from '../../../shared/marketplaceOAuthManifest';
+import {
+  hasPlatformTokens,
+  loadPlatformTokens,
+} from './secureTokenStore';
 
-export type ServerOAuthConnection = {
-  marketplace: string;
-  provider?: string;
-  configured: boolean;
+export function usesServerOAuth(_marketplaceId: string): boolean {
+  return false;
+}
+
+export function isDeviceOAuthMarketplace(marketplaceId: string): boolean {
+  return Boolean(getOAuthManifestEntry(marketplaceId)?.oauthSupported);
+}
+
+export async function fetchServerOAuthConnections(): Promise<
+  Array<{
+    marketplace: string;
+    configured: boolean;
+    connected: boolean;
+    accountLabel: string | null;
+    shopDomain: string | null;
+  }>
+> {
+  return [];
+}
+
+export async function fetchDeviceOAuthStatus(marketplaceId: string): Promise<{
   connected: boolean;
   accountLabel: string | null;
   shopDomain: string | null;
-};
-
-const SERVER_OAUTH_IDS = new Set(['etsy', 'ebay', 'shopify', 'amazon']);
-
-export function usesServerOAuth(marketplaceId: string): boolean {
-  return SERVER_OAUTH_IDS.has(marketplaceId);
-}
-
-export async function fetchServerOAuthConnections(): Promise<ServerOAuthConnection[]> {
-  const res = await fetch(`${API_BASE_URL}/api/auth/connections`);
-  if (!res.ok) {
-    throw new Error('Failed to load server OAuth connections');
-  }
-  const data = (await res.json()) as { connections?: ServerOAuthConnection[] };
-  return data.connections ?? [];
-}
-
-export async function connectMarketplaceViaServer(
-  marketplaceId: string,
-  options?: { shopDomain?: string }
-): Promise<{ ok: boolean; message: string }> {
-  if (!usesServerOAuth(marketplaceId)) {
-    throw new Error(`${marketplaceId} does not use server OAuth`);
-  }
-
-  const params = new URLSearchParams({ returnTo: 'mobile', redirect: '1' });
-  if (options?.shopDomain?.trim()) {
-    params.set('shop', options.shopDomain.trim());
-  }
-
-  const authUrl = `${API_BASE_URL}/api/auth/${marketplaceId}/url?${params.toString()}`;
-  const redirectUrl = `kauf26://oauth/${marketplaceId}`;
-
-  const result = await WebBrowser.openAuthSessionAsync(authUrl, redirectUrl);
-
-  if (result.type === 'success' && result.url) {
-    const parsed = new URL(result.url);
-    const connected = parsed.searchParams.get('connected');
-    if (connected === '1' || connected === 'true') {
-      return { ok: true, message: 'Account linked successfully.' };
-    }
-    const reason = parsed.searchParams.get('reason') ?? 'Connection failed';
+  message: string;
+}> {
+  const connected = await hasPlatformTokens(marketplaceId);
+  if (!connected) {
     return {
-      ok: false,
-      message: `OAuth failed: ${reason} – check backend logs`,
+      connected: false,
+      accountLabel: null,
+      shopDomain: null,
+      message: 'Not connected',
     };
   }
-
-  if (result.type === 'cancel' || result.type === 'dismiss') {
-    throw new Error('Connection cancelled');
-  }
-
-  throw new Error('OAuth failed: unknown error – check backend logs');
+  const tokens = await loadPlatformTokens(marketplaceId);
+  return {
+    connected: true,
+    accountLabel: tokens?.userName ?? tokens?.accountName ?? null,
+    shopDomain: tokens?.shopDomain ?? null,
+    message: tokens?.userName ?? tokens?.accountName ?? 'Connected',
+  };
 }
 
-export async function disconnectMarketplaceViaServer(marketplaceId: string): Promise<void> {
-  const res = await fetch(`${API_BASE_URL}/api/auth/${marketplaceId}/revoke`, {
-    method: 'POST',
-  });
-  if (!res.ok) {
-    throw new Error('Failed to disconnect');
-  }
+export async function disconnectMarketplaceOnDevice(marketplaceId: string): Promise<void> {
+  const { deletePlatformTokens } = await import('./secureTokenStore');
+  await deletePlatformTokens(marketplaceId);
+}
+
+/** @deprecated Server does not store OAuth tokens */
+export const disconnectMarketplaceViaServer = disconnectMarketplaceOnDevice;
+
+/** @deprecated Use connectMarketplaceOneTap — tokens stay on device */
+export async function connectMarketplaceViaServer(): Promise<never> {
+  throw new Error('Server OAuth storage is disabled — connect on this device instead.');
 }

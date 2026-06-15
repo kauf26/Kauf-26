@@ -6,12 +6,7 @@ import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypt
 import type { Request } from "express";
 import { getOAuthConfigFor } from "../config/oauthConfig";
 import { env } from "./adapters/adapterUtils";
-import {
-  deleteConnectionTokens,
-  loadConnectionTokens,
-  saveConnectionTokens,
-  type StoredConnectionTokens,
-} from "./oauthConnectionStorage";
+import { getClientMarketplaceToken } from "./publishTokenContext";
 import {
   clearMockTokens,
   exchangeMockCode,
@@ -42,6 +37,8 @@ const TOKEN_SKEW_MS = 60_000;
 declare module "express-session" {
   interface SessionData {
     oauthPending?: OAuthPendingSession;
+    /** Web-only: tokens for current login session (not persisted to marketplace_connections). */
+    marketplaceSessionTokens?: Record<string, TokenResponse>;
     /** @deprecated */
     marketplaceOAuth?: OAuthPendingSession & { marketplace?: OAuthProviderId };
   }
@@ -473,7 +470,8 @@ export async function refreshToken(
 
 export async function revokeAccess(
   provider: string,
-  userId: number | null
+  userId: number | null,
+  req?: Request
 ): Promise<void> {
   if (!isUniversalOAuthProvider(provider)) {
     throw new Error(`Unsupported OAuth provider: ${provider}`);
@@ -482,8 +480,19 @@ export async function revokeAccess(
     clearMockTokens(userId, provider);
     return;
   }
-  await deleteConnectionTokens(provider, userId);
+  if (req?.session?.marketplaceSessionTokens) {
+    delete req.session.marketplaceSessionTokens[provider];
+  }
   console.info(`[OAuth] Revoked access provider=${provider} userId=${userId ?? "anon"}`);
+}
+
+function storeSessionMarketplaceTokens(
+  req: Request,
+  provider: string,
+  tokens: TokenResponse
+): void {
+  req.session.marketplaceSessionTokens = req.session.marketplaceSessionTokens ?? {};
+  req.session.marketplaceSessionTokens[provider] = tokens;
 }
 
 function resolvePendingSession(req: Request): OAuthPendingSession | null {
@@ -564,7 +573,7 @@ export async function handleUnifiedCallback(
   });
 
   if (!isMockOAuthMode()) {
-    await saveConnectionTokens(provider, tokens, pending.userId);
+    storeSessionMarketplaceTokens(req, provider, tokens);
   }
   delete req.session.oauthPending;
 
@@ -609,7 +618,7 @@ export async function handleLegacyCallback(
   });
 
   if (!isMockOAuthMode()) {
-    await saveConnectionTokens(provider, tokens, pending.userId);
+    storeSessionMarketplaceTokens(req, provider, tokens);
   }
   delete req.session.oauthPending;
 
@@ -636,7 +645,8 @@ export function oauthFailureRedirect(
 
 export async function getValidAccessToken(
   userId: number | null,
-  provider: string
+  provider: string,
+  req?: Request
 ): Promise<string | null> {
   if (!isUniversalOAuthProvider(provider)) return null;
 
@@ -644,28 +654,21 @@ export async function getValidAccessToken(
     return getMockAccessToken(userId, provider);
   }
 
-  const stored = await loadConnectionTokens(provider, userId);
-  if (!stored?.accessToken) return null;
+  const fromRequest = getClientMarketplaceToken(provider);
+  if (fromRequest?.accessToken) return fromRequest.accessToken;
 
-  const expiresAt = stored.expiresAt ? Date.parse(stored.expiresAt) : 0;
+  const sessionRow = req?.session?.marketplaceSessionTokens?.[provider];
+  if (!sessionRow?.accessToken) return null;
+
+  const expiresAt = sessionRow.expiresAt ? Date.parse(sessionRow.expiresAt) : 0;
   const stillValid = !expiresAt || expiresAt > Date.now() + REFRESH_BUFFER_MS;
-  if (stillValid) return stored.accessToken;
+  if (stillValid) return sessionRow.accessToken;
 
-  if (!stored.refreshToken) {
-    console.warn(`[OAuth] Token expired without refresh token provider=${provider}`);
-    return null;
-  }
+  if (!sessionRow.refreshToken || !req) return null;
 
   const lockKey = refreshLockKey(userId, provider);
   return withTokenRefreshLock(lockKey, async () => {
-    const latest = await loadConnectionTokens(provider, userId);
-    if (latest?.accessToken) {
-      const latestExpiry = latest.expiresAt ? Date.parse(latest.expiresAt) : 0;
-      if (!latestExpiry || latestExpiry > Date.now() + TOKEN_SKEW_MS) {
-        return latest.accessToken;
-      }
-    }
-
+    const latest = req.session?.marketplaceSessionTokens?.[provider];
     if (!latest?.refreshToken) return null;
 
     try {
@@ -673,42 +676,44 @@ export async function getValidAccessToken(
         shopDomain: latest.shopDomain,
         userId,
       });
-      await saveConnectionTokens(
-        provider,
-        { ...latest, ...refreshed } as StoredConnectionTokens,
-        userId
-      );
+      storeSessionMarketplaceTokens(req, provider, { ...latest, ...refreshed });
       return refreshed.accessToken;
     } catch (error) {
-      console.error(`[OAuth] Refresh failed provider=${provider}:`, error);
+      console.error(`[OAuth] Session refresh failed provider=${provider}:`, error);
       return null;
     }
   });
 }
 
-export async function listProviderConnectionStatus(userId: number | null) {
-  const rows = isMockOAuthMode()
-    ? listMockConnected(userId).map((provider) => ({
-        provider,
-        shopDomain: provider === "shopify" ? "mock-store.myshopify.com" : null,
-        accountLabel: `Mock ${provider}`,
-        tokenExpiresAt: new Date(Date.now() + 3600_000),
-        connected: true,
-      }))
-    : await import("./oauthConnectionStorage").then((m) => m.listConnections(userId));
+export function listProviderConnectionStatus(req: Request, userId: number | null) {
+  if (isMockOAuthMode()) {
+    return listMockConnected(userId).map((provider) => ({
+      marketplace: provider,
+      provider,
+      configured: isProviderConfigured(provider),
+      connected: true,
+      accountLabel: provider === "shopify" ? "mock-store.myshopify.com" : `Mock ${provider}`,
+      shopDomain: provider === "shopify" ? "mock-store.myshopify.com" : null,
+      expiresAt: new Date(Date.now() + 3600_000).toISOString(),
+    }));
+  }
 
-  return UNIVERSAL_OAUTH_PROVIDERS.map((id) => {
-    const row = rows.find((r) => r.provider === id);
+  const sessionTokens = req.session?.marketplaceSessionTokens ?? {};
+
+  const universal = UNIVERSAL_OAUTH_PROVIDERS.map((id) => {
+    const row = sessionTokens[id];
     return {
       marketplace: id,
       provider: id,
       configured: isProviderConfigured(id),
-      connected: Boolean(row),
+      connected: Boolean(row?.accessToken),
       accountLabel: row?.accountLabel ?? null,
       shopDomain: row?.shopDomain ?? null,
-      expiresAt: row?.tokenExpiresAt?.toString?.() ?? null,
+      expiresAt: row?.expiresAt ?? null,
     };
   });
+
+  return universal;
 }
 
 // Legacy aliases

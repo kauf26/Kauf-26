@@ -101,7 +101,7 @@ This whitelists `kauf26://oauth/*` so Chrome Custom Tabs can return to the app. 
 1. Open [Shopify Partners](https://partners.shopify.com) → Apps → your app → **Configuration**.
 2. **Allowed redirection URL(s)** → Add **`kauf26://oauth/shopify`**.
 3. Copy **Client ID** → `SHOPIFY_CLIENT_ID` in server `.env`.
-4. Copy **Client secret** → `EXPO_PUBLIC_SHOPIFY_CLIENT_SECRET` in mobile build env (device-only token exchange).
+4. Copy **Client secret** → `SHOPIFY_CLIENT_SECRET` in **server** `.env` (never in the mobile app).
 5. Merchant enters store domain in the app before connect (e.g. `your-store.myshopify.com`).
 6. Confirm `GET /api/marketplaces/oauth-config` shows `redirectUri: "kauf26://oauth/shopify"`.
 
@@ -113,7 +113,7 @@ This whitelists `kauf26://oauth/*` so Chrome Custom Tabs can return to the app. 
 2. **OAuth Redirect URIs (RuName)** → Add **`kauf26://oauth/ebay`**.
    - For sandbox testing, register the same URI on the sandbox key set if separate.
 3. Copy **App ID (Client ID)** → `EBAY_CLIENT_ID` in server `.env`.
-4. Copy **Cert ID (Client Secret)** → `EXPO_PUBLIC_EBAY_CLIENT_SECRET` in mobile build env.
+4. Copy **Cert ID (Client Secret)** → `EBAY_CLIENT_SECRET` or `EBAY_CERT_ID` in **server** `.env`.
 5. Enable scopes including `commerce.identity.readonly` (profile auto-fill) and sell scopes.
 6. Set `EBAY_SANDBOX=true` in `.env` for sandbox; auth URLs switch automatically.
 7. Confirm `GET /api/marketplaces/oauth-config` shows `redirectUri: "kauf26://oauth/ebay"`.
@@ -130,7 +130,7 @@ This whitelists `kauf26://oauth/*` so Chrome Custom Tabs can return to the app. 
 
 ## Other OAuth marketplaces — quick setup
 
-For each OAuth-supported marketplace below, register **`kauf26://oauth/{id}`** in the developer portal and set the matching `{ENV}_CLIENT_ID` in server `.env`. Set `EXPO_PUBLIC_{ID}_CLIENT_SECRET` in mobile build env when token exchange requires a secret (see `shared/marketplaceOAuthManifest.ts`).
+For each OAuth-supported marketplace below, register **`kauf26://oauth/{id}`** in the developer portal and set the matching `{ENV}_CLIENT_ID` and client secret in **server** `.env`. The mobile app sends the authorization code to `POST /api/auth/{id}/exchange` — no secrets in the mobile bundle.
 
 | Marketplace | Developer portal | Server env (client id) |
 |-------------|------------------|------------------------|

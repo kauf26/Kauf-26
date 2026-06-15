@@ -83,13 +83,3 @@ export async function getOAuthConfig(marketplace: string) {
   const legacy = await fetchOAuthConfigs();
   return legacy.find((c) => c.marketplace === marketplace);
 }
-
-/** On-device token exchange secret from Expo build env. */
-export function getMobileClientSecret(marketplaceId: string): string {
-  const entry = getOAuthManifestEntry(marketplaceId);
-  if (entry?.mobileClientSecretEnv) {
-    return process.env[entry.mobileClientSecretEnv] ?? '';
-  }
-  const derived = `EXPO_PUBLIC_${marketplaceId.toUpperCase()}_CLIENT_SECRET`;
-  return process.env[derived] ?? '';
-}

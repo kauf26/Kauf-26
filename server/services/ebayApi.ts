@@ -1,5 +1,5 @@
 /**
- * eBay helpers — server OAuth tokens in marketplace_auth when connected.
+ * eBay helpers — OAuth tokens come from the client per request (never stored server-side).
  */
 import { env } from "./adapters/adapterUtils";
 import {
@@ -7,11 +7,7 @@ import {
   isMarketplaceConnectedForPublish,
 } from "./listingService";
 import { isMockOAuthMode } from "./oauth/mockOAuth";
-import {
-  deleteConnectionTokens,
-  loadConnectionTokens,
-  saveConnectionTokens,
-} from "./oauthConnectionStorage";
+import { getClientMarketplaceToken } from "./publishTokenContext";
 import { refreshToken } from "./oauthService";
 
 export type MarketplaceConnectionResult = {
@@ -44,7 +40,7 @@ function warnMissingEbayRefreshToken(): void {
   if (warnedMissingEbayRefreshToken) return;
   if (!env("EBAY_REFRESH_TOKEN")) {
     console.warn(
-      "[eBay] EBAY_REFRESH_TOKEN not set — publish uses OAuth-stored refresh tokens only"
+      "[eBay] EBAY_REFRESH_TOKEN not set — publish requires device OAuth tokens per request"
     );
   }
   warnedMissingEbayRefreshToken = true;
@@ -74,13 +70,6 @@ export function isEbayConfigured(): boolean {
     Boolean(env("EBAY_CLIENT_ID") || env("EBAY_APP_ID")) &&
     Boolean(env("EBAY_CLIENT_SECRET") || env("EBAY_CERT_ID"))
   );
-}
-
-function isStoredTokenExpired(expiresAt?: string | null): boolean {
-  if (!expiresAt) return false;
-  const parsed = Date.parse(expiresAt);
-  if (Number.isNaN(parsed)) return false;
-  return parsed <= Date.now() + REFRESH_BUFFER_MS;
 }
 
 async function refreshEbayAccessTokenFromEnv(
@@ -121,24 +110,21 @@ async function refreshEbayAccessTokenFromEnv(
   return data.access_token;
 }
 
-async function refreshEbayTokenFromStorage(
+async function refreshEbayFromClientCredential(
   fetchImpl: typeof fetch = fetch
 ): Promise<string> {
-  const stored = await loadConnectionTokens("ebay", null);
-  if (!stored?.refreshToken) {
-    throw new EbayAuthError("Invalid access token — no eBay refresh token stored");
+  const client = getClientMarketplaceToken("ebay");
+  if (!client?.refreshToken) {
+    throw new EbayAuthError("Invalid access token — no eBay refresh token in request");
   }
 
   try {
-    const refreshed = await refreshToken("ebay", stored.refreshToken, {
+    const refreshed = await refreshToken("ebay", client.refreshToken, {
       userId: null,
-      shopDomain: stored.shopDomain,
+      shopDomain: client.shopDomain,
     });
-    await saveConnectionTokens("ebay", { ...stored, ...refreshed }, null);
     return refreshed.accessToken;
   } catch (error) {
-    console.error("[eBay] OAuth refresh failed — revoking stored tokens:", error);
-    await deleteConnectionTokens("ebay", null);
     throw new EbayAuthError(
       error instanceof Error
         ? error.message.includes(EBAY_TOKEN_EXPIRED)
@@ -147,28 +133,6 @@ async function refreshEbayTokenFromStorage(
         : `${EBAY_TOKEN_EXPIRED}: Invalid access token — reconnect eBay`
     );
   }
-}
-
-async function forceRefreshEbayAccessToken(
-  fetchImpl: typeof fetch = fetch
-): Promise<string> {
-  warnMissingEbayRefreshToken();
-
-  if (isMockOAuthMode()) {
-    return `mock_ebay_access_${Date.now()}`;
-  }
-
-  const stored = await loadConnectionTokens("ebay", null);
-  if (stored?.refreshToken) {
-    return refreshEbayTokenFromStorage(fetchImpl);
-  }
-
-  if (env("EBAY_REFRESH_TOKEN")) {
-    return refreshEbayAccessTokenFromEnv(fetchImpl);
-  }
-
-  await deleteConnectionTokens("ebay", null);
-  throw new EbayAuthError();
 }
 
 async function resolveEbayAccessToken(
@@ -181,17 +145,13 @@ async function resolveEbayAccessToken(
     return mock ?? `mock_ebay_access_${Date.now()}`;
   }
 
-  const stored = await loadConnectionTokens("ebay", null);
-  if (stored?.accessToken && !isStoredTokenExpired(stored.expiresAt)) {
-    return stored.accessToken;
-  }
-
-  if (stored?.refreshToken || isStoredTokenExpired(stored?.expiresAt)) {
-    return forceRefreshEbayAccessToken(fetchImpl);
-  }
-
   const fromOAuth = await getAccessTokenForListingPublish("ebay", null);
   if (fromOAuth) return fromOAuth;
+
+  const client = getClientMarketplaceToken("ebay");
+  if (client?.refreshToken) {
+    return refreshEbayFromClientCredential(fetchImpl);
+  }
 
   if (env("EBAY_REFRESH_TOKEN")) {
     return refreshEbayAccessTokenFromEnv(fetchImpl);
@@ -200,224 +160,4 @@ async function resolveEbayAccessToken(
   throw new EbayAuthError(
     "Connect eBay in Settings before publishing (OAuth token missing or expired)."
   );
-}
-
-async function callEbayApi(
-  url: string,
-  init: RequestInit,
-  fetchImpl: typeof fetch = fetch
-): Promise<Response> {
-  let token = await resolveEbayAccessToken(fetchImpl);
-  const headers = {
-    ...(init.headers as Record<string, string> | undefined),
-    Authorization: `Bearer ${token}`,
-  };
-
-  let response = await fetchImpl(url, { ...init, headers });
-  if (response.status !== 401) {
-    return response;
-  }
-
-  console.warn("[eBay] API returned 401 — refreshing token and retrying once");
-  try {
-    token = await forceRefreshEbayAccessToken(fetchImpl);
-  } catch (error) {
-    if (error instanceof EbayAuthError) throw error;
-    throw new EbayAuthError();
-  }
-
-  response = await fetchImpl(url, {
-    ...init,
-    headers: { ...headers, Authorization: `Bearer ${token}` },
-  });
-
-  if (response.status === 401) {
-    await deleteConnectionTokens("ebay", null);
-    throw new EbayAuthError();
-  }
-
-  return response;
-}
-
-export async function verifyEbayConnection(
-  fetchImpl: typeof fetch = fetch
-): Promise<MarketplaceConnectionResult> {
-  const hasApp = isEbayConfigured();
-  if (!hasApp) {
-    return {
-      ok: false,
-      configured: false,
-      status: 0,
-      message: "EBAY_CLIENT_ID / EBAY_CLIENT_SECRET not set.",
-    };
-  }
-
-  if (isMockOAuthMode()) {
-    return {
-      ok: true,
-      configured: true,
-      status: 200,
-      message: "eBay connected via mock OAuth (MOCK_OAUTH_MODE).",
-    };
-  }
-
-  try {
-    await resolveEbayAccessToken(fetchImpl);
-    return {
-      ok: true,
-      configured: true,
-      status: 200,
-      message: "eBay connected via server OAuth.",
-    };
-  } catch (error) {
-    if (error instanceof EbayAuthError) {
-      return {
-        ok: false,
-        configured: true,
-        status: 401,
-        message: error.message,
-      };
-    }
-    const connected = await isMarketplaceConnectedForPublish("ebay", null);
-    if (connected) {
-      return {
-        ok: false,
-        configured: true,
-        status: 401,
-        message: error instanceof Error ? error.message : "eBay token invalid.",
-      };
-    }
-    return {
-      ok: false,
-      configured: true,
-      status: 401,
-      message: "Connect eBay in Settings to authorize publishing.",
-    };
-  }
-}
-
-export type EbayInventoryListing = {
-  sku: string;
-  title: string;
-  description: string;
-  brand?: string;
-  condition: string;
-  price: { value: string; currency: string };
-  quantity?: number;
-  marketplaceId: string;
-  categoryId: string;
-  listingFormat: string;
-};
-
-export type EbayPublishResult = {
-  listingId: string;
-  offerId?: string;
-  listingUrl?: string;
-  message: string;
-};
-
-export async function publishEbayInventoryListing(
-  listing: EbayInventoryListing,
-  fetchImpl: typeof fetch = fetch
-): Promise<EbayPublishResult> {
-  if (isMockOAuthMode()) {
-    const listingId = `mock-ebay-${Date.now()}`;
-    return {
-      listingId,
-      message: "eBay mock publish succeeded (MOCK_OAUTH_MODE)",
-      listingUrl: `https://www.ebay.com/itm/${listingId}`,
-    };
-  }
-
-  const baseUrl = resolveEbayBaseUrl();
-  const sku = listing.sku;
-  const jsonHeaders = {
-    "Content-Type": "application/json",
-    "Content-Language": "en-US",
-  };
-
-  const inventoryBody = {
-    product: {
-      title: listing.title,
-      description: listing.description,
-      aspects: listing.brand ? { Brand: [String(listing.brand)] } : undefined,
-    },
-    condition: listing.condition,
-    availability: {
-      shipToLocationAvailability: { quantity: listing.quantity ?? 1 },
-    },
-  };
-
-  const invRes = await callEbayApi(
-    `${baseUrl}/sell/inventory/v1/inventory_item/${encodeURIComponent(sku)}`,
-    { method: "PUT", headers: jsonHeaders, body: JSON.stringify(inventoryBody) },
-    fetchImpl
-  );
-  if (!invRes.ok) {
-    const text = await invRes.text();
-    throw new Error(
-      `eBay createInventoryItem failed (${invRes.status}): ${text.slice(0, 300)}`
-    );
-  }
-
-  const offerBody = {
-    sku,
-    marketplaceId: listing.marketplaceId,
-    format: listing.listingFormat,
-    listingDescription: listing.description,
-    availableQuantity: listing.quantity ?? 1,
-    categoryId: listing.categoryId,
-    pricingSummary: {
-      price: { value: listing.price.value, currency: listing.price.currency },
-    },
-    listingPolicies: {
-      fulfillmentPolicyId: env("EBAY_FULFILLMENT_POLICY_ID") || undefined,
-      paymentPolicyId: env("EBAY_PAYMENT_POLICY_ID") || undefined,
-      returnPolicyId: env("EBAY_RETURN_POLICY_ID") || undefined,
-    },
-  };
-
-  const offerRes = await callEbayApi(
-    `${baseUrl}/sell/inventory/v1/offer`,
-    { method: "POST", headers: jsonHeaders, body: JSON.stringify(offerBody) },
-    fetchImpl
-  );
-  if (!offerRes.ok) {
-    const text = await offerRes.text();
-    throw new Error(
-      `eBay createOffer failed (${offerRes.status}): ${text.slice(0, 300)}`
-    );
-  }
-
-  const offer = (await offerRes.json()) as { offerId?: string };
-  const offerId = offer.offerId;
-  if (!offerId) {
-    return {
-      listingId: sku,
-      message: "eBay offer created (no offerId in response)",
-    };
-  }
-
-  const pubRes = await callEbayApi(
-    `${baseUrl}/sell/inventory/v1/offer/${offerId}/publish`,
-    { method: "POST", headers: jsonHeaders },
-    fetchImpl
-  );
-  if (!pubRes.ok) {
-    const text = await pubRes.text();
-    throw new Error(
-      `eBay publishOffer failed (${pubRes.status}): ${text.slice(0, 300)}`
-    );
-  }
-
-  const published = (await pubRes.json()) as { listingId?: string };
-  const listingId = published.listingId ?? offerId;
-  return {
-    listingId,
-    offerId,
-    listingUrl: published.listingId
-      ? `https://www.ebay.com/itm/${published.listingId}`
-      : undefined,
-    message: "eBay listing published",
-  };
 }

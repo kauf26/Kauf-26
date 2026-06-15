@@ -5,7 +5,7 @@ import {
   savePlatformTokens,
   type StoredPlatformTokens,
 } from './secureTokenStore';
-import { getMobileClientSecret } from './oauthConfig';
+import { fetchServerOAuthStatus, usesServerOAuth } from './serverMarketplaceOAuth';
 
 export type VerifyResult = {
   ok: boolean;
@@ -55,48 +55,9 @@ async function getValidTokens(marketplace: string): Promise<StoredPlatformTokens
       expiresAt: Date.now() + (json.expires_in ?? 3600) * 1000,
     };
   } else if (marketplace === 'shopify' && stored.shopDomain) {
-    const secret = getMobileClientSecret('shopify');
-    const res = await fetch(`https://${stored.shopDomain}/admin/oauth/access_token`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        client_id: config.clientId,
-        client_secret: secret,
-        grant_type: 'refresh_token',
-        refresh_token: stored.refreshToken,
-      }),
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error_description ?? 'Shopify refresh failed');
-    refreshed = {
-      ...stored,
-      accessToken: json.access_token,
-      refreshToken: json.refresh_token ?? stored.refreshToken,
-      expiresAt: Date.now() + (json.expires_in ?? 86399) * 1000,
-    };
+    throw new Error(`${marketplace} token expired — reconnect in Connections`);
   } else if (marketplace === 'ebay') {
-    const secret = getMobileClientSecret('ebay');
-    const basic = btoa(`${config.clientId}:${secret}`);
-    const res = await fetch(config.tokenUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${basic}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        refresh_token: stored.refreshToken,
-        scope: Array.isArray(config.scopes) ? config.scopes.join(' ') : String(config.scopes ?? ''),
-      }),
-    });
-    const json = await res.json();
-    if (!res.ok) throw new Error(json.error_description ?? 'eBay refresh failed');
-    refreshed = {
-      ...stored,
-      accessToken: json.access_token,
-      refreshToken: json.refresh_token ?? stored.refreshToken,
-      expiresAt: Date.now() + (json.expires_in ?? 7200) * 1000,
-    };
+    throw new Error(`${marketplace} token expired — reconnect in Connections`);
   } else {
     throw new Error('Cannot refresh token');
   }
@@ -106,6 +67,19 @@ async function getValidTokens(marketplace: string): Promise<StoredPlatformTokens
 }
 
 export async function verifyMarketplace(marketplace: string): Promise<VerifyResult> {
+  if (usesServerOAuth(marketplace)) {
+    try {
+      const status = await fetchServerOAuthStatus(marketplace);
+      return {
+        ok: status.connected,
+        message: status.accountLabel ?? status.message,
+        accountName: status.accountLabel ?? undefined,
+      };
+    } catch {
+      return { ok: false, message: 'Not connected' };
+    }
+  }
+
   if (!(await hasPlatformTokens(marketplace))) {
     return { ok: false, message: 'Not connected' };
   }

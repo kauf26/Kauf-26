@@ -1,9 +1,10 @@
 import {
-  getValidAccessToken,
+  getClientMarketplaceToken,
+} from "./publishTokenContext";
+import {
   isUniversalOAuthProvider,
   type OAuthProviderId,
-} from "./oauthService";
-import { hasConnection } from "./oauthConnectionStorage";
+} from "./oauth/types";
 import type { ListingPolicyContext } from "../../shared/marketplaceCategorySupport";
 import {
   assertMarketplacesEligible,
@@ -26,23 +27,23 @@ export function isOAuthListingMarketplace(
 }
 
 /**
- * Fetch a valid access token for publishing — never expose to the frontend.
- * Uses concurrency-safe refresh via oauthService.
+ * Access token for publish — from request body (mobile/web) only.
+ * Never reads persisted server token storage.
  */
 export async function getAccessTokenForListingPublish(
   marketplaceId: string,
-  userId: number | null = null
+  _userId: number | null = null
 ): Promise<string | null> {
   if (!isOAuthListingMarketplace(marketplaceId)) return null;
-  return getValidAccessToken(userId, marketplaceId);
+  return getClientMarketplaceToken(marketplaceId)?.accessToken ?? null;
 }
 
 export async function isMarketplaceConnectedForPublish(
   marketplaceId: string,
-  userId: number | null = null
+  _userId: number | null = null
 ): Promise<boolean> {
   if (!isUniversalOAuthProvider(marketplaceId)) return false;
-  return hasConnection(marketplaceId, userId);
+  return Boolean(getClientMarketplaceToken(marketplaceId)?.accessToken);
 }
 
 /** Validate token before publish; throws when missing or expired without refresh. */

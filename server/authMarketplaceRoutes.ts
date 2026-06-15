@@ -1,6 +1,9 @@
 /**
  * Universal marketplace OAuth API routes.
  * Mounted after session middleware (see setupAuth / index.ts).
+ *
+ * Marketplace tokens are never persisted — mobile stores in SecureStore;
+ * web may hold tokens in session only for the current login.
  */
 import express from "express";
 import {
@@ -22,6 +25,14 @@ import {
   logOAuthCallbackError,
 } from "./services/oauth/callbackErrors";
 import { RESERVED_AUTH_PATHS } from "./services/oauth/types";
+import { requireAuthInProduction } from "./auth/requireAuth";
+import { getOAuthManifestEntry } from "../shared/marketplaceOAuthManifest";
+import { getOAuthRedirectUri } from "../shared/oauthRedirect";
+import {
+  exchangeMarketplaceAuthorizationCode,
+  isOAuthExchangeSupported,
+} from "./services/marketplaceTokenExchange";
+import type { TokenResponse } from "./services/oauth/types";
 
 function wantsJsonOAuthResponse(req: express.Request): boolean {
   if (req.query.format === "json") return true;
@@ -64,6 +75,21 @@ function respondOAuthCallbackError(
   });
 }
 
+/** OAuth token JSON for mobile clients (never persisted server-side). */
+function tokenResponseToOAuthJson(tokens: TokenResponse): Record<string, unknown> {
+  const expiresIn = tokens.expiresAt
+    ? Math.max(1, Math.floor((Date.parse(tokens.expiresAt) - Date.now()) / 1000))
+    : 3600;
+  return {
+    access_token: tokens.accessToken,
+    refresh_token: tokens.refreshToken,
+    token_type: tokens.tokenType ?? "Bearer",
+    expires_in: expiresIn,
+    scope: tokens.scope,
+    user_id: tokens.marketplaceShopId,
+  };
+}
+
 const router = express.Router();
 
 function parseProvider(param: string): OAuthProviderId | null {
@@ -72,13 +98,27 @@ function parseProvider(param: string): OAuthProviderId | null {
   return isUniversalOAuthProvider(id) ? id : null;
 }
 
+function parseExchangeMarketplace(param: string): string | null {
+  const id = param.toLowerCase();
+  if (RESERVED_AUTH_PATHS.has(id)) return null;
+  return isOAuthExchangeSupported(id) ? id : null;
+}
+
+function parseRevokeMarketplace(param: string): string | null {
+  const id = param.toLowerCase();
+  if (RESERVED_AUTH_PATHS.has(id)) return null;
+  if (isUniversalOAuthProvider(id)) return id;
+  return isOAuthExchangeSupported(id) ? id : null;
+}
+
 router.get("/connections", async (req, res) => {
   try {
     const userId = resolveOAuthUserId(req);
-    const connections = await listProviderConnectionStatus(userId);
+    const connections = listProviderConnectionStatus(req, userId);
     return res.status(200).json({
       connections,
       mockMode: isMockOAuthMode(),
+      note: "Server does not store marketplace tokens. Mobile uses SecureStore; web uses session only.",
     });
   } catch (error) {
     console.error("[OAuth] connections error:", error);
@@ -160,14 +200,114 @@ router.get("/:provider/url", (req, res) => {
   }
 });
 
+/** Stateless token exchange — returns OAuth JSON, never persists tokens. */
+router.post("/:marketplace/token-proxy", requireAuthInProduction, async (req, res) => {
+  const marketplace = parseExchangeMarketplace(String(req.params.marketplace));
+  if (!marketplace) {
+    return res.status(400).json({ error: "Unsupported OAuth marketplace" });
+  }
+
+  const code = typeof req.body?.code === "string" ? req.body.code.trim() : "";
+  if (!code) {
+    return res.status(400).json({ error: "code is required" });
+  }
+
+  const canonicalRedirect = getOAuthRedirectUri(marketplace);
+  const redirectUri =
+    typeof req.body?.redirectUri === "string" && req.body.redirectUri.trim()
+      ? req.body.redirectUri.trim()
+      : canonicalRedirect;
+
+  const userId = resolveOAuthUserId(req);
+  if (process.env.NODE_ENV === "production" && userId == null) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  try {
+    const tokens = await exchangeMarketplaceAuthorizationCode(marketplace, code, {
+      redirectUri,
+      codeVerifier:
+        typeof req.body?.codeVerifier === "string" ? req.body.codeVerifier : undefined,
+      shopDomain:
+        typeof req.body?.shopDomain === "string" ? req.body.shopDomain : undefined,
+      siteUrl: typeof req.body?.siteUrl === "string" ? req.body.siteUrl : undefined,
+      baseUrl: typeof req.body?.baseUrl === "string" ? req.body.baseUrl : undefined,
+      userId,
+    });
+
+    return res.status(200).json(tokenResponseToOAuthJson(tokens));
+  } catch (error) {
+    const details = error instanceof Error ? error.message : "Token exchange failed";
+    console.error(`[OAuth] POST /api/auth/${marketplace}/token-proxy failed:`, error);
+    return res.status(400).json({ error: "OAuth exchange failed", details });
+  }
+});
+
+/** @deprecated Use token-proxy — exchange no longer persists tokens. */
+router.post("/:marketplace/exchange", requireAuthInProduction, async (req, res) => {
+  const marketplace = parseExchangeMarketplace(String(req.params.marketplace));
+  if (!marketplace) {
+    return res.status(400).json({ error: "Unsupported OAuth marketplace" });
+  }
+
+  const code = typeof req.body?.code === "string" ? req.body.code.trim() : "";
+  if (!code) {
+    return res.status(400).json({ error: "code is required" });
+  }
+
+  const canonicalRedirect = getOAuthRedirectUri(marketplace);
+  const redirectUri =
+    typeof req.body?.redirectUri === "string" && req.body.redirectUri.trim()
+      ? req.body.redirectUri.trim()
+      : canonicalRedirect;
+
+  const userId = resolveOAuthUserId(req);
+  if (process.env.NODE_ENV === "production" && userId == null) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+
+  try {
+    const tokens = await exchangeMarketplaceAuthorizationCode(marketplace, code, {
+      redirectUri,
+      codeVerifier:
+        typeof req.body?.codeVerifier === "string" ? req.body.codeVerifier : undefined,
+      shopDomain:
+        typeof req.body?.shopDomain === "string" ? req.body.shopDomain : undefined,
+      siteUrl: typeof req.body?.siteUrl === "string" ? req.body.siteUrl : undefined,
+      baseUrl: typeof req.body?.baseUrl === "string" ? req.body.baseUrl : undefined,
+      userId,
+    });
+
+    const entry = getOAuthManifestEntry(marketplace);
+    return res.status(200).json({
+      ok: true,
+      provider: marketplace,
+      marketplace,
+      name: entry?.name ?? marketplace,
+      accountLabel: tokens.accountLabel ?? null,
+      shopDomain: tokens.shopDomain ?? null,
+      ...tokenResponseToOAuthJson(tokens),
+      deprecated: true,
+      message:
+        "This endpoint no longer stores tokens. Use POST /api/auth/:marketplace/token-proxy and save tokens on the device.",
+    });
+  } catch (error) {
+    const details = error instanceof Error ? error.message : "Token exchange failed";
+    console.error(`[OAuth] POST /api/auth/${marketplace}/exchange failed:`, error);
+    return res.status(400).json({ error: "OAuth exchange failed", details });
+  }
+});
+
 router.post("/:provider/revoke", async (req, res) => {
-  const provider = parseProvider(String(req.params.provider));
+  const provider = parseRevokeMarketplace(String(req.params.provider));
   if (!provider) {
     return res.status(400).json({ error: "Unsupported OAuth provider" });
   }
 
   try {
-    await revokeAccess(provider, resolveOAuthUserId(req));
+    if (isUniversalOAuthProvider(provider)) {
+      await revokeAccess(provider, resolveOAuthUserId(req), req);
+    }
     return res.status(200).json({ ok: true, provider });
   } catch (error) {
     console.error(`[OAuth] revoke ${provider} failed:`, error);
@@ -176,26 +316,32 @@ router.post("/:provider/revoke", async (req, res) => {
 });
 
 router.get("/:provider/status", async (req, res) => {
-  const provider = parseProvider(String(req.params.provider));
+  const provider = parseRevokeMarketplace(String(req.params.provider));
   if (!provider) {
     return res.status(400).json({ error: "Unsupported OAuth provider" });
   }
 
   const userId = resolveOAuthUserId(req);
-  const token = await getValidAccessToken(userId, provider);
-  const connections = await listProviderConnectionStatus(userId);
-  const row = connections.find((c) => c.provider === provider);
+  const token = isUniversalOAuthProvider(provider)
+    ? await getValidAccessToken(userId, provider, req)
+    : null;
+  const connections = listProviderConnectionStatus(req, userId);
+  const row = connections.find((c) => c.provider === provider || c.marketplace === provider);
+
+  const configured = isUniversalOAuthProvider(provider)
+    ? isOAuthProviderConfigured(provider)
+    : Boolean(getOAuthManifestEntry(provider)?.oauthSupported);
 
   return res.status(200).json({
     provider,
-    configured: isOAuthProviderConfigured(provider),
+    configured,
     connected: Boolean(token),
     accountLabel: row?.accountLabel ?? null,
     shopDomain: row?.shopDomain ?? null,
     mockMode: isMockOAuthMode(),
     message: token
       ? "Connected"
-      : isOAuthProviderConfigured(provider)
+      : configured
         ? "Not connected"
         : "OAuth not configured on server",
   });

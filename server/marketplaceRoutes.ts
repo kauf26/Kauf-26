@@ -8,6 +8,10 @@ import {
   getEnabledMarketplaceIds,
 } from './config/marketplaces';
 import { publishDraft, publishDraftToAll } from './services/publishEngine';
+import {
+  mergePublishTokenSources,
+  runWithPublishTokens,
+} from './services/publishTokenContext';
 import { marketplaceEnvConfigured } from './services/marketplaceCredentials';
 import {
   getBlockedKeywords,
@@ -53,11 +57,15 @@ router.post('/publish', requireAuthInProduction, async (req, res) => {
  }
 
  try {
-   const report = await publishDraft(Number(draftId), targets, {
-     sync: sync === true,
-     createJob: true,
-     translateInternational: translateInternational !== false,
-   });
+   const report = await runWithPublishTokens(
+     { marketplaceTokens: mergePublishTokenSources(req.body, req.session) },
+     () =>
+       publishDraft(Number(draftId), targets, {
+         sync: sync === true,
+         createJob: true,
+         translateInternational: translateInternational !== false,
+       })
+   );
 
    return res.status(202).json({
      success: true,
@@ -163,11 +171,15 @@ router.post('/publish-all', requireAuthInProduction, async (req, res) => {
     return res.status(404).json({ error: `Draft ${draftId} not found.` });
   }
 
-  try {
-    const report = await publishDraftToAll(Number(draftId), {
-      sync: sync === true,
-      createJob: true,
-    });
+ try {
+   const report = await runWithPublishTokens(
+     { marketplaceTokens: mergePublishTokenSources(req.body, req.session) },
+     () =>
+       publishDraftToAll(Number(draftId), {
+         sync: sync === true,
+         createJob: true,
+       })
+   );
 
     return res.status(202).json({
       success: true,

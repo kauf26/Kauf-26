@@ -54,4 +54,5 @@ export const RESERVED_AUTH_PATHS = new Set([
   "setup",
   "callback",
   "connections",
+  "exchange",
 ]);
