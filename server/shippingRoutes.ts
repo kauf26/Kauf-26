@@ -21,8 +21,11 @@ import {
 } from "../shared/shippingValidation";
 import { sendShippingLabelEmail } from "./services/shippingEmailService";
 import { parseBuyerAddress } from "../shared/shippingAddresses";
+import { requireAuthInProduction } from "./auth";
 
 const router = express.Router();
+
+router.use(requireAuthInProduction);
 
 function normalizeRatesBody(body: Record<string, unknown>): RateQuoteInput {
   const dimensions = body.dimensions as Record<string, unknown> | undefined;

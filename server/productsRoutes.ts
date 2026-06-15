@@ -1,7 +1,7 @@
 import express from 'express';
 import { db } from './db';
 import { productDrafts, publishJobs, publishTasks } from '../shared/schema';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, and } from 'drizzle-orm';
 import { collectDraftImages } from './services/adapters/adapterUtils';
 import {
   MAX_DRAFT_IMAGES,
@@ -14,8 +14,16 @@ import {
   filesToPublicUrls,
 } from './services/draftPhotoUpload';
 import { countUniqueProductDrafts } from '../shared/draftCount';
+import {
+  draftAccessWhere,
+  draftVisibilityCondition,
+  requireAuthInProduction,
+  userIdForNewDraft,
+} from './auth';
 
 const router = express.Router();
+
+router.use(requireAuthInProduction);
 
 const STRIPPED_ATTRIBUTE_KEYS = [
   "productUrl",
@@ -102,7 +110,7 @@ router.post("/drafts", async (req, res) => {
    if (id) {
      const [existingDraft] = await db.select()
        .from(productDrafts)
-       .where(eq(productDrafts.id, Number(id)));
+       .where(draftAccessWhere(req, Number(id)));
 
      if (existingDraft) {
        const priorImages = Array.isArray(existingDraft.images)
@@ -122,7 +130,7 @@ router.post("/drafts", async (req, res) => {
            attributes: normalizedAttributes,
            updatedAt: new Date()
          })
-         .where(eq(productDrafts.id, Number(id)))
+         .where(draftAccessWhere(req, Number(id)))
          .returning();
 
        console.log(
@@ -140,6 +148,7 @@ router.post("/drafts", async (req, res) => {
    // Create new draft
    const [newDraft] = await db.insert(productDrafts)
      .values({
+       userId: userIdForNewDraft(req),
        title,
        sku: sku || null,
        status: status || 'draft',
@@ -160,9 +169,10 @@ router.post("/drafts", async (req, res) => {
 });
 
 // --- 2. FETCH ALL SAVED DRAFTS (GET) ---
-router.get("/drafts/count", async (_req, res) => {
+router.get("/drafts/count", async (req, res) => {
  try {
-   const rows = await db
+   const visibility = draftVisibilityCondition(req);
+   const baseQuery = db
      .select({
        id: productDrafts.id,
        title: productDrafts.title,
@@ -170,6 +180,9 @@ router.get("/drafts/count", async (_req, res) => {
        attributes: productDrafts.attributes,
      })
      .from(productDrafts);
+   const rows = visibility
+     ? await baseQuery.where(visibility)
+     : await baseQuery;
 
    const count = countUniqueProductDrafts(rows);
    return res.status(200).json({ count });
@@ -179,9 +192,13 @@ router.get("/drafts/count", async (_req, res) => {
  }
 });
 
-router.get("/drafts", async (_req, res) => {
+router.get("/drafts", async (req, res) => {
  try {
-   const allDrafts = await db.select().from(productDrafts);
+   const visibility = draftVisibilityCondition(req);
+   const baseQuery = db.select().from(productDrafts);
+   const allDrafts = visibility
+     ? await baseQuery.where(visibility)
+     : await baseQuery;
    console.log(`[KAUF26] Fetching ${allDrafts.length} total drafts`);
    return res.status(200).json(allDrafts);
  } catch (error) {
@@ -203,6 +220,7 @@ router.post("/scrape-from-camera", async (req, res) => {
 
    const [draftFromCamera] = await db.insert(productDrafts)
      .values({
+       userId: userIdForNewDraft(req),
        title: title || "Camera Captured Product",
        sku: sku || null,
        status: 'processing',
@@ -244,13 +262,17 @@ router.post("/scrape-from-camera", async (req, res) => {
 });
 
 // --- 4. GET DRAFTS READY FOR MARKETPLACE POSTING (GET) ---
-router.get("/drafts/ready-for-posting", async (_req, res) => {
+router.get("/drafts/ready-for-posting", async (req, res) => {
  try {
-   const readyDrafts = await db.select()
-     .from(productDrafts)
-     .where(
-       inArray(productDrafts.status, ["ready_for_posting", "requires_review"])
-     );
+   const visibility = draftVisibilityCondition(req);
+   const statusFilter = inArray(productDrafts.status, ["ready_for_posting", "requires_review"]);
+   const readyDrafts = visibility
+     ? await db.select()
+       .from(productDrafts)
+       .where(and(statusFilter, visibility))
+     : await db.select()
+       .from(productDrafts)
+       .where(statusFilter);
 
    console.log(`[KAUF26] Found ${readyDrafts.length} drafts ready for posting`);
    return res.status(200).json({
@@ -274,7 +296,7 @@ router.post("/drafts/:id/post-to-marketplaces", async (req, res) => {
 
    const [draft] = await db.select()
      .from(productDrafts)
-     .where(eq(productDrafts.id, Number(draftId)));
+     .where(draftAccessWhere(req, Number(draftId)));
 
    if (!draft) {
      return res.status(404).json({ error: "Draft not found" });
@@ -325,7 +347,7 @@ router.post("/drafts/:id/post-to-marketplaces", async (req, res) => {
        attributes: updatedAttributes,
        updatedAt: new Date()
      })
-     .where(eq(productDrafts.id, Number(draftId)))
+     .where(draftAccessWhere(req, Number(draftId)))
      .returning();
 
    return res.status(202).json({
@@ -364,7 +386,7 @@ router.post(
       const [draft] = await db
         .select()
         .from(productDrafts)
-        .where(eq(productDrafts.id, draftId));
+        .where(draftAccessWhere(req, draftId));
 
       if (!draft) {
         return res.status(404).json({ error: "Draft not found" });
@@ -408,7 +430,7 @@ router.post("/drafts/:id/add-photos", async (req, res) => {
     const [existingDraft] = await db
       .select()
       .from(productDrafts)
-      .where(eq(productDrafts.id, draftId));
+      .where(draftAccessWhere(req, draftId));
 
     if (!existingDraft) {
       return res.status(404).json({ error: "Draft not found" });
@@ -459,7 +481,7 @@ router.post("/drafts/:id/add-photos", async (req, res) => {
         attributes: updatedAttributes,
         updatedAt: new Date(),
       })
-      .where(eq(productDrafts.id, draftId))
+      .where(draftAccessWhere(req, draftId))
       .returning();
 
     console.log(
@@ -484,7 +506,7 @@ router.get("/drafts/:id", async (req, res) => {
    const draftId = req.params.id;
    const [draft] = await db.select()
      .from(productDrafts)
-     .where(eq(productDrafts.id, Number(draftId)));
+     .where(draftAccessWhere(req, Number(draftId)));
 
    if (!draft) {
      return res.status(404).json({ error: "Draft not found" });
@@ -503,7 +525,7 @@ router.patch("/drafts/:id", async (req, res) => {
    const draftId = Number(req.params.id);
    const [existingDraft] = await db.select()
      .from(productDrafts)
-     .where(eq(productDrafts.id, draftId));
+     .where(draftAccessWhere(req, draftId));
 
    if (!existingDraft) {
      return res.status(404).json({ error: "Draft not found" });
@@ -524,7 +546,7 @@ router.patch("/drafts/:id", async (req, res) => {
        attributes: mergedAttributes,
        updatedAt: new Date(),
      })
-     .where(eq(productDrafts.id, draftId))
+     .where(draftAccessWhere(req, draftId))
      .returning();
 
    console.log(`[KAUF26] Patched draft ID: ${updatedDraft.id}`);
@@ -555,7 +577,7 @@ router.patch("/drafts/:id/status", async (req, res) => {
        status: status,
        updatedAt: new Date()
      })
-     .where(eq(productDrafts.id, Number(draftId)))
+     .where(draftAccessWhere(req, Number(draftId)))
      .returning();
 
    if (!updatedDraft) {
@@ -575,7 +597,7 @@ router.delete("/drafts/:id", async (req, res) => {
  try {
    const draftId = req.params.id;
    const [deletedDraft] = await db.delete(productDrafts)
-     .where(eq(productDrafts.id, Number(draftId)))
+     .where(draftAccessWhere(req, Number(draftId)))
      .returning();
 
    if (!deletedDraft) {
@@ -590,7 +612,8 @@ router.delete("/drafts/:id", async (req, res) => {
  }
 });
 
-// --- 10. DEBUG: Get all drafts with detailed info ---
+// --- DEBUG routes (development only) ---
+if (process.env.NODE_ENV !== "production") {
 router.get("/debug/all-drafts", async (_req, res) => {
  try {
    const allDrafts = await db.select().from(productDrafts);
@@ -649,5 +672,6 @@ router.get("/debug/stats", async (_req, res) => {
    res.status(500).json({ error: "Failed to get stats" });
  }
 });
+}
 
 export { router as productRoutes };

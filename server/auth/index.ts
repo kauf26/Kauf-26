@@ -1,5 +1,14 @@
-export { setupAuth, isAuthenticated, getSessionMiddleware } from "./setupAuth";
+export { setupAuth, isAuthenticated, getSessionMiddleware, initSessionMiddleware } from "./setupAuth";
 export { registerAuthRoutes } from "./routes";
+export {
+  requireAuthInProduction,
+  getSessionUserId,
+  draftVisibilityCondition,
+  userOwnsDraft,
+  userIdForNewDraft,
+  draftAccessWhere,
+  isProductionAuthRequired,
+} from "./requireAuth";
 export {
   upsertOAuthUser,
   getUserById,

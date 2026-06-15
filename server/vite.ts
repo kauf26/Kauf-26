@@ -5,8 +5,11 @@ import express, { type Express } from "express"; // Added express import here
 import type { Server } from "http";
 import { createServer as createViteServer } from "vite";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+/** ESM (tsx dev) uses import.meta.url; CJS bundle (dist/index.cjs) uses __filename. */
+const runtimeDir =
+  typeof __filename !== "undefined"
+    ? path.dirname(__filename)
+    : path.dirname(fileURLToPath(import.meta.url));
 
 export async function setupVite(app: Express, server: Server) {
  const vite = await createViteServer({
@@ -19,7 +22,7 @@ export async function setupVite(app: Express, server: Server) {
  app.use(/.*/, async (req, res, next) => {
    const url = req.originalUrl;
    try {
-     const clientTemplate = path.resolve(__dirname, "..", "index.html");
+     const clientTemplate = path.resolve(runtimeDir, "..", "index.html");
      const template = await fs.promises.readFile(clientTemplate, "utf8");
      const page = await vite.transformIndexHtml(url, template);
      res.status(200).set({ "Content-Type": "text/html" }).end(page);
@@ -31,9 +34,16 @@ export async function setupVite(app: Express, server: Server) {
 }
 
 export function serveStatic(app: Express) {
- const distPath = path.resolve(__dirname, "..", "dist", "public");
+ const distPath = path.resolve(runtimeDir, "..", "dist", "public");
  if (!fs.existsSync(distPath)) {
-   // This is fine for dev; it only throws if you're trying to run production build
+   // Bundled build serves Vite output from dist/ (same folder as index.cjs).
+   const bundledDist = fs.existsSync(path.join(runtimeDir, "index.html"))
+     ? runtimeDir
+     : path.resolve(runtimeDir, "..", "dist");
+   if (!fs.existsSync(bundledDist)) {
+     return;
+   }
+   app.use(express.static(bundledDist));
    return;
  }
  app.use(express.static(distPath));

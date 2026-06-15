@@ -8,6 +8,22 @@ import { pool } from "../db";
 import { upsertOAuthUser } from "./authStorage";
 import type { SessionUser } from "./types";
 
+let sessionInitialized = false;
+
+export function initSessionMiddleware(app: Express): void {
+  if (sessionInitialized) {
+    return;
+  }
+  sessionInitialized = true;
+
+  app.set("trust proxy", 1);
+  app.use(getSessionMiddleware());
+  app.use(passport.initialize());
+  app.use(passport.session());
+  passport.serializeUser((user, cb) => cb(null, user));
+  passport.deserializeUser((user, cb) => cb(null, user as Express.User));
+}
+
 function getBaseUrl(): string {
   const domains = process.env.REPLIT_DOMAINS;
   if (domains) return `https://${domains.split(",")[0].trim()}`;
@@ -65,13 +81,7 @@ function postAuthRedirect(user: SessionUser): string {
 }
 
 export async function setupAuth(app: Express): Promise<void> {
-  app.set("trust proxy", 1);
-  app.use(getSessionMiddleware());
-  app.use(passport.initialize());
-  app.use(passport.session());
-
-  passport.serializeUser((user, cb) => cb(null, user));
-  passport.deserializeUser((user, cb) => cb(null, user as Express.User));
+  initSessionMiddleware(app);
 
   const googleClientId = process.env.GOOGLE_CLIENT_ID;
   const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;

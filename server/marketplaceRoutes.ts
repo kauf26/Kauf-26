@@ -1,6 +1,6 @@
 import express from 'express';
 import { db } from './db';
-import { publishJobs, publishTasks } from '../shared/schema';
+import { publishJobs, publishTasks, productDrafts } from '../shared/schema';
 import { eq } from 'drizzle-orm';
 import {
   MASTER_MARKETPLACES,
@@ -15,6 +15,7 @@ import {
   getMarketplaceKeywordPoliciesDocument,
 } from '../shared/marketplaceKeywordBlocker';
 import marketplaceEligibilityRouter from './routes/marketplaceEligibility';
+import { draftAccessWhere, requireAuthInProduction } from './auth';
 
 const router = express.Router();
 
@@ -22,11 +23,20 @@ router.use(marketplaceEligibilityRouter);
 
 // POST /api/marketplaces/publish
 // Body: { draftId, marketplaces?: string[], marketplaceIds?: string[], sync?: boolean }
-router.post('/publish', async (req, res) => {
+router.post('/publish', requireAuthInProduction, async (req, res) => {
  const { draftId, marketplaces, marketplaceIds, sync, translateInternational } = req.body;
 
  if (draftId == null || Number.isNaN(Number(draftId))) {
    return res.status(400).json({ error: 'draftId is required.' });
+ }
+
+ const [ownedDraft] = await db
+   .select({ id: productDrafts.id })
+   .from(productDrafts)
+   .where(draftAccessWhere(req, Number(draftId)));
+
+ if (!ownedDraft) {
+   return res.status(404).json({ error: `Draft ${draftId} not found.` });
  }
 
  const requested = Array.isArray(marketplaces)
@@ -137,11 +147,20 @@ router.get('/status/:jobId', async (req, res) => {
 
 // POST /api/marketplaces/publish-all
 // Body: { draftId, sync?: boolean }
-router.post('/publish-all', async (req, res) => {
+router.post('/publish-all', requireAuthInProduction, async (req, res) => {
   const { draftId, sync } = req.body;
 
   if (draftId == null || Number.isNaN(Number(draftId))) {
     return res.status(400).json({ error: 'draftId is required.' });
+  }
+
+  const [ownedDraft] = await db
+    .select({ id: productDrafts.id })
+    .from(productDrafts)
+    .where(draftAccessWhere(req, Number(draftId)));
+
+  if (!ownedDraft) {
+    return res.status(404).json({ error: `Draft ${draftId} not found.` });
   }
 
   try {

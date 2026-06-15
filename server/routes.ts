@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage.js";
 import * as StripeModule from "./stripeClient.js";
 import { scrapeProduct as fetchMasterProductData } from "./scrapers/masterScraper.js";
+import { requireAuthInProduction } from "./auth";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   app.use((req, res, next) => {
@@ -13,7 +14,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   console.log("🚀 Registering API routes...");
 
   // 1. Scraper Route - Updated with Gatekeeper logic
-  app.post("/api/catalog/scrape", async (req, res) => {
+  app.post("/api/catalog/scrape", requireAuthInProduction, async (req, res) => {
     console.log("[API] Received request for: /api/catalog/scrape");
     try {
       const query = req.body?.query ?? req.body?.imageUrl ?? req.body?.imageData;

@@ -1,4 +1,7 @@
 import express from "express";
+import { eq } from "drizzle-orm";
+import { db } from "./db";
+import { productDrafts } from "../shared/schema";
 import {
   getInventorySnapshot,
   getOrCreatePool,
@@ -6,8 +9,22 @@ import {
   setPoolQuantity,
   subscribeInventory,
 } from "./services/inventoryService";
+import { draftAccessWhere, requireAuthInProduction } from "./auth";
 
 const router = express.Router();
+
+router.use(requireAuthInProduction);
+
+async function assertDraftInventoryAccess(
+  req: express.Request,
+  draftId: number
+): Promise<boolean> {
+  const [draft] = await db
+    .select({ id: productDrafts.id })
+    .from(productDrafts)
+    .where(draftAccessWhere(req, draftId));
+  return Boolean(draft);
+}
 
 // GET /api/inventory/draft/:draftId
 router.get("/draft/:draftId", async (req, res) => {
@@ -16,6 +33,9 @@ router.get("/draft/:draftId", async (req, res) => {
     return res.status(400).json({ error: "Invalid draftId" });
   }
   try {
+    if (!(await assertDraftInventoryAccess(req, draftId))) {
+      return res.status(404).json({ error: "Draft not found" });
+    }
     const initial = Number(req.query.initialQuantity);
     if (Number.isFinite(initial) && initial >= 0) {
       await getOrCreatePool(draftId, initial);
@@ -38,6 +58,9 @@ router.put("/draft/:draftId/quantity", async (req, res) => {
     return res.status(400).json({ error: "draftId and quantity >= 0 required" });
   }
   try {
+    if (!(await assertDraftInventoryAccess(req, draftId))) {
+      return res.status(404).json({ error: "Draft not found" });
+    }
     const snapshot = await setPoolQuantity(draftId, quantity);
     return res.json(snapshot);
   } catch (err) {
@@ -61,6 +84,9 @@ router.post("/webhooks/:marketplace", async (req, res) => {
   }
 
   try {
+    if (!(await assertDraftInventoryAccess(req, draftId))) {
+      return res.status(404).json({ error: "Draft not found" });
+    }
     const snapshot = await recordSale({
       draftId,
       marketplaceId,
@@ -78,6 +104,9 @@ router.post("/webhooks/:marketplace", async (req, res) => {
 
 // POST /api/inventory/draft/:draftId/simulate-sale (dev / test)
 router.post("/draft/:draftId/simulate-sale", async (req, res) => {
+  if (process.env.NODE_ENV === "production") {
+    return res.status(404).json({ error: "Not found" });
+  }
   const draftId = Number(req.params.draftId);
   const marketplaceId = String(req.body?.marketplaceId ?? "ebay").toLowerCase();
   if (Number.isNaN(draftId)) {
@@ -86,6 +115,9 @@ router.post("/draft/:draftId/simulate-sale", async (req, res) => {
   const orderId =
     String(req.body?.orderId ?? "").trim() || `sim-${Date.now()}`;
   try {
+    if (!(await assertDraftInventoryAccess(req, draftId))) {
+      return res.status(404).json({ error: "Draft not found" });
+    }
     const snapshot = await recordSale({
       draftId,
       marketplaceId,
@@ -105,6 +137,10 @@ router.get("/draft/:draftId/stream", async (req, res) => {
   const draftId = Number(req.params.draftId);
   if (Number.isNaN(draftId)) {
     return res.status(400).end();
+  }
+
+  if (!(await assertDraftInventoryAccess(req, draftId))) {
+    return res.status(404).end();
   }
 
   res.setHeader("Content-Type", "text/event-stream");

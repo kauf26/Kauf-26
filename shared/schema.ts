@@ -268,6 +268,7 @@ export const publishTasks = pgTable("publish_tasks", {
 // New table home for transient cross-border product drafts
 export const productDrafts = pgTable("product_drafts", {
  id: serial("id").primaryKey(),
+ userId: integer("user_id").references(() => users.id, { onDelete: "set null" }),
  title: text("title").notNull(),
  sku: text("sku"),
  status: text("status").default("draft"),
