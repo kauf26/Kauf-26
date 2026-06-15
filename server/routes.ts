@@ -1,7 +1,10 @@
 import { type Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage.js";
-import * as StripeModule from "./stripeClient.js";
+import {
+  createHoldPaymentSession,
+  createPerSaleCheckoutSession,
+} from "./stripeClient.js";
 import { scrapeProduct as fetchMasterProductData } from "./scrapers/masterScraper.js";
 import { requireAuthInProduction } from "./auth";
 
@@ -78,10 +81,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { userId, itemSalePrice, userSalesCount } = req.body;
       if (!userId) return res.status(400).json({ message: "User ID required" });
-      const session = await (StripeModule as any).createPerSaleCheckoutSession({
+      const session = await createPerSaleCheckoutSession({
         userId,
         itemSalePrice,
-        userSalesCount
+        userSalesCount,
       });
       res.json({ url: session.url, sessionId: session.id });
     } catch (error: any) {
@@ -94,9 +97,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/create-hold", async (req, res) => {
     try {
       const { userId, amount } = req.body;
-      const session = await (StripeModule as any).createHoldPaymentSession({
+      if (!userId) return res.status(400).json({ message: "User ID required" });
+      const session = await createHoldPaymentSession({
         userId,
-        amount
+        amount,
       });
       res.json({ url: session.url, sessionId: session.id });
     } catch (error: any) {
