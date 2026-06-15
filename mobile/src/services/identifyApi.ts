@@ -1,5 +1,7 @@
+import * as FileSystem from 'expo-file-system';
 import { DEFAULT_IDENTIFY_MARKETPLACES } from '../../../shared/identifyFlow';
 import { API_BASE_URL } from './config';
+import { userFacingApiError } from './httpResponse';
 import type { IdentifyApiResponse, IdentifyEditPayload } from '../types/identify';
 
 export { DEFAULT_IDENTIFY_MARKETPLACES };
@@ -10,46 +12,57 @@ export type IdentifyImageInput = {
   fileName?: string;
 };
 
-export function buildIdentifyFormData(
+async function imageUriToDataUrl(uri: string, mimeType = 'image/jpeg'): Promise<string> {
+  const normalized = uri.startsWith('file://') ? uri : uri;
+  const base64 = await FileSystem.readAsStringAsync(normalized, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  return `data:${mimeType};base64,${base64}`;
+}
+
+/** JSON body — matches server extractIdentifyImages() JSON path (reliable on physical devices). */
+async function buildIdentifyJsonBody(
   images: IdentifyImageInput[],
   options?: {
     autoTranslate?: boolean;
     marketplaces?: string[];
     targetLang?: string;
   }
-): FormData {
-  const formData = new FormData();
+): Promise<string> {
+  const dataUrls = await Promise.all(
+    images.map((image) =>
+      imageUriToDataUrl(image.uri, image.mimeType ?? 'image/jpeg')
+    )
+  );
 
-  images.forEach((image, index) => {
-    const mime = image.mimeType ?? 'image/jpeg';
-    const name = image.fileName ?? `angle-${index + 1}.jpg`;
-    formData.append('images', {
-      uri: image.uri,
-      name,
-      type: mime,
-    } as unknown as Blob);
+  return JSON.stringify({
+    images: dataUrls,
+    autoTranslate: options?.autoTranslate ?? true,
+    marketplaces: options?.marketplaces ?? DEFAULT_IDENTIFY_MARKETPLACES,
+    ...(options?.targetLang?.trim() ? { targetLang: options.targetLang.trim() } : {}),
   });
+}
 
-  if (images.length === 1) {
-    const image = images[0];
-    formData.append('image', {
-      uri: image.uri,
-      name: image.fileName ?? 'product.jpg',
-      type: image.mimeType ?? 'image/jpeg',
-    } as unknown as Blob);
+function parseIdentifyResponse(
+  response: Response,
+  body: IdentifyApiResponse & { message?: string; error?: string }
+): IdentifyApiResponse {
+  if (!response.ok) {
+    const detail =
+      body.message ||
+      body.error ||
+      (typeof body === 'object' && body !== null && 'details' in body
+        ? String((body as { details?: unknown }).details ?? '')
+        : '') ||
+      response.statusText;
+    throw new Error(detail.trim() || `Identification failed (${response.status})`);
   }
 
-  const autoTranslate = options?.autoTranslate ?? true;
-  formData.append('autoTranslate', String(autoTranslate));
-
-  const marketplaces = options?.marketplaces ?? DEFAULT_IDENTIFY_MARKETPLACES;
-  formData.append('marketplaces', JSON.stringify(marketplaces));
-
-  if (options?.targetLang?.trim()) {
-    formData.append('targetLang', options.targetLang.trim());
+  if (body.success !== true && !body.product?.title) {
+    throw new Error(body.message || body.error || 'Could not identify this product.');
   }
 
-  return formData;
+  return body;
 }
 
 export async function postIdentify(
@@ -61,32 +74,39 @@ export async function postIdentify(
   }
 ): Promise<IdentifyApiResponse> {
   const imageList = Array.isArray(images) ? images : [images];
-  const formData = buildIdentifyFormData(imageList, options);
+  if (imageList.length === 0) {
+    throw new Error('No images to identify.');
+  }
+
   const deviceTz = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'UTC';
-
-  const response = await fetch(`${API_BASE_URL}/api/identify`, {
-    method: 'POST',
-    headers: {
-      'X-Client-Timezone': deviceTz,
-    },
-    body: formData,
-  });
-
-  const body = (await response.json().catch(() => ({}))) as IdentifyApiResponse & {
-    message?: string;
-    error?: string;
+  const url = `${API_BASE_URL}/api/identify`;
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+    'X-Client-Timezone': deviceTz,
   };
 
-  if (!response.ok) {
-    const detail = body.message || body.error || response.statusText;
-    throw new Error(detail || `Identification failed (${response.status})`);
-  }
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: await buildIdentifyJsonBody(imageList, options),
+    });
 
-  if (body.success !== true && !body.product?.title) {
-    throw new Error(body.message || body.error || 'Could not identify this product.');
-  }
+    const body = (await response.json().catch(() => ({}))) as IdentifyApiResponse & {
+      message?: string;
+      error?: string;
+    };
 
-  return body;
+    return parseIdentifyResponse(response, body);
+  } catch (error) {
+    throw new Error(
+      userFacingApiError(
+        error,
+        `Could not reach the identify API at ${url}. On a physical device, set EXPO_PUBLIC_API_URL to http://YOUR_MAC_LAN_IP:2626 in mobile/.env and run npx expo start --clear.`
+      )
+    );
+  }
 }
 
 export function mapIdentifyResponseToEditPayload(

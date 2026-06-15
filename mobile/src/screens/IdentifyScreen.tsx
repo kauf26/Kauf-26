@@ -237,8 +237,12 @@ export default function IdentifyScreen() {
 
       await playSuccessAnimation();
       navigation.navigate('Edit', { result: payload });
-    } catch {
-      setError('Failed to identify product. Check server connection.');
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'Failed to identify product. Check server connection.';
+      setError(message);
     } finally {
       clearProgressTimer();
       setAnalyzeStep(0);
