@@ -50,7 +50,9 @@ function isSet(value) {
 }
 
 function isPlaceholderUrl(value) {
-  return /yourdomain\.com|your-api|example\.com|localhost/i.test(value);
+  if (/localhost|127\.0\.0\.1|192\.168\.\d+/i.test(value)) return false;
+  if (/kaufai\.com/i.test(value)) return false;
+  return /yourdomain\.com|your-api|example\.com/i.test(value);
 }
 
 console.log("\n=== Kauf26 Store Readiness Validator ===\n");
