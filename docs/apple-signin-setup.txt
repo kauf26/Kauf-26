@@ -5,7 +5,7 @@
 
 WHAT YOU NEED BEFORE STARTING
   • An Apple Developer account (developer.apple.com — $99/year)
-  • Your live domain: kauf26.com
+  • Your live domain: kaufai.com (web) + api.kaufai.com (API)
   • About 20 minutes
 
 YOU WILL COLLECT THESE 4 VALUES AT THE END:
@@ -53,8 +53,8 @@ STEP 3 — CREATE A SERVICE ID (this is what the web app uses)
 6. Now click on the Service ID you just created to edit it.
 7. CHECK the box next to "Sign In with Apple" → click Configure.
 8. Primary App ID: select "com.kauf26.app" from the dropdown.
-9. Domains and Subdomains: add   kauf26.com
-10. Return URLs: add              https://kauf26.com/api/auth/apple/callback
+9. Domains and Subdomains: add   kaufai.com, api.kaufai.com
+10. Return URLs: add              https://api.kaufai.com/api/auth/apple/callback
 11. Click Next → Done → Continue → Save.
 
 ================================================================================
@@ -135,10 +135,10 @@ When you wrap the app as a native iOS app (via PWABuilder or Capacitor):
 CALLBACK URL REGISTERED WITH APPLE (for reference)
 ================================================================================
 
-  https://kauf26.com/api/auth/apple/callback
+  https://api.kaufai.com/api/auth/apple/callback
 
-If your Replit dev URL is different, you may also add it during testing:
-  https://[your-replit-dev-domain]/api/auth/apple/callback
+Local development (optional):
+  http://localhost:2626/api/auth/apple/callback
 
 ================================================================================
 TROUBLESHOOTING
@@ -146,7 +146,7 @@ TROUBLESHOOTING
 
 "Invalid redirect URI" error:
   → Double-check the Return URL in your Service ID configuration exactly matches
-    https://kauf26.com/api/auth/apple/callback (no trailing slash)
+    https://api.kaufai.com/api/auth/apple/callback (no trailing slash)
 
 "Invalid client" error:
   → Make sure APPLE_CLIENT_ID is the Service ID (com.kauf26.app.service),

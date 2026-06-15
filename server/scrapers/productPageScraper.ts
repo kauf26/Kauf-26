@@ -37,7 +37,7 @@ export async function fetchProductPageImages(
       signal: controller.signal,
       headers: {
         "User-Agent":
-          "Mozilla/5.0 (compatible; Kauf26Bot/1.0; +https://kauf26.com)",
+          "Mozilla/5.0 (compatible; Kauf26Bot/1.0; +https://kaufai.com)",
         Accept: "text/html,application/xhtml+xml",
       },
       redirect: "follow",

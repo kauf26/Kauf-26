@@ -219,7 +219,7 @@ export default function Terms() {
                 For questions about these Terms or the Service, please contact us at{" "}
                 <a href="mailto:kaufit@yahoo.com" className="underline hover:text-foreground">kaufit@yahoo.com</a>{" "}
                 or visit{" "}
-                <a href="https://kauf26.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">kauf26.com</a>.
+                <a href="https://kaufai.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">kaufai.com</a>.
               </p>
             </CardContent>
           </Card>

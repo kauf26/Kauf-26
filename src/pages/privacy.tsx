@@ -197,7 +197,7 @@ export default function Privacy() {
             <CardContent className="pt-6 space-y-3">
               <h2 className="text-lg font-semibold text-foreground">14. Contact Us</h2>
               <p>
-                If you have any questions about this Privacy Policy, wish to exercise your data rights, or have a privacy concern, please contact us at <a href="mailto:kaufit@yahoo.com" className="underline hover:text-foreground">kaufit@yahoo.com</a> or visit <a href="https://kauf26.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">kauf26.com</a>.
+                If you have any questions about this Privacy Policy, wish to exercise your data rights, or have a privacy concern, please contact us at <a href="mailto:kaufit@yahoo.com" className="underline hover:text-foreground">kaufit@yahoo.com</a> or visit <a href="https://kaufai.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">kaufai.com</a>.
               </p>
             </CardContent>
           </Card>

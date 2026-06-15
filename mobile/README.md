@@ -76,13 +76,15 @@ Etsy, Shopify, and eBay connect via one-tap OAuth in the **Connections** tab. To
    npm install
    ```
 
-2. **Update the API URL** (CRITICAL!)
-   - Open `src/services/api.ts`
-   - Replace the URL with your published Replit app URL:
-   ```typescript
-   export const API_BASE_URL = 'https://YOUR-APP-NAME.replit.app';
+2. **Set the API URL** (CRITICAL!)
+   - Copy `mobile/.env.example` to `mobile/.env`
+   - Set production values:
+   ```bash
+   EXPO_PUBLIC_API_URL=https://api.kaufai.com
+   EXPO_PUBLIC_WEB_BASE_URL=https://kaufai.com
    ```
-   - Save the file
+   - For local dev, use `http://localhost:2626` (simulator) or your Mac's LAN IP (physical device)
+   - See `mobile/src/services/config.ts` — `API_BASE_URL` is resolved from `EXPO_PUBLIC_API_URL`
 
 3. **Update app.json with your info**
    - Open `app.json`

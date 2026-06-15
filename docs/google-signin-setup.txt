@@ -5,7 +5,7 @@
 
 WHAT YOU NEED BEFORE STARTING
   • A Google account (free)
-  • Your live domain: kauf26.com
+  • Your live domain: kaufai.com (web) + api.kaufai.com (API)
   • About 10 minutes
 
 YOU WILL COLLECT THESE 2 VALUES AT THE END:
@@ -51,9 +51,9 @@ users see when they click "Sign in with Google."
      User support email:    kaufit@yahoo.com
      App logo:              (optional — upload your app icon)
      App domain:
-       Application home page:        https://kauf26.com
-       Application privacy policy:   https://kauf26.com/privacy
-       Application terms of service: https://kauf26.com/terms
+       Application home page:        https://kaufai.com
+       Application privacy policy:   https://kaufai.com/privacy
+       Application terms of service: https://kaufai.com/terms
      Developer contact email:        kaufit@yahoo.com
 4. Click "Save and Continue".
 5. On the Scopes page, click "Add or Remove Scopes".
@@ -82,13 +82,13 @@ STEP 4 — CREATE OAUTH 2.0 CREDENTIALS
 3. Application type: Web application.
 4. Name: Global Lister Web Client
 5. Under "Authorized JavaScript origins" add:
-     https://kauf26.com
-     (also add your Replit dev URL if you want to test in development:)
-     https://[your-replit-dev-domain]
+     https://kaufai.com
+     https://api.kaufai.com
+     http://localhost:5173
+     http://localhost:2626
 6. Under "Authorized redirect URIs" add:
-     https://kauf26.com/api/auth/google/callback
-     (also add your Replit dev URL for testing:)
-     https://[your-replit-dev-domain]/api/auth/google/callback
+     https://api.kaufai.com/api/auth/google/callback
+     http://localhost:2626/api/auth/google/callback
 7. Click "Create".
 8. A popup appears showing:
      Client ID:     123456789-abcdef.apps.googleusercontent.com  → GOOGLE_CLIENT_ID
@@ -135,10 +135,10 @@ CALLBACK URL REGISTERED WITH GOOGLE (for reference)
 ================================================================================
 
 Production:
-  https://kauf26.com/api/auth/google/callback
+  https://api.kaufai.com/api/auth/google/callback
 
-Development/testing (add your Replit dev URL here):
-  https://[your-replit-dev-domain]/api/auth/google/callback
+Development/testing (local API):
+  http://localhost:2626/api/auth/google/callback
 
 IMPORTANT: If the redirect URI is not in this exact list, Google will show
 "redirect_uri_mismatch" error. Make sure there is no trailing slash.
