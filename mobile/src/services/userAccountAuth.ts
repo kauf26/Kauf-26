@@ -143,7 +143,15 @@ export async function revokeAllMarketplaceConnections(): Promise<void> {
   }
 }
 
-export async function signOutAccount(): Promise<void> {
+export type SignOutAccountOptions = {
+  /** Mobile only — e.g. () => rootNavigation.navigate('Login') */
+  navigateToLogin?: () => void;
+};
+
+export async function signOutAccount(options?: SignOutAccountOptions): Promise<void> {
+  const oauthIds = MARKETPLACE_OAUTH_MANIFEST.filter((m) => m.oauthSupported).map((m) => m.id);
+  await clearAllMarketplaceTokens(oauthIds);
+
   try {
     await fetch(`${API_BASE_URL}/api/auth/logout`, { method: 'POST', ...fetchOpts });
   } catch {
@@ -151,6 +159,7 @@ export async function signOutAccount(): Promise<void> {
   }
   await clearDevSession();
   await SecureStore.deleteItemAsync(USER_ACCOUNT_KEY);
+  options?.navigateToLogin?.();
 }
 
 export async function deleteAccount(): Promise<void> {

@@ -134,7 +134,10 @@ export default function SettingsScreen() {
           void (async () => {
             setAccountBusy(true);
             try {
-              await signOutAccount();
+              await signOutAccount({
+                navigateToLogin: () =>
+                  navigation.getParent()?.getParent()?.navigate('Login'),
+              });
               setAccount(null);
             } finally {
               setAccountBusy(false);
