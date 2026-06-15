@@ -7,6 +7,15 @@ import { isWebOAuthConfigured } from "../../shared/webOAuthEnv";
 import { pool } from "../db";
 import { upsertOAuthUser } from "./authStorage";
 import type { SessionUser } from "./types";
+import {
+  mobileOAuthSuccessRedirect,
+} from "./mobileAuthRoutes";
+
+declare module "express-session" {
+  interface SessionData {
+    userAuthReturnTo?: "mobile" | "web";
+  }
+}
 
 let sessionInitialized = false;
 
@@ -176,27 +185,44 @@ export async function setupAuth(app: Express): Promise<void> {
     );
   }
 
-  app.get(
-    "/api/auth/google",
-    passport.authenticate("google", { scope: ["profile", "email"] })
-  );
+  app.get("/api/auth/google", (req, res, next) => {
+    if (req.query.platform === "mobile") {
+      req.session.userAuthReturnTo = "mobile";
+    }
+    passport.authenticate("google", { scope: ["profile", "email"] })(req, res, next);
+  });
 
   app.get(
     "/api/auth/google/callback",
     passport.authenticate("google", { failureRedirect: "/login?error=google" }),
     (req, res) => {
       const user = req.user as SessionUser;
+      const returnTo = req.session.userAuthReturnTo ?? "web";
+      delete req.session.userAuthReturnTo;
+      if (returnTo === "mobile") {
+        return res.redirect(mobileOAuthSuccessRedirect("google"));
+      }
       res.redirect(postAuthRedirect(user));
     }
   );
 
-  app.get("/api/auth/apple", passport.authenticate("apple"));
+  app.get("/api/auth/apple", (req, res, next) => {
+    if (req.query.platform === "mobile") {
+      req.session.userAuthReturnTo = "mobile";
+    }
+    passport.authenticate("apple")(req, res, next);
+  });
 
   app.post(
     "/api/auth/apple/callback",
     passport.authenticate("apple", { failureRedirect: "/login?error=apple" }),
     (req, res) => {
       const user = req.user as SessionUser;
+      const returnTo = req.session.userAuthReturnTo ?? "web";
+      delete req.session.userAuthReturnTo;
+      if (returnTo === "mobile") {
+        return res.redirect(mobileOAuthSuccessRedirect("apple"));
+      }
       res.redirect(postAuthRedirect(user));
     }
   );

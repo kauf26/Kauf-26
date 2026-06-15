@@ -29,6 +29,13 @@ import {
   isRequiresAuthForPublish,
   setRequiresAuthForPublish,
 } from '../auth/publishAuth';
+import {
+  deleteAccount,
+  fetchCurrentUserAccount,
+  loadCachedUserAccount,
+  signOutAccount,
+  type UserAccount,
+} from '../services/userAccountAuth';
 
 async function openLegalUrl(url: string, label: string) {
   try {
@@ -50,18 +57,26 @@ export default function SettingsScreen() {
   const [biometricCap, setBiometricCap] = useState<BiometricCapability | null>(null);
   const [biometricBusy, setBiometricBusy] = useState(false);
   const [requirePublishAuth, setRequirePublishAuth] = useState(true);
+  const [account, setAccount] = useState<UserAccount | null>(null);
+  const [accountBusy, setAccountBusy] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState('');
 
   useEffect(() => {
     void getAutoTranslateEnabled().then(setAutoTranslate);
     void (async () => {
-      const [enabled, cap, publishAuth] = await Promise.all([
+      const [enabled, cap, publishAuth, cached] = await Promise.all([
         isBiometricEnabled(),
         getBiometricCapability(),
         isRequiresAuthForPublish(),
+        loadCachedUserAccount(),
       ]);
       setBiometricOn(enabled);
       setBiometricCap(cap);
       setRequirePublishAuth(publishAuth);
+      setAccount(cached);
+      void fetchCurrentUserAccount().then((live) => {
+        if (live) setAccount(live);
+      });
     })();
   }, []);
 
@@ -109,6 +124,63 @@ export default function SettingsScreen() {
   const biometricLabel = biometricCap?.label ?? 'Biometrics';
   const biometricAvailable = Boolean(biometricCap?.available && biometricCap?.enrolled);
 
+  const handleSignOut = () => {
+    Alert.alert('Sign out', 'End your Kauf26 account session on this device?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign out',
+        style: 'destructive',
+        onPress: () => {
+          void (async () => {
+            setAccountBusy(true);
+            try {
+              await signOutAccount();
+              setAccount(null);
+            } finally {
+              setAccountBusy(false);
+            }
+          })();
+        },
+      },
+    ]);
+  };
+
+  const handleDeleteAccount = () => {
+    if (deleteConfirm !== 'DELETE') {
+      Alert.alert('Confirmation required', 'Type DELETE in the box below to confirm.');
+      return;
+    }
+    Alert.alert(
+      'Delete account permanently?',
+      'This removes your server account, drafts, and all marketplace tokens stored on this device. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setAccountBusy(true);
+              try {
+                await deleteAccount();
+                setAccount(null);
+                setDeleteConfirm('');
+                Alert.alert('Account deleted', 'Your account and local marketplace tokens were removed.');
+              } catch (err) {
+                Alert.alert(
+                  'Could not delete account',
+                  err instanceof Error ? err.message : 'Try again later.'
+                );
+              } finally {
+                setAccountBusy(false);
+              }
+            })();
+          },
+        },
+      ]
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -121,16 +193,65 @@ export default function SettingsScreen() {
 
         <Text style={styles.sectionHeader}>Account</Text>
         <View style={styles.card}>
+          {account ? (
+            <>
+              <View style={styles.accountRow}>
+                <Ionicons name="person-circle-outline" size={20} color="#3b82f6" />
+                <View style={styles.linkTextWrap}>
+                  <Text style={styles.linkTitle}>
+                    {account.email ?? `User #${account.id}`}
+                  </Text>
+                  <Text style={styles.linkHint}>
+                    Signed in with {account.provider ?? 'account'}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.divider} />
+              <TouchableOpacity
+                style={styles.linkRow}
+                onPress={handleSignOut}
+                disabled={accountBusy}
+              >
+                <Ionicons name="log-out-outline" size={20} color="#f87171" />
+                <Text style={[styles.linkTitle, styles.destructiveText]}>Sign out</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <TouchableOpacity
+              style={styles.linkRow}
+              onPress={() => navigation.getParent()?.getParent()?.navigate('Login')}
+            >
+              <Ionicons name="log-in-outline" size={20} color="#3b82f6" />
+              <View style={styles.linkTextWrap}>
+                <Text style={styles.linkTitle}>Sign in</Text>
+                <Text style={styles.linkHint}>Google or Sign in with Apple</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="#6b7280" />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <Text style={styles.sectionHeader}>Delete account</Text>
+        <View style={styles.card}>
+          <Text style={styles.deleteHint}>
+            Permanently delete your Kauf26 account and clear all marketplace OAuth tokens from
+            this device. Required by App Store and Google Play.
+          </Text>
+          <TextInput
+            style={styles.deleteInput}
+            value={deleteConfirm}
+            onChangeText={setDeleteConfirm}
+            placeholder='Type DELETE to confirm'
+            placeholderTextColor="#6b7280"
+            autoCapitalize="characters"
+            editable={!accountBusy}
+          />
           <TouchableOpacity
-            style={styles.linkRow}
-            onPress={() => navigation.getParent()?.getParent()?.navigate('Login')}
+            style={[styles.deleteButton, (accountBusy || deleteConfirm !== 'DELETE') && styles.deleteButtonDisabled]}
+            onPress={handleDeleteAccount}
+            disabled={accountBusy || deleteConfirm !== 'DELETE'}
           >
-            <Ionicons name="log-in-outline" size={20} color="#3b82f6" />
-            <View style={styles.linkTextWrap}>
-              <Text style={styles.linkTitle}>Sign in</Text>
-              <Text style={styles.linkHint}>Google or Apple account (web OAuth)</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color="#6b7280" />
+            <Text style={styles.deleteButtonText}>Delete my account</Text>
           </TouchableOpacity>
         </View>
 
@@ -299,8 +420,9 @@ export default function SettingsScreen() {
         </View>
 
         <Text style={styles.hint}>
-          OAuth marketplace tokens are stored encrypted on the server, not on this device, when
-          you connect via Connections.
+          Marketplace OAuth tokens are stored only on this device (iOS Keychain / Android Keystore).
+          They are sent to our server only when you publish, per request, and are never stored on
+          the server.
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -344,5 +466,34 @@ const styles = StyleSheet.create({
   linkHint: { color: '#6b7280', fontSize: 12, lineHeight: 17 },
   linkUrl: { color: '#6b7280', fontSize: 12 },
   divider: { height: 1, backgroundColor: '#1f2937' },
+  accountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 16,
+  },
+  destructiveText: { color: '#f87171' },
+  deleteHint: { color: '#9ca3af', fontSize: 13, lineHeight: 18, padding: 16, paddingBottom: 8 },
+  deleteInput: {
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#374151',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: '#fff',
+    fontSize: 16,
+  },
+  deleteButton: {
+    marginHorizontal: 16,
+    marginBottom: 16,
+    backgroundColor: '#b91c1c',
+    borderRadius: 10,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  deleteButtonDisabled: { opacity: 0.45 },
+  deleteButtonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
   hint: { color: '#6b7280', fontSize: 12, lineHeight: 18, marginTop: 16 },
 });

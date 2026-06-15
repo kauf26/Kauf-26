@@ -21,7 +21,7 @@ const router = express.Router();
 router.get("/connections", async (req, res) => {
   try {
     const userId = resolveOAuthUserId(req);
-    const connections = await listProviderConnectionStatus(userId);
+    const connections = listProviderConnectionStatus(req, userId);
     return res.status(200).json({ connections });
   } catch (error) {
     console.error("[OAuth] connections error:", error);
@@ -87,7 +87,7 @@ router.delete("/:marketplace", async (req, res) => {
   }
 
   try {
-    await revokeAccess(marketplace, resolveOAuthUserId(req));
+    await revokeAccess(marketplace, resolveOAuthUserId(req), req);
     return res.status(200).json({ ok: true });
   } catch (error) {
     console.error(`[OAuth] disconnect ${marketplace} failed:`, error);
@@ -102,8 +102,8 @@ router.get("/:marketplace/status", async (req, res) => {
   }
 
   const userId = resolveOAuthUserId(req);
-  const token = await getValidAccessToken(userId, marketplace);
-  const connections = await listProviderConnectionStatus(userId);
+  const token = await getValidAccessToken(userId, marketplace, req);
+  const connections = listProviderConnectionStatus(req, userId);
   const row = connections.find((c) => c.provider === marketplace);
 
   return res.status(200).json({

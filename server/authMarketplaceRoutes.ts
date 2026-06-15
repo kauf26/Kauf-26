@@ -243,61 +243,6 @@ router.post("/:marketplace/token-proxy", requireAuthInProduction, async (req, re
   }
 });
 
-/** @deprecated Use token-proxy — exchange no longer persists tokens. */
-router.post("/:marketplace/exchange", requireAuthInProduction, async (req, res) => {
-  const marketplace = parseExchangeMarketplace(String(req.params.marketplace));
-  if (!marketplace) {
-    return res.status(400).json({ error: "Unsupported OAuth marketplace" });
-  }
-
-  const code = typeof req.body?.code === "string" ? req.body.code.trim() : "";
-  if (!code) {
-    return res.status(400).json({ error: "code is required" });
-  }
-
-  const canonicalRedirect = getOAuthRedirectUri(marketplace);
-  const redirectUri =
-    typeof req.body?.redirectUri === "string" && req.body.redirectUri.trim()
-      ? req.body.redirectUri.trim()
-      : canonicalRedirect;
-
-  const userId = resolveOAuthUserId(req);
-  if (process.env.NODE_ENV === "production" && userId == null) {
-    return res.status(401).json({ message: "Unauthorized" });
-  }
-
-  try {
-    const tokens = await exchangeMarketplaceAuthorizationCode(marketplace, code, {
-      redirectUri,
-      codeVerifier:
-        typeof req.body?.codeVerifier === "string" ? req.body.codeVerifier : undefined,
-      shopDomain:
-        typeof req.body?.shopDomain === "string" ? req.body.shopDomain : undefined,
-      siteUrl: typeof req.body?.siteUrl === "string" ? req.body.siteUrl : undefined,
-      baseUrl: typeof req.body?.baseUrl === "string" ? req.body.baseUrl : undefined,
-      userId,
-    });
-
-    const entry = getOAuthManifestEntry(marketplace);
-    return res.status(200).json({
-      ok: true,
-      provider: marketplace,
-      marketplace,
-      name: entry?.name ?? marketplace,
-      accountLabel: tokens.accountLabel ?? null,
-      shopDomain: tokens.shopDomain ?? null,
-      ...tokenResponseToOAuthJson(tokens),
-      deprecated: true,
-      message:
-        "This endpoint no longer stores tokens. Use POST /api/auth/:marketplace/token-proxy and save tokens on the device.",
-    });
-  } catch (error) {
-    const details = error instanceof Error ? error.message : "Token exchange failed";
-    console.error(`[OAuth] POST /api/auth/${marketplace}/exchange failed:`, error);
-    return res.status(400).json({ error: "OAuth exchange failed", details });
-  }
-});
-
 router.post("/:provider/revoke", async (req, res) => {
   const provider = parseRevokeMarketplace(String(req.params.provider));
   if (!provider) {

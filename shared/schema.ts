@@ -151,19 +151,15 @@ connected: boolean("connected").notNull().default(false),
 updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
 });
 
-/** Encrypted OAuth tokens per user + marketplace (server-side connect flow). */
+/** @deprecated OAuth tokens are not stored server-side. Metadata-only legacy table. */
 export const marketplaceAuth = pgTable(
   "marketplace_auth",
   {
     id: serial("id").primaryKey(),
     userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
     marketplace: text("marketplace").notNull(),
-    encryptedPayload: text("encrypted_payload").notNull(),
-    iv: text("iv").notNull(),
-    authTag: text("auth_tag").notNull(),
     shopDomain: text("shop_domain"),
     accountLabel: text("account_label"),
-    expiresAt: timestamp("expires_at"),
     connected: boolean("connected").notNull().default(true),
     createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
     updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
@@ -176,17 +172,13 @@ export const marketplaceAuth = pgTable(
   ]
 );
 
-/** Universal OAuth connections — encrypted tokens per user + provider. */
+/** @deprecated OAuth tokens are not stored server-side. Metadata-only legacy table. */
 export const marketplaceConnections = pgTable(
   "marketplace_connections",
   {
     id: serial("id").primaryKey(),
     userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }),
     provider: text("provider").notNull(),
-    encryptedPayload: text("encrypted_payload").notNull(),
-    iv: text("iv").notNull(),
-    authTag: text("auth_tag").notNull(),
-    tokenExpiresAt: timestamp("token_expires_at"),
     scope: text("scope"),
     marketplaceShopId: text("marketplace_shop_id"),
     shopDomain: text("shop_domain"),

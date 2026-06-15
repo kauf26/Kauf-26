@@ -18,6 +18,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.globalmarketplacelister.app",
       "buildNumber": "1.0.0",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "NSCameraUsageDescription": "Take photos of products to create marketplace listings with AI-powered descriptions.",
         "NSPhotoLibraryUsageDescription": "Select product photos from your library to list on multiple marketplaces.",
@@ -25,6 +26,10 @@
         "CFBundleURLTypes": [
           {
             "CFBundleURLName": "kauf26.oauth",
+            "CFBundleURLSchemes": ["kauf26"]
+          },
+          {
+            "CFBundleURLName": "kauf26.auth",
             "CFBundleURLSchemes": ["kauf26"]
           }
         ]
@@ -47,6 +52,11 @@
             {
               "scheme": "kauf26",
               "host": "oauth",
+              "pathPrefix": "/"
+            },
+            {
+              "scheme": "kauf26",
+              "host": "auth",
               "pathPrefix": "/"
             }
           ],
@@ -71,11 +81,12 @@
       "expo-image-picker",
       "expo-secure-store",
       [
-        "expo-local-authentication",
-        {
-          "faceIDPermission": "Use Face ID to quickly unlock the app instead of entering your PIN."
-        }
-      ]
+      "expo-local-authentication",
+      {
+        "faceIDPermission": "Use Face ID to quickly unlock the app instead of entering your PIN."
+      }
+    ],
+    "expo-apple-authentication"
     ]
   }
 }

@@ -25,11 +25,7 @@ import {
 } from '../services/onboardingProfile';
 import { syncUserProfileToBackend } from '../services/userProfile';
 import { loadProviderRegistry, nonOAuthStatusMessage, authMethodLabel, MARKETPLACE_COUNT } from '../services/providerRegistry';
-import {
-  disconnectMarketplaceViaServer,
-  fetchServerOAuthConnections,
-  usesServerOAuth,
-} from '../services/serverMarketplaceOAuth';
+import { disconnectMarketplaceOnDevice } from '../services/serverMarketplaceOAuth';
 import {
   deletePlatformTokens,
   hasPlatformTokens,
@@ -75,14 +71,6 @@ export default function ConnectionsScreen() {
       return;
     }
 
-    let serverConnections: Awaited<ReturnType<typeof fetchServerOAuthConnections>> = [];
-    try {
-      serverConnections = await fetchServerOAuthConnections();
-    } catch {
-      // Backend may be offline during dev startup.
-    }
-    const serverById = new Map(serverConnections.map((c) => [c.marketplace, c]));
-
     const next: Record<string, { ok: boolean; message: string }> = {};
     for (const p of registry) {
       if (!p.oauthSupported) {
@@ -90,24 +78,6 @@ export default function ConnectionsScreen() {
           ok: false,
           message: p.notes ?? nonOAuthStatusMessage(p.oauthFlow ?? 'api_key'),
         };
-        continue;
-      }
-
-      if (usesServerOAuth(p.id)) {
-        const row = serverById.get(p.id);
-        if (!row?.configured) {
-          next[p.id] = {
-            ok: false,
-            message: CREDENTIALS_NOT_CONFIGURED,
-          };
-          continue;
-        }
-        if (!row.connected) {
-          next[p.id] = { ok: false, message: 'Not connected' };
-          continue;
-        }
-        const label = row.accountLabel ?? row.shopDomain ?? 'Connected';
-        next[p.id] = { ok: true, message: label };
         continue;
       }
 
@@ -266,9 +236,7 @@ export default function ConnectionsScreen() {
   };
 
   const handleDisconnect = async (id: string) => {
-    if (usesServerOAuth(id)) {
-      await disconnectMarketplaceViaServer(id);
-    }
+    await disconnectMarketplaceOnDevice(id);
     await deletePlatformTokens(id);
     await refresh();
   };
@@ -489,9 +457,7 @@ export default function ConnectionsScreen() {
                   <Ionicons name="flash-outline" size={18} color="#fff" />
                   <Text style={styles.buttonText}>
                     {p.configured
-                      ? usesServerOAuth(p.id)
-                        ? `Connect ${p.name}`
-                        : `Connect ${p.name} — one tap`
+                      ? `Connect ${p.name} — one tap`
                       : CREDENTIALS_NOT_CONFIGURED}
                   </Text>
                 </View>

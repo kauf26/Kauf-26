@@ -8,7 +8,7 @@ import {
   env,
   hasEnv,
 } from "./adapterUtils";
-import { getValidAccessToken } from "../oauthService";
+import { getAccessTokenForListingPublish } from "../listingService";
 
 export function formatAmazonListing(draft: DraftPublishPayload): FormattedListing {
   const a = draft.attributes ?? {};
@@ -72,9 +72,9 @@ export async function publishToAmazon(
     );
   }
 
-  const token = await getValidAccessToken(userId, "amazon");
+  const token = await getAccessTokenForListingPublish("amazon", userId);
   if (!token) {
-    throw new Error("Amazon account not connected. Please connect in Settings.");
+    throw new Error("Amazon account not connected. Please connect in Connections.");
   }
 
   const sellerId = env("AMAZON_SELLER_ID");

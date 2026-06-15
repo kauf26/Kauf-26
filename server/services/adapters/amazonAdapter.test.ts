@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { publishToAmazon } from "./amazonAdapter";
-import * as oauthService from "../oauthService";
+import * as listingService from "../listingService";
 
 describe("amazonAdapter OAuth", () => {
   const originalEnv = { ...process.env };
@@ -14,7 +14,9 @@ describe("amazonAdapter OAuth", () => {
       AMAZON_SELLER_ID: "SELLER123",
     };
     fetchMock = vi.fn();
-    vi.spyOn(oauthService, "getValidAccessToken").mockResolvedValue("oauth-amazon-token");
+    vi.spyOn(listingService, "getAccessTokenForListingPublish").mockResolvedValue(
+      "oauth-amazon-token"
+    );
   });
 
   afterEach(() => {
@@ -22,7 +24,7 @@ describe("amazonAdapter OAuth", () => {
     process.env = originalEnv;
   });
 
-  it("calls getValidAccessToken and uses OAuth token for SP-API publish", async () => {
+  it("uses per-request OAuth token for SP-API publish", async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ submissionId: "sub-1" }), { status: 200 })
     );
@@ -35,7 +37,7 @@ describe("amazonAdapter OAuth", () => {
 
     const result = await publishToAmazon(formatted, fetchMock as typeof fetch, null);
 
-    expect(oauthService.getValidAccessToken).toHaveBeenCalledWith(null, "amazon");
+    expect(listingService.getAccessTokenForListingPublish).toHaveBeenCalledWith("amazon", null);
     expect(result.dryRun).toBe(false);
     expect(result.listingId).toBe("sub-1");
     expect(fetchMock).toHaveBeenCalledWith(
@@ -51,7 +53,7 @@ describe("amazonAdapter OAuth", () => {
   });
 
   it("throws when Amazon OAuth token is missing", async () => {
-    vi.mocked(oauthService.getValidAccessToken).mockResolvedValueOnce(null);
+    vi.mocked(listingService.getAccessTokenForListingPublish).mockResolvedValueOnce(null);
 
     await expect(
       publishToAmazon(
@@ -63,7 +65,7 @@ describe("amazonAdapter OAuth", () => {
         fetchMock as typeof fetch,
         null
       )
-    ).rejects.toThrow("Amazon account not connected. Please connect in Settings.");
+    ).rejects.toThrow("Amazon account not connected. Please connect in Connections.");
 
     expect(fetchMock).not.toHaveBeenCalled();
   });

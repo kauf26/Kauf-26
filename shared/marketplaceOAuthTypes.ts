@@ -35,6 +35,7 @@ export type MarketplaceOAuthManifestEntry = {
   /** Server env var for OAuth client id (public in mobile config response). */
   clientIdEnv: string;
   /** Mobile build env for on-device token exchange (EXPO_PUBLIC_*). */
+  /** Server-side secret env key (never EXPO_PUBLIC_* in mobile builds). */
   mobileClientSecretEnv?: string;
   scopes: string[];
   oauthFlow: MarketplaceOAuthFlow;

@@ -32,13 +32,14 @@ export type { OAuthProviderId, TokenResponse, OAuthConnectOptions };
 export { isUniversalOAuthProvider, UNIVERSAL_OAUTH_PROVIDERS };
 
 const REFRESH_BUFFER_MS = 5 * 60 * 1000;
-const TOKEN_SKEW_MS = 60_000;
 
 declare module "express-session" {
   interface SessionData {
     oauthPending?: OAuthPendingSession;
     /** Web-only: tokens for current login session (not persisted to marketplace_connections). */
     marketplaceSessionTokens?: Record<string, TokenResponse>;
+    /** User login OAuth return target for mobile deep link. */
+    userAuthReturnTo?: "mobile" | "web";
     /** @deprecated */
     marketplaceOAuth?: OAuthPendingSession & { marketplace?: OAuthProviderId };
   }
@@ -573,7 +574,10 @@ export async function handleUnifiedCallback(
   });
 
   if (!isMockOAuthMode()) {
-    storeSessionMarketplaceTokens(req, provider, tokens);
+    // Mobile OAuth tokens stay on the device — never store in server session.
+    if (pending.returnTo !== "mobile") {
+      storeSessionMarketplaceTokens(req, provider, tokens);
+    }
   }
   delete req.session.oauthPending;
 
@@ -618,7 +622,10 @@ export async function handleLegacyCallback(
   });
 
   if (!isMockOAuthMode()) {
-    storeSessionMarketplaceTokens(req, provider, tokens);
+    // Mobile OAuth tokens stay on the device — never store in server session.
+    if (pending.returnTo !== "mobile") {
+      storeSessionMarketplaceTokens(req, provider, tokens);
+    }
   }
   delete req.session.oauthPending;
 

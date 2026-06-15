@@ -8,13 +8,20 @@ import {
   Image,
   Alert,
   TextInput,
+  Platform,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import * as WebBrowser from 'expo-web-browser';
 import type { StackScreenProps } from '@react-navigation/stack';
-import { API_BASE_URL } from '../services/config';
+import { PRIVACY_POLICY_URL } from '../config/legal';
 import type { RootStackParamList } from '../types/navigation';
 import { devLoginWithPin, fetchDevLoginEnabled } from '../services/devAuth';
+import {
+  signInWithAppleNative,
+  signInWithGoogleMobile,
+} from '../services/userAccountAuth';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -22,28 +29,17 @@ const LOGO_IMAGE = require('../../assets/img-2482.jpg');
 
 type Props = StackScreenProps<RootStackParamList, 'Login'>;
 
-async function openOAuth(path: '/api/auth/google' | '/api/auth/apple') {
-  const authUrl = `${API_BASE_URL}${path}`;
-  try {
-    const result = await WebBrowser.openAuthSessionAsync(authUrl, 'kauf26://');
-    if (result.type === 'success') {
-      Alert.alert(
-        'Sign in started',
-        'Complete sign-in in the browser. Your session is tied to the web app cookie when using the same device browser profile.'
-      );
-    }
-  } catch {
-    Alert.alert('Sign in failed', 'Could not open the sign-in page. Check your server connection.');
-  }
-}
-
 export default function LoginScreen({ navigation }: Props) {
   const [loading, setLoading] = useState<'google' | 'apple' | 'dev' | null>(null);
   const [devLoginAvailable, setDevLoginAvailable] = useState(false);
   const [devPin, setDevPin] = useState('');
+  const [appleAvailable, setAppleAvailable] = useState(false);
 
   useEffect(() => {
     void fetchDevLoginEnabled().then(setDevLoginAvailable);
+    if (Platform.OS === 'ios') {
+      void AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
+    }
   }, []);
 
   const handleDevLogin = async () => {
@@ -62,7 +58,12 @@ export default function LoginScreen({ navigation }: Props) {
   const handleGoogle = async () => {
     setLoading('google');
     try {
-      await openOAuth('/api/auth/google');
+      await signInWithGoogleMobile();
+      navigation.goBack();
+    } catch (err) {
+      if (err instanceof Error && !err.message.includes('cancelled')) {
+        Alert.alert('Sign in failed', err.message);
+      }
     } finally {
       setLoading(null);
     }
@@ -71,7 +72,20 @@ export default function LoginScreen({ navigation }: Props) {
   const handleApple = async () => {
     setLoading('apple');
     try {
-      await openOAuth('/api/auth/apple');
+      if (Platform.OS === 'ios' && appleAvailable) {
+        await signInWithAppleNative();
+      } else {
+        Alert.alert(
+          'Sign in with Apple',
+          'Native Apple Sign In is required on iOS when Google sign-in is offered.'
+        );
+        return;
+      }
+      navigation.goBack();
+    } catch (err) {
+      const code = (err as { code?: string })?.code;
+      if (code === 'ERR_REQUEST_CANCELED') return;
+      Alert.alert('Sign in failed', err instanceof Error ? err.message : 'Apple Sign In failed');
     } finally {
       setLoading(null);
     }
@@ -83,8 +97,30 @@ export default function LoginScreen({ navigation }: Props) {
         <Image source={LOGO_IMAGE} style={styles.logo} resizeMode="contain" />
         <Text style={styles.title}>KAUF-AI</Text>
         <Text style={styles.subtitle}>
-          Sign in to sync listings and marketplace connections with your account.
+          Sign in to sync drafts across devices. Marketplace OAuth tokens stay on this device only.
         </Text>
+
+        {Platform.OS === 'ios' && appleAvailable ? (
+          <AppleAuthentication.AppleAuthenticationButton
+            buttonType={AppleAuthentication.AppleAuthenticationButtonType.SIGN_IN}
+            buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.BLACK}
+            cornerRadius={12}
+            style={styles.appleNativeButton}
+            onPress={() => void handleApple()}
+          />
+        ) : Platform.OS === 'ios' ? (
+          <TouchableOpacity
+            style={[styles.button, styles.appleButton]}
+            onPress={() => void handleApple()}
+            disabled={loading !== null}
+          >
+            {loading === 'apple' ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.appleText}>Continue with Apple</Text>
+            )}
+          </TouchableOpacity>
+        ) : null}
 
         <TouchableOpacity
           style={[styles.button, styles.googleButton]}
@@ -98,20 +134,15 @@ export default function LoginScreen({ navigation }: Props) {
           )}
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.button, styles.appleButton]}
-          onPress={() => void handleApple()}
-          disabled={loading !== null}
-        >
-          {loading === 'apple' ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.appleText}>Continue with Apple</Text>
-          )}
-        </TouchableOpacity>
-
         <TouchableOpacity style={styles.skipButton} onPress={() => navigation.goBack()}>
           <Text style={styles.skipText}>Continue without account</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.privacyLink}
+          onPress={() => void Linking.openURL(PRIVACY_POLICY_URL)}
+        >
+          <Text style={styles.privacyText}>Privacy Policy</Text>
         </TouchableOpacity>
 
         {devLoginAvailable ? (
@@ -167,6 +198,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 8,
   },
+  appleNativeButton: { width: '100%', maxWidth: 320, height: 48 },
   button: {
     width: '100%',
     maxWidth: 320,
@@ -186,6 +218,8 @@ const styles = StyleSheet.create({
   appleText: { color: '#ffffff', fontSize: 16, fontWeight: '600' },
   skipButton: { marginTop: 8, padding: 12 },
   skipText: { color: '#6B7280', fontSize: 14, fontWeight: '500' },
+  privacyLink: { padding: 8 },
+  privacyText: { color: '#3b82f6', fontSize: 13, fontWeight: '500' },
   devBox: {
     width: '100%',
     maxWidth: 320,

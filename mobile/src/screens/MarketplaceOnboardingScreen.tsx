@@ -18,7 +18,6 @@ import {
   syncUserProfileToBackend,
 } from '../services/userProfile';
 import { nonOAuthStatusMessage, authMethodLabel } from '../services/providerRegistry';
-import { usesServerOAuth } from '../services/serverMarketplaceOAuth';
 import { CREDENTIALS_NOT_CONFIGURED } from '../services/auth';
 import { API_BASE_URL } from '../services/config';
 
@@ -261,11 +260,7 @@ export default function MarketplaceOnboardingScreen({ onComplete }: Props) {
                       <ActivityIndicator color="#fff" />
                     ) : (
                       <Text style={styles.connectButtonText}>
-                        {p.configured
-                          ? usesServerOAuth(p.id)
-                            ? `Connect ${p.name}`
-                            : `Connect ${p.name}`
-                          : CREDENTIALS_NOT_CONFIGURED}
+                        {p.configured ? `Connect ${p.name}` : CREDENTIALS_NOT_CONFIGURED}
                       </Text>
                     )}
                   </TouchableOpacity>

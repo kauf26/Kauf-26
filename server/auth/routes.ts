@@ -1,5 +1,5 @@
 import type { Express, Request, Response } from "express";
-import { getUserById, updateUserProfile } from "./authStorage";
+import { getUserById, updateUserProfile, deleteAccountByUserId } from "./authStorage";
 import { registerDevLoginRoutes } from "./devLogin";
 import { isAuthenticated } from "./setupAuth";
 import type { SessionUser } from "./types";
@@ -76,6 +76,29 @@ export function registerAuthRoutes(app: Express): void {
       console.error("[auth] POST /api/user/profile", error);
       return res.status(500).json({
         message: error instanceof Error ? error.message : "Failed to update profile",
+      });
+    }
+  });
+
+  app.delete("/api/account", isAuthenticated, async (req: Request, res: Response) => {
+    try {
+      const sessionUser = req.user as SessionUser;
+      await deleteAccountByUserId(sessionUser.id);
+
+      req.logout(() => {
+        req.session.destroy((err) => {
+          if (err) {
+            console.error("[auth] DELETE /api/account session destroy", err);
+            return res.status(500).json({ message: "Account deleted but session cleanup failed" });
+          }
+          res.clearCookie("connect.sid");
+          return res.status(200).json({ ok: true, message: "Account deleted" });
+        });
+      });
+    } catch (error) {
+      console.error("[auth] DELETE /api/account", error);
+      return res.status(500).json({
+        message: error instanceof Error ? error.message : "Failed to delete account",
       });
     }
   });

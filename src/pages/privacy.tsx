@@ -88,6 +88,18 @@ export default function Privacy() {
 
           <Card>
             <CardContent className="pt-6 space-y-3">
+              <h2 className="text-lg font-semibold text-foreground">6a. Marketplace OAuth Tokens (Mobile App)</h2>
+              <p>
+                When you connect marketplaces in the Kauf26 mobile app, OAuth access and refresh tokens are stored <strong className="text-foreground">only on your device</strong> (iOS Keychain or Android Keystore via Expo SecureStore). We do not persist marketplace OAuth tokens on our servers.
+              </p>
+              <p>
+                When you publish a listing, tokens are sent to our server only for that single request to call the marketplace API on your behalf, then discarded. They are never logged or cached server-side.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-6 space-y-3">
               <h2 className="text-lg font-semibold text-foreground">6. Data Storage and Security</h2>
               <p>
                 Your data is stored in a secure PostgreSQL database. All data is transmitted over HTTPS (TLS encryption). We implement reasonable technical and organizational measures to protect your information from unauthorized access, loss, or misuse. However, no method of transmission over the internet is 100% secure, and we cannot guarantee absolute security.

@@ -16,10 +16,22 @@ if (!isProd) {
 
 const errors = [];
 
+for (const [key, value] of Object.entries(process.env)) {
+  if (
+    key.startsWith("EXPO_PUBLIC_") &&
+    /SECRET|CLIENT_SECRET|APP_SECRET|PARTNER_KEY|CERT_ID/i.test(key) &&
+    value?.trim()
+  ) {
+    errors.push(`${key} — client secrets must not be in the mobile bundle`);
+  }
+}
+
 if (!process.env.EXPO_PUBLIC_API_URL?.trim()) {
   errors.push(
     "EXPO_PUBLIC_API_URL — backend API base URL (e.g. https://api.yourdomain.com)"
   );
+} else if (!process.env.EXPO_PUBLIC_API_URL.trim().startsWith("https://")) {
+  errors.push("EXPO_PUBLIC_API_URL must use HTTPS in production");
 }
 
 const webBase = process.env.EXPO_PUBLIC_WEB_BASE_URL?.trim();

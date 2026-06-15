@@ -64,7 +64,19 @@ eas secret:create --name EXPO_PUBLIC_TERMS_URL --value https://yourdomain.com/te
 
 Deploy the web app first so those URLs return HTTP 200 before submitting to the stores.
 
-OAuth client secrets are configured on the **server** only. The mobile app exchanges authorization codes via `POST /api/auth/:marketplace/exchange` — do not add `EXPO_PUBLIC_*_SECRET` to EAS secrets.
+OAuth client secrets stay on the **server** only. Marketplace tokens are stored on-device (SecureStore). Secret-required code exchange uses `POST /api/auth/:marketplace/token-proxy` (stateless) — do not add `EXPO_PUBLIC_*_SECRET` to EAS secrets.
+
+### Sign in with Apple (required when Google sign-in is offered)
+
+1. In [Apple Developer](https://developer.apple.com/account/resources/identifiers/list) → App IDs → your app → enable **Sign in with Apple**.
+2. Create a **Services ID** if using web OAuth; for native mobile, configure the App ID capability on `com.globalmarketplacelister.app`.
+3. Set server `.env`: `APPLE_CLIENT_ID` (bundle ID or Services ID), `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`.
+4. EAS builds use `expo-apple-authentication` — run `npx expo prebuild --clean` after changing `app.json` plugins.
+5. iOS shows the native **Sign in with Apple** button on the Login screen; Google uses system browser OAuth with `kauf26://auth/google` redirect.
+
+### Account deletion (App Store / Play requirement)
+
+Settings → **Delete account** — clears all marketplace tokens from SecureStore and calls `DELETE /api/account` when signed in.
 
 Validate before building:
 

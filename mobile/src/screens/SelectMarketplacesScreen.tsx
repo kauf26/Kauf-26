@@ -27,6 +27,10 @@ import {
   isUnknownProductCategory,
 } from '../../../shared/marketplaceKeywordBlocker';
 import PublishPinModal from '../components/PublishPinModal';
+import {
+  assertTokensForPublish,
+  loadMarketplaceTokensForPublish,
+} from '../services/publishCredentials';
 
 type EligibilityResult = {
   marketplaceId: string;
@@ -234,6 +238,9 @@ export default function SelectMarketplacesScreen({ route, navigation }: Props) {
 
     setPublishing(true);
     try {
+      await assertTokensForPublish(allowedSelected);
+      const marketplaceTokens = await loadMarketplaceTokensForPublish(allowedSelected);
+
       const res = await fetch(`${API_BASE_URL}/api/marketplaces/publish`, {
         method: 'POST',
         headers: {
@@ -246,6 +253,7 @@ export default function SelectMarketplacesScreen({ route, navigation }: Props) {
           translateInternational,
           sync: true,
           listing,
+          marketplaceTokens,
         }),
       });
       const body = (await res.json().catch(() => ({}))) as PublishReport & {

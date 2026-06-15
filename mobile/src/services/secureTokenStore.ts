@@ -73,6 +73,23 @@ export async function deletePlatformTokens(marketplace: string): Promise<void> {
   } catch {
     // Legacy key format was invalid on this platform
   }
+  try {
+    await SecureStore.deleteItemAsync(key(marketplace, 'connectContext'));
+  } catch {
+    // Optional connect context
+  }
+}
+
+/** Remove all marketplace OAuth tokens from device (logout / account deletion). */
+export async function clearAllMarketplaceTokens(marketplaceIds: string[]): Promise<void> {
+  for (const id of marketplaceIds) {
+    await deletePlatformTokens(id);
+  }
+  try {
+    await SecureStore.deleteItemAsync(SHOPIFY_SHOP_DOMAIN_KEY);
+  } catch {
+    // Optional
+  }
 }
 
 export async function hasPlatformTokens(marketplace: string): Promise<boolean> {

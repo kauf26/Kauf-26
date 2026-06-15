@@ -11,6 +11,7 @@ import RootNavigator from './src/navigation/RootNavigator';
 import MarketplaceOnboardingScreen from './src/screens/MarketplaceOnboardingScreen';
 import { USER_PIN_KEY } from './src/auth/biometric';
 import { isMarketplaceOnboardingCompleted } from './src/services/userProfile';
+import { wireOAuthSessionLifecycle } from './src/services/oauthSessionLifecycle';
 
 const AppTheme = {
   ...DefaultTheme,
@@ -32,6 +33,7 @@ export default function App() {
   const [onboardingDone, setOnboardingDone] = useState(true);
 
   useEffect(() => {
+    const unwire = wireOAuthSessionLifecycle();
     void (async () => {
       const [storedPin, onboardingComplete] = await Promise.all([
         SecureStore.getItemAsync(USER_PIN_KEY),
@@ -41,6 +43,7 @@ export default function App() {
       setOnboardingDone(onboardingComplete);
       setBooting(false);
     })();
+    return unwire;
   }, []);
 
   if (booting) {

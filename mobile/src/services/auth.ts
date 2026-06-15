@@ -3,7 +3,7 @@
  *
  * Authorize/token URLs live in shared/marketplaceOAuthManifest.ts.
  * The server exposes public metadata at GET /api/marketplaces/oauth-config.
- * Token exchange uses POST /api/auth/:marketplace/exchange — secrets stay on the server.
+ * Token exchange: PKCE on-device, or POST /api/auth/:marketplace/token-proxy (stateless).
  */
 import {
   getOAuthManifestEntry,

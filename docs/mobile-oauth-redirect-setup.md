@@ -130,7 +130,7 @@ This whitelists `kauf26://oauth/*` so Chrome Custom Tabs can return to the app. 
 
 ## Other OAuth marketplaces — quick setup
 
-For each OAuth-supported marketplace below, register **`kauf26://oauth/{id}`** in the developer portal and set the matching `{ENV}_CLIENT_ID` and client secret in **server** `.env`. The mobile app sends the authorization code to `POST /api/auth/{id}/exchange` — no secrets in the mobile bundle.
+For each OAuth-supported marketplace below, register **`kauf26://oauth/{id}`** in the developer portal and set the matching `{ENV}_CLIENT_ID` and client secret in **server** `.env`. PKCE flows (e.g. Etsy) exchange on-device; secret-required flows use **`POST /api/auth/{id}/token-proxy`** (stateless — server never stores tokens).
 
 | Marketplace | Developer portal | Server env (client id) |
 |-------------|------------------|------------------------|

@@ -1,6 +1,6 @@
 /**
- * Server-side OAuth authorization-code exchange for all oauthSupported marketplaces.
- * Client secrets stay in server environment variables only.
+ * Stateless server-side OAuth authorization-code exchange for secret-required marketplaces.
+ * Returns tokens to the client — never persists them on the server.
  */
 import { getOAuthManifestEntry } from "../../shared/marketplaceOAuthManifest";
 import { manifestEntryToProviderConfig } from "../../shared/marketplaceOAuthRegistry";

@@ -5,7 +5,6 @@ import {
   savePlatformTokens,
   type StoredPlatformTokens,
 } from './secureTokenStore';
-import { fetchServerOAuthStatus, usesServerOAuth } from './serverMarketplaceOAuth';
 
 export type VerifyResult = {
   ok: boolean;
@@ -67,19 +66,6 @@ async function getValidTokens(marketplace: string): Promise<StoredPlatformTokens
 }
 
 export async function verifyMarketplace(marketplace: string): Promise<VerifyResult> {
-  if (usesServerOAuth(marketplace)) {
-    try {
-      const status = await fetchServerOAuthStatus(marketplace);
-      return {
-        ok: status.connected,
-        message: status.accountLabel ?? status.message,
-        accountName: status.accountLabel ?? undefined,
-      };
-    } catch {
-      return { ok: false, message: 'Not connected' };
-    }
-  }
-
   if (!(await hasPlatformTokens(marketplace))) {
     return { ok: false, message: 'Not connected' };
   }

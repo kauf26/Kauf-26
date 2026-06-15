@@ -15,7 +15,14 @@ function devFallbackUrl(): string {
 function resolveApiBaseUrl(): string {
   const fromEnv = process.env.EXPO_PUBLIC_API_URL?.trim();
   if (fromEnv) {
-    return stripTrailingSlash(fromEnv);
+    const url = stripTrailingSlash(fromEnv);
+    const isDev = typeof __DEV__ !== "undefined" ? __DEV__ : process.env.NODE_ENV !== "production";
+    if (!isDev && !url.startsWith('https://')) {
+      throw new Error(
+        'EXPO_PUBLIC_API_URL must use HTTPS in production builds (e.g. https://api.yourdomain.com)'
+      );
+    }
+    return url;
   }
 
   const isDev = typeof __DEV__ !== "undefined" ? __DEV__ : process.env.NODE_ENV !== "production";

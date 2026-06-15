@@ -142,3 +142,10 @@ export async function updateUserProfile(
   if (!user) throw new Error("User not found");
   return user;
 }
+
+/** Permanently delete account; FK cascades remove drafts and related rows. */
+export async function deleteAccountByUserId(userId: number): Promise<void> {
+  const existing = await getUserById(userId);
+  if (!existing) throw new Error("User not found");
+  await db.delete(users).where(eq(users.id, userId));
+}
