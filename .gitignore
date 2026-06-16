@@ -3,6 +3,8 @@ dist
 .env
 .env.local
 .env.*.local
+# Local copy of env template — may contain secrets; canonical template is .env.example
+.env.template
 .DS_Store
 .browser-sessions/
 server/public
