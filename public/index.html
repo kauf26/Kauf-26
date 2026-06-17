@@ -149,6 +149,14 @@
       paint-order: stroke fill;
     }
 
+    .hero h1 .dash {
+      font-size: 0.55em;
+      font-weight: 300;
+      -webkit-text-stroke: 1px rgba(0, 0, 0, 0.7);
+      vertical-align: baseline;
+      opacity: 0.9;
+    }
+
     .tagline {
       font-size: clamp(1.05rem, 2.5vw, 1.25rem);
       color: var(--text-soft);
@@ -364,7 +372,7 @@
 
     <main>
       <section class="hero">
-        <h1>KAUFAI&thinsp;&ndash;&thinsp;AI powered marketplace management</h1>
+        <h1>KAUF <span class="dash" aria-hidden="true">&ndash;</span> AI <span class="dash" aria-hidden="true">&ndash;</span> AI <span class="dash" aria-hidden="true">&ndash;</span> powered marketplace management</h1>
         <p class="tagline">Connect, manage, and optimize your multi-channel e-commerce in one place</p>
       </section>
 
