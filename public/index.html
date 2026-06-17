@@ -23,8 +23,8 @@
       --cyan: #2BAAC9;
       --purple: #8B5CF6;
       --pink: #E84D8A;
-      --deep-purple: #7C3AED;
-      --deep-purple-hover: #6D28D9;
+      --gold: #F59E0B;
+      --logo-gradient: linear-gradient(135deg, #2BAAC9 0%, #8B5CF6 40%, #E84D8A 100%);
       --text: #ffffff;
       --text-soft: rgba(255, 255, 255, 0.82);
       --text-muted: rgba(255, 255, 255, 0.65);
@@ -141,7 +141,7 @@
       letter-spacing: -0.04em;
       line-height: 1.1;
       margin-bottom: 1.25rem;
-      background: linear-gradient(90deg, #2BAAC9 0%, #8B5CF6 35%, #F59E0B 65%, #E84D8A 100%);
+      background: linear-gradient(90deg, #2BAAC9 0%, #8B5CF6 30%, #F59E0B 60%, #E84D8A 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -258,8 +258,8 @@
     }
 
     .signup-form input[type="email"]:focus {
-      border-color: var(--deep-purple);
-      box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.35);
+      border-color: var(--purple);
+      box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.35);
     }
 
     .signup-form input[type="email"]::placeholder { color: rgba(255, 255, 255, 0.4); }
@@ -270,17 +270,20 @@
       font-weight: 600;
       font-family: inherit;
       color: var(--text);
-      background: var(--deep-purple);
+      background: linear-gradient(135deg, #2BAAC9 0%, #8B5CF6 40%, #E84D8A 100%);
       border: none;
       border-radius: 0.625rem;
       cursor: pointer;
-      transition: transform 0.15s, background 0.15s, box-shadow 0.15s;
+      transition: transform 0.15s, filter 0.15s, box-shadow 0.15s;
     }
 
     .signup-form button:hover {
       transform: translateY(-1px);
-      background: var(--deep-purple-hover);
-      box-shadow: 0 8px 24px rgba(124, 58, 237, 0.4);
+      filter: brightness(1.1);
+      box-shadow:
+        0 8px 24px rgba(43, 170, 201, 0.3),
+        0 8px 32px rgba(139, 92, 246, 0.25),
+        0 8px 40px rgba(232, 77, 138, 0.2);
     }
 
     .signup-form button:active { transform: translateY(0); }
@@ -326,7 +329,7 @@
     }
 
     footer a:hover {
-      color: var(--deep-purple);
+      color: var(--purple);
       text-decoration: underline;
     }
 
@@ -359,7 +362,7 @@
 
     <main>
       <section class="hero">
-        <h1>KaufAI &mdash; AI-Powered Marketplace Management</h1>
+        <h1>KAUFAI &ndash; AI powered marketplace management</h1>
         <p class="tagline">Connect, manage, and optimize your multi-channel e-commerce in one place</p>
       </section>
 
