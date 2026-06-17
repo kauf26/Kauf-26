@@ -23,9 +23,10 @@
       --teal: #14b8a6;
       --teal-light: #2dd4bf;
       --blue: #3b82f6;
-      --text: #f0f9ff;
-      --muted: #94a3b8;
-      --border: rgba(45, 212, 191, 0.15);
+      --text: #ffffff;
+      --text-soft: rgba(255, 255, 255, 0.82);
+      --text-muted: rgba(255, 255, 255, 0.65);
+      --border: rgba(255, 255, 255, 0.12);
       --glow: rgba(20, 184, 166, 0.25);
     }
 
@@ -45,7 +46,7 @@
     .bg-gradient {
       position: fixed;
       inset: 0;
-      z-index: -1;
+      z-index: 0;
       background:
         radial-gradient(ellipse 80% 60% at 50% -10%, rgba(20, 184, 166, 0.18), transparent),
         radial-gradient(ellipse 50% 40% at 100% 50%, rgba(59, 130, 246, 0.12), transparent),
@@ -53,20 +54,44 @@
         linear-gradient(180deg, var(--bg-deep) 0%, var(--bg-mid) 50%, var(--bg-deep) 100%);
     }
 
+    .logo-watermark {
+      position: fixed;
+      inset: 0;
+      z-index: 1;
+      pointer-events: none;
+      background-image: url("/IMG_2482.JPG");
+      background-repeat: no-repeat;
+      background-position: center center;
+      /* contain keeps the full icon + collar in frame */
+      background-size: min(92vw, 92vh);
+      opacity: 0.20;
+      filter: saturate(1.05);
+    }
+
     .grid-overlay {
       position: fixed;
       inset: 0;
-      z-index: -1;
+      z-index: 2;
       opacity: 0.04;
       background-image:
         linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px),
         linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px);
       background-size: 48px 48px;
+      pointer-events: none;
+    }
+
+    .page-content {
+      position: relative;
+      z-index: 3;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
     }
 
     header {
       max-width: 72rem;
       margin: 0 auto;
+      width: 100%;
       padding: 1.25rem 1.5rem;
       display: flex;
       align-items: center;
@@ -81,15 +106,15 @@
       text-decoration: none;
     }
 
-    .logo span { color: var(--teal-light); }
+    .logo span { color: var(--text); }
 
     .badge {
       font-size: 0.75rem;
       font-weight: 600;
       letter-spacing: 0.06em;
       text-transform: uppercase;
-      color: var(--teal-light);
-      background: rgba(20, 184, 166, 0.12);
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.08);
       border: 1px solid var(--border);
       padding: 0.35rem 0.75rem;
       border-radius: 999px;
@@ -98,7 +123,9 @@
     main {
       max-width: 72rem;
       margin: 0 auto;
+      width: 100%;
       padding: 3rem 1.5rem 5rem;
+      flex: 1;
     }
 
     .hero {
@@ -113,15 +140,12 @@
       letter-spacing: -0.04em;
       line-height: 1.1;
       margin-bottom: 1.25rem;
-      background: linear-gradient(135deg, var(--text) 0%, var(--teal-light) 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
+      color: var(--text);
     }
 
     .tagline {
       font-size: clamp(1.05rem, 2.5vw, 1.25rem);
-      color: var(--muted);
+      color: var(--text-soft);
       max-width: 32rem;
       margin: 0 auto 2.5rem;
     }
@@ -134,17 +158,18 @@
     }
 
     .feature {
-      background: rgba(19, 47, 76, 0.6);
+      background: rgba(19, 47, 76, 0.65);
       border: 1px solid var(--border);
       border-radius: 1rem;
       padding: 1.5rem;
-      backdrop-filter: blur(8px);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
       transition: border-color 0.2s, box-shadow 0.2s;
     }
 
     .feature:hover {
-      border-color: rgba(45, 212, 191, 0.35);
-      box-shadow: 0 0 32px var(--glow);
+      border-color: rgba(255, 255, 255, 0.22);
+      box-shadow: 0 0 32px rgba(0, 0, 0, 0.35);
     }
 
     .feature-icon {
@@ -163,33 +188,37 @@
       font-size: 1rem;
       font-weight: 600;
       margin-bottom: 0.5rem;
+      color: var(--text);
     }
 
     .feature p {
       font-size: 0.875rem;
-      color: var(--muted);
+      color: var(--text-soft);
     }
 
     .coming-soon {
       max-width: 28rem;
       margin: 0 auto;
       text-align: center;
-      background: rgba(19, 47, 76, 0.8);
+      background: rgba(19, 47, 76, 0.85);
       border: 1px solid var(--border);
       border-radius: 1.25rem;
       padding: 2.5rem 2rem;
       box-shadow: 0 24px 48px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
     }
 
     .coming-soon h2 {
       font-size: 1.375rem;
       font-weight: 600;
       margin-bottom: 0.5rem;
+      color: var(--text);
     }
 
     .coming-soon > p {
       font-size: 0.9rem;
-      color: var(--muted);
+      color: var(--text-muted);
       margin-bottom: 1.5rem;
     }
 
@@ -217,7 +246,7 @@
       box-shadow: 0 0 0 3px var(--glow);
     }
 
-    .signup-form input[type="email"]::placeholder { color: #64748b; }
+    .signup-form input[type="email"]::placeholder { color: rgba(255, 255, 255, 0.4); }
 
     .signup-form button {
       padding: 0.875rem 1.5rem;
@@ -241,7 +270,7 @@
 
     .signup-note {
       font-size: 0.75rem;
-      color: #64748b;
+      color: var(--text-muted);
       margin-top: 0.25rem;
     }
 
@@ -251,7 +280,7 @@
       background: rgba(20, 184, 166, 0.15);
       border: 1px solid var(--border);
       border-radius: 0.625rem;
-      color: var(--teal-light);
+      color: var(--text);
       font-size: 0.9rem;
       font-weight: 500;
     }
@@ -261,6 +290,7 @@
     footer {
       max-width: 72rem;
       margin: 0 auto;
+      width: 100%;
       padding: 2rem 1.5rem 2.5rem;
       border-top: 1px solid var(--border);
       display: flex;
@@ -269,11 +299,11 @@
       justify-content: space-between;
       gap: 1rem;
       font-size: 0.875rem;
-      color: var(--muted);
+      color: var(--text-soft);
     }
 
     footer a {
-      color: var(--teal-light);
+      color: var(--text);
       text-decoration: none;
     }
 
@@ -288,73 +318,80 @@
       main { padding-top: 2rem; }
       .coming-soon { padding: 2rem 1.25rem; }
       footer { flex-direction: column; text-align: center; }
+      .logo-watermark {
+        background-size: min(96vw, 88vh);
+        opacity: 0.18;
+      }
     }
   </style>
 </head>
 <body>
   <div class="bg-gradient" aria-hidden="true"></div>
+  <div class="logo-watermark" aria-hidden="true"></div>
   <div class="grid-overlay" aria-hidden="true"></div>
 
-  <header>
-    <a class="logo" href="https://kaufai.com">Kauf<span>AI</span></a>
-    <span class="badge">Coming Soon</span>
-  </header>
+  <div class="page-content">
+    <header>
+      <a class="logo" href="https://kaufai.com">Kauf<span>AI</span></a>
+      <span class="badge">Coming Soon</span>
+    </header>
 
-  <main>
-    <section class="hero">
-      <h1>KaufAI &mdash; AI-Powered Marketplace Management</h1>
-      <p class="tagline">Connect, manage, and optimize your multi-channel e-commerce in one place</p>
-    </section>
+    <main>
+      <section class="hero">
+        <h1>KaufAI &mdash; AI-Powered Marketplace Management</h1>
+        <p class="tagline">Connect, manage, and optimize your multi-channel e-commerce in one place</p>
+      </section>
 
-    <section class="features" aria-label="Features">
-      <article class="feature">
-        <div class="feature-icon" aria-hidden="true">📸</div>
-        <h3>AI Product Identification</h3>
-        <p>Snap a photo and let AI generate titles, descriptions, and attributes for your listings.</p>
-      </article>
-      <article class="feature">
-        <div class="feature-icon" aria-hidden="true">🔗</div>
-        <h3>Multi-Channel Connect</h3>
-        <p>Link eBay, Etsy, Shopify, Allegro, and more from a single dashboard.</p>
-      </article>
-      <article class="feature">
-        <div class="feature-icon" aria-hidden="true">⚡</div>
-        <h3>Publish Faster</h3>
-        <p>List once, publish everywhere — save hours on repetitive marketplace work.</p>
-      </article>
-    </section>
+      <section class="features" aria-label="Features">
+        <article class="feature">
+          <div class="feature-icon" aria-hidden="true">📸</div>
+          <h3>AI Product Identification</h3>
+          <p>Snap a photo and let AI generate titles, descriptions, and attributes for your listings.</p>
+        </article>
+        <article class="feature">
+          <div class="feature-icon" aria-hidden="true">🔗</div>
+          <h3>Multi-Channel Connect</h3>
+          <p>Link eBay, Etsy, Shopify, Allegro, and more from a single dashboard.</p>
+        </article>
+        <article class="feature">
+          <div class="feature-icon" aria-hidden="true">⚡</div>
+          <h3>Publish Faster</h3>
+          <p>List once, publish everywhere — save hours on repetitive marketplace work.</p>
+        </article>
+      </section>
 
-    <section class="coming-soon" id="notify" aria-labelledby="notify-heading">
-      <h2 id="notify-heading">Get notified at launch</h2>
-      <p>We&rsquo;re putting the finishing touches on KaufAI. Join the waitlist and be first to know.</p>
+      <section class="coming-soon" id="notify" aria-labelledby="notify-heading">
+        <h2 id="notify-heading">Get notified at launch</h2>
+        <p>We&rsquo;re putting the finishing touches on KaufAI. Join the waitlist and be first to know.</p>
 
-      <form class="signup-form" id="signup-form" novalidate>
-        <label for="email" class="visually-hidden">Email address</label>
-        <input
-          type="email"
-          id="email"
-          name="email"
-          placeholder="you@example.com"
-          autocomplete="email"
-          required
-        />
-        <button type="submit">Notify Me</button>
-        <p class="signup-note">No spam. Unsubscribe anytime.</p>
-      </form>
+        <form class="signup-form" id="signup-form" novalidate>
+          <label for="email" class="visually-hidden">Email address</label>
+          <input
+            type="email"
+            id="email"
+            name="email"
+            placeholder="you@example.com"
+            autocomplete="email"
+            required
+          />
+          <button type="submit">Notify Me</button>
+          <p class="signup-note">No spam. Unsubscribe anytime.</p>
+        </form>
 
-      <p class="success-msg" id="success-msg" role="status">
-        Thanks! We&rsquo;ll let you know when KaufAI launches.
-      </p>
-    </section>
-  </main>
+        <p class="success-msg" id="success-msg" role="status">
+          Thanks! We&rsquo;ll let you know when KaufAI launches.
+        </p>
+      </section>
+    </main>
 
-  <footer>
-    <p>&copy; 2026 KaufAI. All rights reserved.</p>
-    <nav class="footer-links" aria-label="Footer">
-      <a href="/privacy.html">Privacy Policy</a>
-      <a href="mailto:support@kaufai.com">support@kaufai.com</a>
-    </nav>
-  </footer>
+    <footer>
+      <p>&copy; 2026 KaufAI. All rights reserved.</p>
+      <nav class="footer-links" aria-label="Footer">
+        <a href="/privacy.html">Privacy Policy</a>
+        <a href="mailto:support@kaufai.com">support@kaufai.com</a>
+      </nav>
+    </footer>
+  </div>
 
   <style>
     .visually-hidden {
