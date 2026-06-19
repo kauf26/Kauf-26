@@ -8,16 +8,31 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "dev:ios": "expo run:ios --device",
-    "dev:android": "expo run:android --device",
-    "postinstall": "node scripts/patch-expo-dev-menu.js",
-    "web": "expo start --web",
-    "validate:production-env": "node scripts/validate-production-env.js --production",
-    "eas:login": "eas login",
-    "eas:configure": "eas build:configure",
-    "eas:build:dev:ios": "eas build --platform ios --profile development",
-    "eas:build:dev:android": "eas build --platform android --profile development",
-    "build:ios": "npm run validate:production-env && eas build --platform ios --profile production",
-    "build:android": "npm run validate:production-env && eas build --platform android --profile production"
+    "dev:android": "expo run:android --device"
+  },
+  "codegenConfig": {
+    "libraries": [
+      {
+        "name": "react-native-gesture-handler",
+        "type": "modules",
+        "jsSrcsDir": "."
+      },
+      {
+        "name": "react-native-safe-area-context",
+        "type": "modules",
+        "jsSrcsDir": "."
+      },
+      {
+        "name": "react-native-screens",
+        "type": "modules",
+        "jsSrcsDir": "."
+      },
+      {
+        "name": "react-native-webview",
+        "type": "modules",
+        "jsSrcsDir": "."
+      }
+    ]
   },
   "dependencies": {
     "@expo/vector-icons": "^14.0.0",

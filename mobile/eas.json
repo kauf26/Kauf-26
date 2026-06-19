@@ -16,10 +16,12 @@
     },
     "production": {
       "env": {
-        "APP_ENV": "production"
+        "APP_ENV": "production",
+        "EXPO_PUBLIC_API_URL": "https://api.kaufai.com",
+        "EXPO_PUBLIC_WEB_BASE_URL": "https://kaufai.com"
       },
       "ios": {
-        "resourceClass": "m1-medium"
+        "resourceClass": "m-medium"
       },
       "android": {
         "buildType": "app-bundle"
@@ -29,9 +31,9 @@
   "submit": {
     "production": {
       "ios": {
-        "appleId": "YOUR_APPLE_ID",
+        "appleId": "bz6gpf5nvc@privaterelay.appleid.com",
         "ascAppId": "YOUR_APP_STORE_CONNECT_APP_ID",
-        "appleTeamId": "YOUR_APPLE_TEAM_ID"
+        "appleTeamId": "U2M253533S"
       },
       "android": {
         "serviceAccountKeyPath": "./google-play-service-account.json",
