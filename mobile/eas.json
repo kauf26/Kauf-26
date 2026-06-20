@@ -13,8 +13,11 @@
     },
     "preview": {
       "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://api.kaufai.com",
+        "EXPO_PUBLIC_WEB_BASE_URL": "https://kaufai.com"
+      },
       "ios": {
-        "simulator": true,
         "image": "macos-tahoe-26.4-xcode-26.4"
       }
     },

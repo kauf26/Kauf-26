@@ -11,10 +11,18 @@ function isProductionBuild() {
   );
 }
 
-if (isProductionBuild() && !process.env.EXPO_PUBLIC_API_URL?.trim()) {
+function isPreviewBuild() {
+  return process.env.EAS_BUILD_PROFILE === "preview";
+}
+
+function requiresPublicEnv() {
+  return isProductionBuild() || isPreviewBuild();
+}
+
+if (requiresPublicEnv() && !process.env.EXPO_PUBLIC_API_URL?.trim()) {
   throw new Error(
-    "[Kauf26] EXPO_PUBLIC_API_URL is required for production builds. " +
-      "Set it in EAS Secrets or mobile/.env before running eas build --profile production. " +
+    "[Kauf26] EXPO_PUBLIC_API_URL is required for production/preview builds. " +
+      "Set it in eas.json (build profile env), EAS Secrets, or mobile/.env before running eas build. " +
       "See mobile/.env.example and MOBILE_SUBMISSION.md."
   );
 }
@@ -43,9 +51,9 @@ const privacyUrl = process.env.EXPO_PUBLIC_PRIVACY_URL?.trim();
 const termsUrl = process.env.EXPO_PUBLIC_TERMS_URL?.trim();
 const hasLegalUrls = Boolean(webBase) || (Boolean(privacyUrl) && Boolean(termsUrl));
 
-if (isProductionBuild() && !hasLegalUrls) {
+if (requiresPublicEnv() && !hasLegalUrls) {
   throw new Error(
-    "[Kauf26] Legal URLs are required for production builds. " +
+    "[Kauf26] Legal URLs are required for production/preview builds. " +
       "Set EXPO_PUBLIC_WEB_BASE_URL or both EXPO_PUBLIC_PRIVACY_URL and EXPO_PUBLIC_TERMS_URL. " +
       "See mobile/MOBILE_SUBMISSION.md."
   );
