@@ -59,6 +59,7 @@ module.exports = {
     plugins: [
       ...(base.expo.plugins ?? []),
       ["./plugins/withPrivacyManifest.js"],
+      ["./plugins/withXcode26FmtFix.js"],
     ],
     extra: {
       apiUrl: process.env.EXPO_PUBLIC_API_URL?.trim()?.replace(/\/$/, "") ?? "",
