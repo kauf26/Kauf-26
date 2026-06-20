@@ -5,8 +5,17 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-function stripTrailingSlash(url: string): string {
-  return url.replace(/\/$/, '');
+function isPrivateOrLocalHost(url: string): boolean {
+  return /^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.|localhost|127\.)/i.test(url);
+}
+
+function normalizeApiBaseUrl(url: string): string {
+  let normalized = stripTrailingSlash(url);
+  // EXPO_PUBLIC_API_URL is the server origin; routes live under /api/* in the app.
+  if (normalized.endsWith('/api')) {
+    normalized = normalized.slice(0, -4);
+  }
+  return normalized;
 }
 
 function isDevBuild(): boolean {
@@ -44,8 +53,8 @@ function warnDevMisconfiguration(url: string): void {
 function resolveApiBaseUrl(): string {
   const fromEnv = process.env.EXPO_PUBLIC_API_URL?.trim();
   if (fromEnv) {
-    const url = stripTrailingSlash(fromEnv);
-    if (!isDevBuild() && !url.startsWith('https://')) {
+    const url = normalizeApiBaseUrl(fromEnv);
+    if (!isDevBuild() && !url.startsWith('https://') && !isPrivateOrLocalHost(url)) {
       throw new Error(
         'EXPO_PUBLIC_API_URL must use HTTPS in production builds (e.g. https://api.kaufai.com)'
       );

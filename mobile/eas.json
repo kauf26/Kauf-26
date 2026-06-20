@@ -14,8 +14,8 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://api.kaufai.com",
-        "EXPO_PUBLIC_WEB_BASE_URL": "https://kaufai.com"
+        "EXPO_PUBLIC_API_URL": "http://192.168.1.186:2626",
+        "EXPO_PUBLIC_WEB_BASE_URL": "http://192.168.1.186:5173"
       },
       "ios": {
         "image": "macos-tahoe-26.4-xcode-26.4"
