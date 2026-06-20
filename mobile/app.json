@@ -69,6 +69,14 @@
     },
     "scheme": "kauf26",
     "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ],
       "expo-dev-client",
       [
         "expo-camera",
@@ -86,7 +94,8 @@
         "faceIDPermission": "Use Face ID to quickly unlock the app instead of entering your PIN."
       }
     ],
-    "expo-apple-authentication"
+      "expo-apple-authentication",
+      "expo-font"
     ]
   }
 }
