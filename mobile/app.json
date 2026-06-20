@@ -95,7 +95,8 @@
       }
     ],
       "expo-apple-authentication",
-      "expo-font"
+      "expo-font",
+      "expo-asset"
     ]
   }
 }
