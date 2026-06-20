@@ -10,30 +10,6 @@
     "dev:ios": "expo run:ios --device",
     "dev:android": "expo run:android --device"
   },
-  "codegenConfig": {
-    "libraries": [
-      {
-        "name": "react-native-gesture-handler",
-        "type": "modules",
-        "jsSrcsDir": "."
-      },
-      {
-        "name": "react-native-safe-area-context",
-        "type": "modules",
-        "jsSrcsDir": "."
-      },
-      {
-        "name": "react-native-screens",
-        "type": "modules",
-        "jsSrcsDir": "."
-      },
-      {
-        "name": "react-native-webview",
-        "type": "modules",
-        "jsSrcsDir": "."
-      }
-    ]
-  },
   "dependencies": {
     "@expo/vector-icons": "^14.0.0",
     "@react-navigation/bottom-tabs": "^6.5.0",
