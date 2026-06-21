@@ -1,5 +1,5 @@
 /**
- * Expo config — validates EXPO_PUBLIC_API_URL on production EAS builds.
+ * Expo config — validates EXPO_PUBLIC_API_URL on production/preview EAS builds.
  * @see mobile/.env.example
  */
 const base = require("./app.json");
@@ -59,22 +59,20 @@ if (requiresPublicEnv() && !hasLegalUrls) {
   );
 }
 
-/** @type {import('expo/config').ExpoConfig} */
-module.exports = {
-  expo: {
-    ...base.expo,
-    name: "Kauf26",
-    plugins: [
-      ...(base.expo.plugins ?? []),
-      ["./plugins/withPrivacyManifest.js"],
-      ["./plugins/withXcode26FmtFix.js"],
-    ],
-    extra: {
-      apiUrl: process.env.EXPO_PUBLIC_API_URL?.trim()?.replace(/\/$/, "") ?? "",
-      eas: {
-        projectId: "59f74669-28ab-41fc-8f7b-18fc9b0a5595",
-        ...(base.expo.extra?.eas ?? {}),
-      },
+/** @param {{ config: import('expo/config').ExpoConfig }} param0 */
+module.exports = ({ config }) => ({
+  ...config,
+  plugins: [
+    ...(config.plugins ?? base.expo.plugins ?? []),
+    ["./plugins/withPrivacyManifest.js"],
+    ["./plugins/withXcode26FmtFix.js"],
+  ],
+  extra: {
+    ...(config.extra ?? {}),
+    apiUrl: process.env.EXPO_PUBLIC_API_URL?.trim()?.replace(/\/$/, "") ?? "",
+    eas: {
+      projectId: "59f74669-28ab-41fc-8f7b-18fc9b0a5595",
+      ...(config.extra?.eas ?? base.expo.extra?.eas ?? {}),
     },
   },
-};
+});

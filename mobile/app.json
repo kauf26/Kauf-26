@@ -1,19 +1,17 @@
 {
   "expo": {
-    "name": "Global Marketplace Lister",
+    "name": "global-marketplace-lister",
     "slug": "global-marketplace-lister",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0a0a0f"
+      "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.globalmarketplacelister.app",
@@ -41,7 +39,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#0a0a0f"
+        "backgroundColor": "#ffffff"
       },
       "package": "com.globalmarketplacelister.app",
       "intentFilters": [
@@ -89,11 +87,11 @@
       "expo-image-picker",
       "expo-secure-store",
       [
-      "expo-local-authentication",
-      {
-        "faceIDPermission": "Use Face ID to quickly unlock the app instead of entering your PIN."
-      }
-    ],
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Use Face ID to quickly unlock the app instead of entering your PIN."
+        }
+      ],
       "expo-apple-authentication",
       "expo-font",
       "expo-asset"
