@@ -5,6 +5,10 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
+function stripTrailingSlash(url: string): string {
+  return url.replace(/\/$/, '');
+}
+
 function isPrivateOrLocalHost(url: string): boolean {
   return /^https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.|localhost|127\.)/i.test(url);
 }

@@ -18,6 +18,9 @@
       "buildNumber": "1.0.0",
       "usesAppleSignIn": true,
       "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsLocalNetworking": true
+        },
         "NSCameraUsageDescription": "Take photos of products to create marketplace listings with AI-powered descriptions.",
         "NSPhotoLibraryUsageDescription": "Select product photos from your library to list on multiple marketplaces.",
         "NSFaceIDUsageDescription": "Use Face ID to quickly unlock the app instead of entering your PIN.",
