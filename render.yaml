@@ -1,0 +1,64 @@
+# Render Blueprint — deploy API to api.kaufai.com
+# Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: kauf26-api
+    runtime: docker
+    plan: starter
+    region: oregon
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 2626
+      - key: APP_BASE_URL
+        value: https://api.kaufai.com
+      - key: CLIENT_URL
+        value: https://kaufai.com
+      - key: VITE_API_URL
+        value: https://api.kaufai.com
+      - key: MOCK_OAUTH_MODE
+        value: false
+      - key: DATABASE_URL
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: SESSION_ENCRYPTION_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: APPLE_CLIENT_ID
+        value: com.globalmarketplacelister.app
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: EBAY_CLIENT_ID
+        sync: false
+      - key: EBAY_CLIENT_SECRET
+        sync: false
+      - key: EBAY_SANDBOX
+        value: false
+      - key: ETSY_CLIENT_ID
+        sync: false
+      - key: ETSY_CLIENT_SECRET
+        sync: false
+      - key: SHOPIFY_CLIENT_ID
+        sync: false
+      - key: SHOPIFY_CLIENT_SECRET
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: APIFY_API_KEY
+        sync: false
+      - key: UNIFIED_API_KEY
+        sync: false
+
+databases:
+  - name: kauf26-db
+    plan: free
+    databaseName: kauf26
+    user: kauf26

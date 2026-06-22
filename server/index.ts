@@ -878,9 +878,10 @@ function fillMarketAverages(input: {
 
 const app = express();
 const PORT = Number(process.env.PORT ?? 3000);
+const JSON_BODY_LIMIT = process.env.JSON_BODY_LIMIT ?? "50mb";
 
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: false, limit: "10mb" }));
+app.use(express.json({ limit: JSON_BODY_LIMIT }));
+app.use(express.urlencoded({ extended: false, limit: JSON_BODY_LIMIT }));
 
 void ensureUploadsDir().catch((err) => {
   console.warn("[KAUF26] Could not create uploads directory:", err);
