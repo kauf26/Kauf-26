@@ -10,16 +10,21 @@ dist
 server/public
 vite.config.ts.*
 *.tar.gz
-node_modules
-node_modules/
-.env
-.DS_Store
-.env
+
 google-play-service-account.json
 mobile/google-play-service-account.json
 
+# Backup / duplicate junk (macOS Finder, manual saves)
+*.bak
+*.bak-*
+*.save
+* 2.*
+* 2/
+
 # Expo generated
+.expo/
 mobile/.expo/
+mobile/.vercel/
 mobile/android/
 mobile/ios/
 
