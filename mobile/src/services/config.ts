@@ -15,7 +15,6 @@ function isPrivateOrLocalHost(url: string): boolean {
 
 function normalizeApiBaseUrl(url: string): string {
   let normalized = stripTrailingSlash(url);
-  // EXPO_PUBLIC_API_URL is the server origin; routes live under /api/* in the app.
   if (normalized.endsWith('/api')) {
     normalized = normalized.slice(0, -4);
   }
@@ -26,13 +25,16 @@ function isDevBuild(): boolean {
   return typeof __DEV__ !== 'undefined' ? __DEV__ : process.env.NODE_ENV !== 'production';
 }
 
+function readExtraApiUrl(): string | undefined {
+  const extra = Constants.expoConfig?.extra as { apiUrl?: string } | undefined;
+  return extra?.apiUrl?.trim() || undefined;
+}
+
 function devFallbackUrl(): string {
-  // iOS Simulator / Android emulator can reach the host via localhost.
   if (Platform.OS !== 'web' && !Constants.isDevice) {
     return 'http://localhost:2626';
   }
-  // Physical device — set EXPO_PUBLIC_API_URL to http://YOUR_LAN_IP:2626 in mobile/.env
-  return 'http://localhost:2626';
+  return readExtraApiUrl() ?? 'http://localhost:2626';
 }
 
 function warnDevMisconfiguration(url: string): void {
@@ -56,11 +58,14 @@ function warnDevMisconfiguration(url: string): void {
 
 function resolveApiBaseUrl(): string {
   const fromEnv = process.env.EXPO_PUBLIC_API_URL?.trim();
-  if (fromEnv) {
-    const url = normalizeApiBaseUrl(fromEnv);
+  const fromExtra = readExtraApiUrl();
+  const raw = fromEnv || fromExtra;
+
+  if (raw) {
+    const url = normalizeApiBaseUrl(raw);
     if (!isDevBuild() && !url.startsWith('https://') && !isPrivateOrLocalHost(url)) {
-      throw new Error(
-        'EXPO_PUBLIC_API_URL must use HTTPS in production builds (e.g. https://api.kaufai.com)'
+      console.error(
+        '[Kauf26] EXPO_PUBLIC_API_URL should use HTTPS in store builds; continuing with configured URL.'
       );
     }
     warnDevMisconfiguration(url);
@@ -77,9 +82,12 @@ function resolveApiBaseUrl(): string {
     return fallback;
   }
 
-  throw new Error(
-    'EXPO_PUBLIC_API_URL is not configured. Set it in mobile/.env for local dev or in EAS Secrets for production builds.'
+  const fallback = devFallbackUrl();
+  console.error(
+    '[Kauf26] EXPO_PUBLIC_API_URL is not configured; falling back to extra/default URL:',
+    fallback
   );
+  return fallback;
 }
 
 export const API_BASE_URL = resolveApiBaseUrl();
