@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useMemo, ReactNode } from 'react';
 
 // Define the exact blueprint of a product draft in your app
 export interface ProductDraft {
@@ -25,10 +25,15 @@ const ProductDraftContext = createContext<ProductDraftContextType | undefined>(u
 export function ProductDraftProvider({ children }: { children: ReactNode }) {
  const [draft, setDraft] = useState<ProductDraft | null>(null);
 
- const clearDraft = () => setDraft(null);
+ const clearDraft = useCallback(() => setDraft(null), []);
+
+ const value = useMemo(
+   () => ({ draft, setDraft, clearDraft }),
+   [draft, clearDraft]
+ );
 
  return (
-   <ProductDraftContext.Provider value={{ draft, setDraft, clearDraft }}>
+   <ProductDraftContext.Provider value={value}>
      {children}
    </ProductDraftContext.Provider>
  );
