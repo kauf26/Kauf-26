@@ -39,7 +39,7 @@ export async function assertTokensForPublish(
   }
   if (missing.length > 0) {
     throw new Error(
-      `Connect ${missing.join(', ')} in Connections before publishing (token missing on this device).`
+      `Connect ${missing.join(', ')} before publishing. Open Connect Marketplace in Settings or tap Connect when prompted.`
     );
   }
 }

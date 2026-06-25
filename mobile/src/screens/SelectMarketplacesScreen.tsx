@@ -9,9 +9,11 @@ import {
   Alert,
   Switch,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import type { StackScreenProps } from '@react-navigation/stack';
+import { Ionicons } from '@expo/vector-icons';
 import type { HomeStackParamList, PublishReport } from '../types/navigation';
+import { navigateToTab, navigateToConnectMarketplace } from '../navigation/navigateToTab';
 import { API_BASE_URL } from '../services/config';
 import { DEFAULT_IDENTIFY_MARKETPLACES } from '../services/identifyApi';
 import {
@@ -62,6 +64,7 @@ const GLOBAL_MARKETS = ALL_MARKETPLACE_IDS.filter(
 
 export default function SelectMarketplacesScreen({ route, navigation }: Props) {
   const { draftId, listing } = route.params;
+  const tabBarHeight = useBottomTabBarHeight();
   const [selected, setSelected] = useState<string[]>([...DEFAULT_IDENTIFY_MARKETPLACES]);
   const [translateInternational, setTranslateInternational] = useState(true);
   const [publishing, setPublishing] = useState(false);
@@ -272,9 +275,20 @@ export default function SelectMarketplacesScreen({ route, navigation }: Props) {
         },
       });
     } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not publish listing.';
+      const needsConnect = /connect/i.test(message);
       Alert.alert(
-        'Publish failed',
-        err instanceof Error ? err.message : 'Could not publish listing.'
+        needsConnect ? 'Marketplace not connected' : 'Publish failed',
+        message,
+        needsConnect
+          ? [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Connect',
+                onPress: () => navigateToConnectMarketplace(navigation, 'ebay'),
+              },
+            ]
+          : [{ text: 'OK' }]
       );
     } finally {
       setPublishing(false);
@@ -294,12 +308,32 @@ export default function SelectMarketplacesScreen({ route, navigation }: Props) {
   ).length;
 
   return (
-    <SafeAreaView style={styles.page} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.content}>
+    <View style={styles.page}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: tabBarHeight + 24 }]}
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={styles.title}>Select Marketplaces</Text>
         <Text style={styles.subtitle}>
           Choose where to publish &quot;{listing.title || 'your product'}&quot;.
         </Text>
+
+        <TouchableOpacity
+          style={styles.connectLink}
+          onPress={() => navigateToConnectMarketplace(navigation, 'ebay')}
+        >
+          <Ionicons name="storefront-outline" size={16} color="#2563eb" />
+          <Text style={styles.connectLinkText}>Connect eBay / Amazon (OAuth)</Text>
+          <Ionicons name="chevron-forward" size={16} color="#2563eb" />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.connectLinkSecondary}
+          onPress={() => navigateToConnectMarketplace(navigation, 'ebay')}
+        >
+          <Ionicons name="settings-outline" size={16} color="#6B7280" />
+          <Text style={styles.connectLinkSecondaryText}>Or open via Settings tab</Text>
+        </TouchableOpacity>
 
         {unknownCategory ? (
           <View style={styles.noticeBox}>
@@ -362,7 +396,7 @@ export default function SelectMarketplacesScreen({ route, navigation }: Props) {
         }}
         onCancel={() => setPublishAuthVisible(false)}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -371,6 +405,31 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 16 },
   title: { fontSize: 24, fontWeight: '700', color: '#111827' },
   subtitle: { fontSize: 14, color: '#6B7280', lineHeight: 20 },
+  connectLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 10,
+    marginBottom: 4,
+    paddingVertical: 8,
+  },
+  connectLinkText: {
+    flex: 1,
+    color: '#2563eb',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  connectLinkSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingBottom: 8,
+  },
+  connectLinkSecondaryText: {
+    flex: 1,
+    color: '#6B7280',
+    fontSize: 13,
+  },
   section: { gap: 8 },
   sectionToolbar: {
     flexDirection: 'row',

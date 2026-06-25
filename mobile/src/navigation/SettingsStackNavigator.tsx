@@ -1,6 +1,8 @@
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import SettingsScreen from '../screens/SettingsScreen';
+import ConnectMarketplaceScreen from '../screens/ConnectMarketplaceScreen';
+import FlowTabHeaderActions from '../components/FlowTabHeaderActions';
 import ToolsScreen from '../screens/ToolsScreen';
 import SalesScreen from '../screens/SalesScreen';
 import SoldProductsScreen from '../screens/SoldProductsScreen';
@@ -23,6 +25,14 @@ export default function SettingsStackNavigator() {
         name="SettingsMain"
         component={SettingsScreen}
         options={{ title: 'Settings', headerShown: false }}
+      />
+      <Stack.Screen
+        name="ConnectMarketplace"
+        component={ConnectMarketplaceScreen}
+        options={{
+          title: 'Connect Marketplace',
+          headerRight: () => <FlowTabHeaderActions emphasizeConnect />,
+        }}
       />
       <Stack.Screen name="Tools" component={ToolsScreen} options={{ title: 'Tools' }} />
       <Stack.Screen name="Sales" component={SalesScreen} options={{ title: 'Sales & Fees' }} />

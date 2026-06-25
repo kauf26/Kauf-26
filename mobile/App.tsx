@@ -3,6 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
+import { rootNavigationRef } from './src/navigation/navigateToTab';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
@@ -87,7 +88,7 @@ export default function App() {
   return (
     <GestureHandlerRootView style={styles.flex}>
       <SafeAreaProvider>
-        <NavigationContainer theme={AppTheme}>
+        <NavigationContainer ref={rootNavigationRef} theme={AppTheme}>
           <RootNavigator />
           <StatusBar style="dark" />
         </NavigationContainer>

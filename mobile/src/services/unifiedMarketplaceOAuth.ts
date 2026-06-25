@@ -3,19 +3,14 @@
  * Tokens are stored only on-device (expo-secure-store).
  * PKCE exchanges run on the device; secret-required flows use a stateless server proxy.
  */
-import * as AuthSession from 'expo-auth-session';
 import { Platform } from 'react-native';
-import type { MarketplaceOAuthProviderConfig } from '../../../shared/marketplaceOAuthTypes';
-import { assertRedirectUriMatches } from '../../../shared/oauthRedirect';
 import { getOAuthManifestEntry } from '../../../shared/marketplaceOAuthManifest';
 import { fetchMarketplaceUserProfile } from './marketplaceUserInfo';
 import { getConnectBlockedReason } from './auth';
-import { getOAuthProvider } from './oauthConfig';
 import { exchangeAuthorizationCodeOnDevice } from './oauthTokenExchange';
 import { openSystemBrowserOAuth } from './systemBrowserOAuth';
+import { prepareMarketplaceOAuthSession } from './marketplaceOAuthSession';
 import {
-  loadConnectContext,
-  saveConnectContext,
   savePlatformTokens,
   type ConnectContext,
   type StoredPlatformTokens,
@@ -24,51 +19,6 @@ import type { ConnectResult, MarketplaceUserProfile } from '../types/marketplace
 import { normalizeOAuthError } from './oauthErrors';
 
 export type ConnectOptions = ConnectContext;
-
-function normalizeShop(domain: string): string {
-  const cleaned = domain.replace(/^https?:\/\//, '').replace(/\/$/, '').trim();
-  if (!cleaned) throw new Error('Shop domain required');
-  return cleaned.includes('.') ? cleaned : `${cleaned}.myshopify.com`;
-}
-
-function normalizeSiteUrl(url: string): string {
-  return url.replace(/^https?:\/\//, '').replace(/\/$/, '').trim();
-}
-
-function resolveUrls(
-  config: MarketplaceOAuthProviderConfig,
-  ctx: ConnectContext
-): { authUrl: string; tokenUrl: string; userInfoUrl: string } {
-  const shop = ctx.shopDomain ? normalizeShop(ctx.shopDomain) : '';
-  const site = ctx.siteUrl ? normalizeSiteUrl(ctx.siteUrl) : '';
-  const base = ctx.baseUrl ? normalizeSiteUrl(ctx.baseUrl) : '';
-  const sub = (url: string) =>
-    url.replace('{shop}', shop).replace('{site}', site).replace('{base}', base);
-  return {
-    authUrl: sub(config.authUrl),
-    tokenUrl: sub(config.tokenUrl),
-    userInfoUrl: sub(config.userInfoUrl),
-  };
-}
-
-async function validateConnectContext(
-  config: MarketplaceOAuthProviderConfig,
-  ctx: ConnectContext
-): Promise<ConnectContext> {
-  const next = { ...ctx };
-  if (config.requiresShopDomain) {
-    if (!ctx.shopDomain?.trim()) throw new Error('Enter your store domain first');
-    next.shopDomain = normalizeShop(ctx.shopDomain);
-  }
-  if (config.requiresSiteUrl && !ctx.siteUrl?.trim()) {
-    throw new Error('Enter your site URL first');
-  }
-  if (config.requiresBaseUrl && !ctx.baseUrl?.trim()) {
-    throw new Error('Enter your store base URL first');
-  }
-  await saveConnectContext(config.id, next);
-  return next;
-}
 
 function mergeProfileIntoTokens(
   tokens: StoredPlatformTokens,
@@ -96,36 +46,12 @@ export async function connectMarketplaceOneTap(
       );
     }
 
-    const config = await getOAuthProvider(marketplaceId);
-    if (!config?.configured) {
-      throw new Error(
-        getConnectBlockedReason(marketplaceId, false) ??
-          `${config?.name ?? marketplaceId} OAuth is not configured on the server`
-      );
-    }
-
-    const blocked = getConnectBlockedReason(marketplaceId, true);
-    if (blocked) {
-      throw new Error(blocked);
-    }
-
-    const savedCtx = (await loadConnectContext(marketplaceId)) ?? {};
-    const ctx = await validateConnectContext(config, { ...savedCtx, ...options });
-    const redirectUri = assertRedirectUriMatches(marketplaceId, config.redirectUri);
-    const urls = resolveUrls(config, ctx);
-
-    const usePkce = config.usePkce ?? config.tokenExchange === 'json_pkce';
-    const request = new AuthSession.AuthRequest({
-      clientId: config.clientId,
-      scopes: config.scopes,
-      redirectUri,
-      responseType: AuthSession.ResponseType.Code,
-      usePKCE: usePkce,
-    });
+    const session = await prepareMarketplaceOAuthSession(marketplaceId, options);
+    const { config, ctx, redirectUri, tokenUrl, request } = session;
 
     const { code, elapsedMs } = await openSystemBrowserOAuth(request, {
-      authorizationEndpoint: urls.authUrl,
-      tokenEndpoint: urls.tokenUrl,
+      authorizationEndpoint: session.authUrl,
+      tokenEndpoint: tokenUrl,
     });
 
     let tokens = await exchangeAuthorizationCodeOnDevice(
@@ -134,7 +60,7 @@ export async function connectMarketplaceOneTap(
       code,
       request.codeVerifier ?? undefined,
       ctx,
-      urls.tokenUrl
+      tokenUrl
     );
 
     const profile = await fetchMarketplaceUserProfile(marketplaceId, config, tokens, ctx);

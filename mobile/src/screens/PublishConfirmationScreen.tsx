@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { StackScreenProps } from '@react-navigation/stack';
 import type { HomeStackParamList, PublishOutcome } from '../types/navigation';
+import { navigateToTab, navigateToConnectMarketplace } from '../navigation/navigateToTab';
 
 type Props = StackScreenProps<HomeStackParamList, 'PublishConfirmation'>;
 
@@ -51,7 +52,7 @@ export default function PublishConfirmationScreen({ route, navigation }: Props) 
   const failed = outcomes.filter((o) => !o.success).length;
 
   const handleReconnectEbay = () => {
-    navigation.getParent()?.navigate('Connections', { reconnectEbay: true });
+    navigateToConnectMarketplace(navigation, 'ebay');
   };
 
   if (outcomes.length === 0) {

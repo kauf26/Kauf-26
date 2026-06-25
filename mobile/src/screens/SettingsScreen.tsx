@@ -8,6 +8,7 @@ import {
   Linking,
   Alert,
   Switch,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -36,6 +37,7 @@ import {
   signOutAccount,
   type UserAccount,
 } from '../services/userAccountAuth';
+import { navigateToTab, navigateToConnectMarketplace } from '../navigation/navigateToTab';
 
 async function openLegalUrl(url: string, label: string) {
   try {
@@ -316,6 +318,35 @@ export default function SettingsScreen() {
               thumbColor="#fff"
             />
           </View>
+        </View>
+
+        <Text style={styles.sectionHeader}>Marketplaces</Text>
+        <View style={styles.card}>
+          <TouchableOpacity
+            style={styles.linkRow}
+            onPress={() => navigation.navigate('ConnectMarketplace', { focus: 'ebay' })}
+          >
+            <Ionicons name="storefront-outline" size={20} color="#3b82f6" />
+            <View style={styles.linkTextWrap}>
+              <Text style={styles.linkTitle}>Connect marketplace</Text>
+              <Text style={styles.linkHint}>Link eBay, Amazon, and other seller accounts via OAuth</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#6b7280" />
+          </TouchableOpacity>
+
+          <View style={styles.divider} />
+
+          <TouchableOpacity
+            style={styles.linkRow}
+            onPress={() => navigateToTab(navigation, 'Connections')}
+          >
+            <Ionicons name="link-outline" size={20} color="#3b82f6" />
+            <View style={styles.linkTextWrap}>
+              <Text style={styles.linkTitle}>All connections</Text>
+              <Text style={styles.linkHint}>View and manage all 26 marketplace integrations</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#6b7280" />
+          </TouchableOpacity>
         </View>
 
         <Text style={styles.sectionHeader}>Inventory & tools</Text>

@@ -25,6 +25,7 @@ import {
 } from '../services/onboardingProfile';
 import { syncUserProfileToBackend } from '../services/userProfile';
 import { loadProviderRegistry, nonOAuthStatusMessage, authMethodLabel, MARKETPLACE_COUNT } from '../services/providerRegistry';
+import { navigateToTab, navigateToConnectMarketplace } from '../navigation/navigateToTab';
 import { disconnectMarketplaceOnDevice } from '../services/serverMarketplaceOAuth';
 import {
   deletePlatformTokens,
@@ -264,6 +265,21 @@ export default function ConnectionsScreen() {
           <Ionicons name="flash" size={22} color="#3b82f6" />
           <Text style={styles.heroTitle}>One-tap marketplace connect</Text>
         </View>
+        <TouchableOpacity
+          style={styles.quickConnectCard}
+          onPress={() => navigateToConnectMarketplace(navigation, 'ebay')}
+        >
+          <View style={styles.quickConnectIcon}>
+            <Ionicons name="storefront" size={20} color="#ffffff" />
+          </View>
+          <View style={styles.quickConnectText}>
+            <Text style={styles.quickConnectTitle}>Connect eBay & Amazon</Text>
+            <Text style={styles.quickConnectHint}>
+              Guided WebView sign-in for the most popular marketplaces
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#93c5fd" />
+        </TouchableOpacity>
         <Text style={styles.subtitle}>{oneTapHelpText()}</Text>
 
         {configWarning ? (
@@ -479,6 +495,28 @@ const styles = StyleSheet.create({
   content: { padding: 16, paddingBottom: 24 },
   hero: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
   heroTitle: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  quickConnectCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#1e3a5f',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#2563eb',
+  },
+  quickConnectIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#2563eb',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickConnectText: { flex: 1 },
+  quickConnectTitle: { color: '#ffffff', fontWeight: '700', fontSize: 15 },
+  quickConnectHint: { color: '#93c5fd', fontSize: 12, marginTop: 2, lineHeight: 16 },
   subtitle: { color: '#9ca3af', fontSize: 14, lineHeight: 20, marginBottom: 16 },
   marketplaceToolbar: {
     flexDirection: 'row',

@@ -33,6 +33,7 @@ export type HomeStackParamList = {
 
 export type SettingsStackParamList = {
   SettingsMain: undefined;
+  ConnectMarketplace: { focus?: string } | undefined;
   Tools: undefined;
   Sales: undefined;
   SoldProducts: undefined;
