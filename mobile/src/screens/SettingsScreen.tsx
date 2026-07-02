@@ -353,7 +353,7 @@ export default function SettingsScreen() {
         <View style={styles.card}>
           <TouchableOpacity
             style={styles.linkRow}
-            onPress={() => navigation.getParent()?.navigate('Inventory')}
+            onPress={() => navigateToTab(navigation, 'Inventory')}
           >
             <Ionicons name="layers-outline" size={20} color="#3b82f6" />
             <View style={styles.linkTextWrap}>

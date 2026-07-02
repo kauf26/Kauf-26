@@ -2,7 +2,7 @@ import React from 'react';
 import { TouchableOpacity, View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { navigateToTab, navigateToConnectMarketplace, type NavigationLike } from '../navigation/navigateToTab';
+import { navigateToTab, navigateToConnectMarketplace } from '../navigation/navigateToTab';
 
 type Props = {
   /** Highlight storefront icon when user likely needs OAuth */
@@ -14,7 +14,7 @@ type Props = {
  * without relying on the bottom tab bar alone.
  */
 export default function FlowTabHeaderActions({ emphasizeConnect = false }: Props) {
-  const navigation = useNavigation() as NavigationLike;
+  const navigation = useNavigation();
 
   return (
     <View style={styles.row}>

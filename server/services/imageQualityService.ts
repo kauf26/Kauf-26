@@ -101,19 +101,50 @@ export async function assessImageQuality(
     };
   }
 
-  const meta = await sharp(buffer).metadata();
+  let meta: { width?: number; height?: number };
+  try {
+    meta = await sharp(buffer).metadata();
+  } catch {
+    return {
+      ok: false,
+      width: 0,
+      height: 0,
+      brightness: 0,
+      sharpness: 0,
+      qualityScore: 0,
+      error: USER_QUALITY_ERROR,
+      preprocessing: [...preprocessing, "invalid_image_format"],
+    };
+  }
+
   const width = meta.width ?? 0;
   const height = meta.height ?? 0;
   preprocessing.push("metadata_read");
 
-  const stats = await sharp(buffer).stats();
-  const brightness = stats.channels[0]?.mean ?? 0;
+  let stats: Awaited<ReturnType<SharpModule["prototype"]["stats"]>>;
+  let data: Buffer;
+  let info: { width: number; height: number };
+  try {
+    stats = await sharp(buffer).stats();
+    ({ data, info } = await sharp(buffer)
+      .greyscale()
+      .resize({ width: Math.min(width, 512), withoutEnlargement: true })
+      .raw()
+      .toBuffer({ resolveWithObject: true }));
+  } catch {
+    return {
+      ok: false,
+      width,
+      height,
+      brightness: 0,
+      sharpness: 0,
+      qualityScore: 0,
+      error: USER_QUALITY_ERROR,
+      preprocessing: [...preprocessing, "invalid_image_format"],
+    };
+  }
 
-  const { data, info } = await sharp(buffer)
-    .greyscale()
-    .resize({ width: Math.min(width, 512), withoutEnlargement: true })
-    .raw()
-    .toBuffer({ resolveWithObject: true });
+  const brightness = stats.channels[0]?.mean ?? 0;
 
   const sharpness = computeSharpnessScore(
     new Uint8Array(data),

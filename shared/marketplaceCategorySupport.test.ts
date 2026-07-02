@@ -21,11 +21,19 @@ describe("marketplaceCategorySupport", () => {
   });
 
   it("blocks restricted marketplaces for watches", () => {
-    for (const id of ["stockx", "wayfair", "newegg", "poshmark"]) {
+    for (const id of ["stockx", "wayfair", "newegg"]) {
       const result = evaluateMarketplaceCategorySupport(id, "Watches");
       expect(result.supported).toBe(false);
       expect(result.disabledReason).toContain("Watches");
     }
+  });
+
+  it("allows Poshmark for watches with optional high-value warning", () => {
+    const result = evaluateMarketplaceCategorySupport("poshmark", "Watches", {
+      priceUsd: 600,
+    });
+    expect(result.supported).toBe(true);
+    expect(result.warnings?.length).toBeGreaterThan(0);
   });
 
   it("allows StockX for footwear categories", () => {

@@ -56,9 +56,3 @@ services:
         sync: false
       - key: UNIFIED_API_KEY
         sync: false
-
-databases:
-  - name: kauf26-db
-    plan: free
-    databaseName: kauf26
-    user: kauf26
