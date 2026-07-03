@@ -4,7 +4,7 @@ import express, { type Express } from "express";
 import type { Server } from "http";
 import { createServer as createViteServer } from "vite";
 
-/** Project root — npm start runs from repo root; dist/index.cjs lives in dist/. */
+/** Dev-only Vite middleware — not imported in production builds. */
 const projectRoot = process.cwd();
 
 export async function setupVite(app: Express, server: Server) {
@@ -27,12 +27,4 @@ export async function setupVite(app: Express, server: Server) {
       next(e);
     }
   });
-}
-
-export function serveStatic(app: Express) {
-  const distPath = path.resolve(projectRoot, "dist");
-  if (!fs.existsSync(distPath)) {
-    return;
-  }
-  app.use(express.static(distPath));
 }

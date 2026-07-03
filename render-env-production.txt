@@ -1,0 +1,379 @@
+# RENDER ENV VARIABLES - PRODUCTION
+# =================================
+# Service: kauf26-api (Render Web Service, Docker, port 2626)
+# Health check: /api/health
+# Custom domain: https://api.kaufai.com
+#
+# STATUS LEGEND (based on render.yaml blueprint — verify in Render Dashboard → Environment):
+#   [✓ RENDER FIXED]     — Value hardcoded in render.yaml; should already be set if you used the blueprint
+#   [○ RENDER SECRET]    — Listed in render.yaml with sync:false; slot exists but YOU must paste the secret
+#   [+ ADD TO RENDER]    — Not in render.yaml; add manually if you need this feature
+#   [optional]           — Has safe defaults or feature works without it
+#   [mobile only]        — Set in mobile/eas.json or EAS Secrets, NOT on Render
+#   [skip Render]        — Dev/legacy only; do not set in production
+#
+# Paste secrets in Render: Dashboard → kauf26-api → Environment → Add Environment Variable
+# Generate random secrets: openssl rand -hex 32
+#
+# OAuth redirect URI to register in ALL marketplace portals:
+#   https://api.kaufai.com/api/auth/callback
+# Mobile deep links (not Render env): kauf26://oauth/{ebay|etsy|shopify|...}
+
+
+# =============================================================================
+# APP CONFIG (Core — required)
+# =============================================================================
+
+# FIXED VALUES (already entered via render.yaml)
+NODE_ENV=production                                    # [✓ RENDER FIXED] Node runtime mode; must be production
+PORT=2626                                              # [✓ RENDER FIXED] HTTP listen port inside container
+APP_BASE_URL=https://api.kaufai.com                    # [✓ RENDER FIXED] Public API base URL (no trailing slash); OAuth callbacks, photo URLs
+CLIENT_URL=https://kaufai.com                          # [✓ RENDER FIXED] Web app origin; OAuth success redirects, Stripe return URL
+VITE_API_URL=https://api.kaufai.com                    # [✓ RENDER FIXED] Build-time API URL if serving Vite static from same container
+MOCK_OAUTH_MODE=false                                  # [✓ RENDER FIXED] Never true in production; simulates OAuth without real keys
+EBAY_SANDBOX=false                                     # [✓ RENDER FIXED] Use production eBay APIs (not sandbox)
+APPLE_CLIENT_ID=com.globalmarketplacelister.app        # [✓ RENDER FIXED] Apple Sign-In client ID (iOS bundle ID)
+
+# SECRETS & CONFIG (need your actual values)
+TRIAL_START_DATE=___________                           # [+ ADD TO RENDER] Trial period start date (YYYY-MM-DD); from your product launch plan
+JSON_BODY_LIMIT=___________                            # [optional] Max JSON request body size; default 50mb if unset
+BROWSER_AUTH_HEADLESS=___________                      # [optional] Documented in .env.example only; not read by server code — skip
+
+
+# =============================================================================
+# DATABASE & SESSION (required)
+# =============================================================================
+
+DATABASE_URL=___________                               # [○ RENDER SECRET] PostgreSQL connection string — Neon dashboard → Connection string → add ?sslmode=require
+SESSION_SECRET=___________                             # [○ RENDER SECRET] Express session signing key — generate: openssl rand -hex 32
+SESSION_ENCRYPTION_KEY=___________                      # [○ RENDER SECRET] 32-byte AES key (64-char hex) encrypts OAuth tokens at rest — generate: openssl rand -hex 32; REQUIRED in production
+
+
+# =============================================================================
+# USER SIGN-IN — Google & Apple (required for web/mobile login)
+# =============================================================================
+
+GOOGLE_CLIENT_ID=___________                           # [○ RENDER SECRET] OAuth 2.0 Client ID — Google Cloud Console → APIs & Services → Credentials → OAuth client (Web)
+GOOGLE_CLIENT_SECRET=___________                       # [○ RENDER SECRET] Matching client secret — same Google Cloud OAuth client
+# Register redirect: https://api.kaufai.com/api/auth/google/callback
+
+APPLE_TEAM_ID=___________                              # [+ ADD TO RENDER] Apple Developer Team ID — developer.apple.com → Membership
+APPLE_KEY_ID=___________                               # [+ ADD TO RENDER] Sign in with Apple key ID — Certificates, Identifiers & Profiles → Keys
+APPLE_PRIVATE_KEY=___________                          # [+ ADD TO RENDER] Contents of .p8 key file (one line or PEM with \n) — same Keys page
+# Register redirect: https://api.kaufai.com/api/auth/apple/callback
+# Note: APPLE_CLIENT_ID is fixed above (bundle ID for native; web may use Services ID if configured)
+
+
+# =============================================================================
+# BILLING — Stripe (optional unless subscriptions enabled)
+# =============================================================================
+
+STRIPE_SECRET_KEY=___________                          # [○ RENDER SECRET] Secret API key sk_live_... — Stripe Dashboard → Developers → API keys
+STRIPE_WEBHOOK_SECRET=___________                      # [○ RENDER SECRET] Webhook signing secret whsec_... — Stripe Dashboard → Webhooks → endpoint https://api.kaufai.com/api/stripe/webhook
+
+
+# =============================================================================
+# AI & IDENTIFY (required for product identification / listing copy)
+# =============================================================================
+
+OPENAI_API_KEY=___________                             # [○ RENDER SECRET] OpenAI API key — platform.openai.com → API keys
+UNIFIED_API_KEY=___________                            # [○ RENDER SECRET] Unified.to API key — app.unified.to → Settings → API Keys (optional integration)
+
+IDENTIFY_QUEUE_CONCURRENCY=___________                 # [optional] Parallel identify jobs; default 3
+IDENTIFY_JOB_TIMEOUT_MS=___________                    # [optional] Per-job timeout ms; default 120000 (code) / 60000 (.env.example)
+IDENTIFY_REQUEST_TIMEOUT_MS=___________                # [optional] HTTP request timeout for identify endpoint; default 65000
+VISION_TIMEOUT_MS=___________                          # [optional] OpenAI vision call timeout ms; default 10000
+IDENTIFY_DEBUG=___________                             # [optional] Verbose identify logs; set false or omit in production
+SCRAPE_DEBUG=___________                               # [optional] Verbose scraper logs; set false or omit in production
+
+
+# =============================================================================
+# SCRAPERS & PRICE RESEARCH (optional — improves identify accuracy)
+# =============================================================================
+
+APIFY_API_KEY=___________                              # [○ RENDER SECRET] Apify API token — console.apify.com → Settings → Integrations → API token
+APIFY_RUN_TIMEOUT_SECS=___________                     # [optional] Apify actor run timeout; default 35
+APIFY_SCRAPER_TIMEOUT_MS=___________                   # [optional] Per-source Apify timeout; default 40000
+APIFY_ACTOR_ID=___________                             # [optional] E-commerce scraper actor; default apify/e-commerce-scraping-tool
+APIFY_GOOGLE_LENS_ACTOR_ID=___________                 # [optional] Google Lens actor; default prodiger/google-lens-scraper
+APIFY_GOOGLE_SEARCH_ACTOR_ID=___________               # [optional] Google search actor override
+SCRAPE_BUDGET_MS=___________                           # [optional] Total scrape time budget ms; default 50000
+SCRAPER_RACE_PER_SOURCE_TIMEOUT_MS=___________         # [optional] Per-source race timeout; default 40000
+SCRAPER_RACE_WINDOW_MS=___________                     # [optional] Total scraper race window; default 45000
+SCRAPER_RACE_TIMEOUT_MS=___________                    # [optional] Alias for race window; default 45000
+GOOGLE_LENS_TIMEOUT_SECS=___________                   # [optional] Google Lens actor timeout; default 4–45 depending on code path
+GOOGLE_LENS_TIMEOUT_MS=___________                     # [optional] Lens stage timeout ms; default 15000
+GOOGLE_SHOPPING_TIMEOUT_MS=___________                 # [optional] Google Shopping timeout; default 3000
+PRODUCT_PAGE_FETCH_TIMEOUT_MS=___________              # [optional] Product page fetch timeout; default 8000
+KEYWORD_STAGE_MIN_BUDGET_MS=___________                # [optional] Keyword scrape min budget; uses race default if unset
+EXACT_MATCH_MIN_RANK=___________                       # [optional] Vision match rank threshold; default 42–50
+
+GOOGLE_API_KEY=___________                             # [optional] Google Custom Search API key — Google Cloud Console → APIs → Custom Search API
+GOOGLE_CX=___________                                  # [optional] Custom Search Engine ID — programmablesearchengine.google.com
+OXYLABS_USERNAME=___________                           # [optional] Oxylabs proxy username — oxylabs.io dashboard
+OXYLABS_PASSWORD=___________                           # [optional] Oxylabs proxy password — oxylabs.io dashboard
+RAPIDAPI_KEY=___________                               # [optional] RapidAPI key — rapidapi.com → Developer → Apps → API Key
+RAPIDAPI_EBAY_HOST=___________                         # [optional] RapidAPI eBay host override
+RAPIDAPI_EBAY_PATH=___________                         # [optional] RapidAPI eBay path override; default /ebay/search?query=
+
+
+# =============================================================================
+# TRANSLATION (optional — requires LibreTranslate instance)
+# =============================================================================
+
+LIBRETRANSLATE_URL=___________                         # [optional] LibreTranslate base URL; default http://localhost:5000 (use hosted URL in prod)
+TRANSLATE_TIMEOUT_MS=___________                       # [optional] Translation request timeout; default 15000
+# Docker Compose only (NOT Render): LT_LOAD_ONLY=en,es,fr,de,pl,nl,pt,ja,zh
+
+
+# =============================================================================
+# PUBLISH QUEUE & INVENTORY (optional tuning)
+# =============================================================================
+
+DEFAULT_PUBLISH_MARKETPLACES=___________               # [+ ADD TO RENDER] Comma-separated marketplace IDs; e.g. ebay,allegro,etsy,shopify
+AUTO_QUEUE_PUBLISH=___________                         # [optional] Auto-queue publish on draft save; default false
+PUBLISH_MAX_ATTEMPTS=___________                       # [optional] Publish retry count; default 3
+PUBLISH_RATE_LIMIT_MS=___________                      # [optional] Min ms between publishes per marketplace; default 2000
+INVENTORY_POLL_ENABLED=___________                     # [optional] Background inventory sync; default false
+INVENTORY_POLL_INTERVAL_MS=___________                 # [optional] Poll interval ms; default 300000 (5 min)
+MARKETPLACE_RULES_PATH=___________                     # [optional] Override path to marketplace eligibility rules JSON file
+
+
+# =============================================================================
+# LIVE MARKETPLACES — Etsy, eBay, Shopify, Allegro (required for OAuth + publish)
+# =============================================================================
+
+# --- Etsy [live] ---
+ETSY_CLIENT_ID=___________                             # [○ RENDER SECRET] Etsy app keystring — etsy.com/developers → Your Apps → App key
+ETSY_CLIENT_SECRET=___________                         # [○ RENDER SECRET] Etsy shared secret — same developer app page
+ETSY_REDIRECT_URI=___________                          # [optional] Override; default derived from APP_BASE_URL/api/auth/callback
+ETSY_OAUTH_SCOPES=___________                          # [optional] Space/comma-separated scope override
+ETSY_SHOP_ID=___________                               # [optional] Default shop ID for server-side calls
+ETSY_TAXONOMY_ID=___________                           # [optional] Default taxonomy node; default 1
+
+# --- eBay [live] ---
+EBAY_CLIENT_ID=___________                             # [○ RENDER SECRET] Production App ID (Client ID) — developer.ebay.com → Application Keys → Production
+EBAY_CLIENT_SECRET=___________                         # [○ RENDER SECRET] Production Cert ID (Client Secret) — same page
+EBAY_APP_ID=___________                                # [optional] Alias for EBAY_CLIENT_ID if using legacy naming
+EBAY_CERT_ID=___________                               # [optional] Alias for EBAY_CLIENT_SECRET if using legacy naming
+EBAY_DEV_ID=___________                                # [optional] eBay Dev ID — developer portal Application Keys
+EBAY_REDIRECT_URI=___________                          # [optional] eBay RuName string for web OAuth — developer.ebay.com → User Tokens → Get a Token from eBay via Your Application
+EBAY_OAUTH_SCOPES=___________                          # [optional] Scope override
+EBAY_MARKETPLACE_ID=___________                        # [+ ADD TO RENDER] eBay site; default EBAY_US
+EBAY_CATEGORY_ID=___________                           # [+ ADD TO RENDER] Default listing category; default 93427
+EBAY_FULFILLMENT_POLICY_ID=___________                 # [+ ADD TO RENDER] eBay business policy ID — eBay Seller Hub → Business policies
+EBAY_PAYMENT_POLICY_ID=___________                     # [+ ADD TO RENDER] eBay business policy ID — same
+EBAY_RETURN_POLICY_ID=___________                      # [+ ADD TO RENDER] eBay business policy ID — same
+EBAY_REFRESH_TOKEN=___________                         # [optional] Legacy server-wide token; per-user tokens preferred via OAuth connect
+EBAY_SIGNIN_URL=___________                            # [optional] Browser auth sign-in URL override
+EBAY_SELLER_VERIFY_URL=___________                     # [optional] Browser auth seller verify URL override
+
+# --- Shopify [live] ---
+SHOPIFY_CLIENT_ID=___________                          # [○ RENDER SECRET] App client ID — partners.shopify.com → Apps → Your app → Client credentials
+SHOPIFY_CLIENT_SECRET=___________                      # [○ RENDER SECRET] App client secret — same page
+SHOPIFY_STORE_NAME=___________                         # [+ ADD TO RENDER] Store slug (e.g. kaufai → kaufai.myshopify.com)
+SHOPIFY_SHOP_DOMAIN=___________                        # [+ ADD TO RENDER] Full shop domain e.g. your-store.myshopify.com
+SHOPIFY_STORE_DOMAIN=___________                       # [optional] Alias for SHOPIFY_SHOP_DOMAIN
+SHOPIFY_ACCESS_TOKEN=___________                       # [optional] Legacy static token; OAuth per-user preferred
+SHOPIFY_OAUTH_REDIRECT_URI=___________                 # [+ ADD TO RENDER] Production: https://api.kaufai.com/api/auth/callback
+SHOPIFY_OAUTH_SCOPES=___________                       # [optional] Default read_products,write_products
+SHOPIFY_APP_BASE_URL=___________                       # [+ ADD TO RENDER] Production: https://api.kaufai.com
+
+# --- Allegro [live] — NOT in render.yaml; add manually ---
+ALLEGRO_CLIENT_ID=___________                          # [+ ADD TO RENDER] Allegro API client ID — developer.allegro.pl → My applications
+ALLEGRO_CLIENT_SECRET=___________                      # [+ ADD TO RENDER] Allegro API client secret — same page
+ALLEGRO_REDIRECT_URI=___________                       # [optional] Override; default derived from APP_BASE_URL/api/auth/callback
+
+
+# =============================================================================
+# OTHER MARKETPLACES — dry-run / partnership stubs (set only if enabling)
+# =============================================================================
+
+# --- AliExpress [dry-run] ---
+ALIEXPRESS_APP_KEY=___________                         # [optional] AliExpress Open Platform — open.aliexpress.com
+ALIEXPRESS_APP_SECRET=___________                      # [optional] Same portal
+
+# --- Amazon SP-API [dry-run] ---
+AMAZON_CLIENT_ID=___________                           # [optional] LWA client ID — sellercentral.amazon.com → Apps & Services → Develop Apps
+AMAZON_CLIENT_SECRET=___________                       # [optional] LWA client secret — same
+AMAZON_REDIRECT_URI=___________                        # [optional] Mobile default kauf26://oauth/amazon
+AMAZON_REFRESH_TOKEN=___________                       # [optional] Legacy LWA refresh token
+AMAZON_SELLER_ID=___________                           # [optional] Amazon Seller ID — Seller Central account info
+AMAZON_MARKETPLACE_ID=___________                      # [optional] Default ATVPDKIKX0DER (US)
+AMAZON_SANDBOX=false                                   # [optional] SP-API sandbox mode
+
+# --- BigCommerce [dry-run] ---
+BIGCOMMERCE_STORE_HASH=___________                     # [optional] Store hash — store control panel URL or API settings
+BIGCOMMERCE_ACCESS_TOKEN=___________                   # [optional] API access token — BigCommerce → Settings → API
+
+# --- Bol.com [dry-run] ---
+BOLCOM_CLIENT_ID=___________                           # [optional] bol.com Retailer API — api.bol.com
+BOLCOM_CLIENT_SECRET=___________                       # [optional] Same portal
+
+# --- Depop [partnership stub] ---
+DEPOP_API_KEY=___________                              # [optional] Depop partnership API (not publicly available)
+
+# --- Flipkart [dry-run] ---
+FLIPKART_APP_ID=___________                            # [optional] Flipkart Seller API portal
+FLIPKART_APP_SECRET=___________                       # [optional] Same portal
+
+# --- Fruugo [dry-run] ---
+FRUUGO_API_KEY=___________                             # [optional] Fruugo merchant API
+FRUUGO_MERCHANT_ID=___________                         # [optional] Fruugo merchant ID
+
+# --- Lazada [dry-run] ---
+LAZADA_APP_KEY=___________                             # [optional] Lazada Open Platform — open.lazada.com
+LAZADA_APP_SECRET=___________                          # [optional] Same portal
+
+# --- Magento [dry-run] ---
+MAGENTO_BASE_URL=___________                           # [optional] Your Magento store base URL
+MAGENTO_ACCESS_TOKEN=___________                       # [optional] Magento integration access token
+
+# --- Mercado Libre [dry-run] ---
+MERCADOLIBRE_CLIENT_ID=___________                     # [optional] developers.mercadolibre.com → Your applications
+MERCADOLIBRE_CLIENT_SECRET=___________                 # [optional] Same portal
+MERCADOLIBRE_REFRESH_TOKEN=___________                 # [optional] OAuth refresh token
+MERCADOLIBRE_SITE_ID=___________                       # [optional] Default MLA (Argentina)
+MERCADOLIBRE_CATEGORY_ID=___________                   # [optional] Default MLA3530
+MERCADOLIBRE_CURRENCY=___________                      # [optional] Default USD
+MERCADOLIBRE_BR_SITE_ID=___________                    # [optional] Brazil site MLB
+
+# --- Newegg [dry-run] ---
+NEWEGG_SELLER_ID=___________                           # [optional] Newegg Marketplace seller portal
+NEWEGG_API_KEY=___________                             # [optional] Same portal
+
+# --- Poshmark [partnership stub] ---
+POSHMARK_PARTNERSHIP_KEY=___________                   # [optional] Poshmark partnership (not publicly available)
+
+# --- Rakuten [dry-run] ---
+RAKUTEN_SERVICE_SECRET=___________                     # [optional] Rakuten RMS API — webservice.rakuten.co.jp
+RAKUTEN_LICENSE_KEY=___________                        # [optional] Same portal
+
+# --- Shopee [dry-run] ---
+SHOPEE_PARTNER_ID=___________                          # [optional] open.shopee.com → App list
+SHOPEE_PARTNER_KEY=___________                         # [optional] Same portal
+SHOPEE_SHOP_ID=___________                             # [optional] Shopee shop ID
+
+# --- StockX [partnership stub] ---
+STOCKX_API_KEY=___________                             # [optional] StockX partnership API
+
+# --- Taobao [dry-run] ---
+TAOBAO_APP_KEY=___________                             # [optional] Taobao Open Platform — open.taobao.com
+TAOBAO_APP_SECRET=___________                          # [optional] Same portal
+
+# --- TikTok Shop [partnership stub] ---
+TIKTOKSHOP_APP_KEY=___________                         # [optional] TikTok Shop Partner Center — partner.tiktokshop.com
+TIKTOKSHOP_APP_SECRET=___________                      # [optional] Same portal
+
+# --- Vinted [partnership stub] ---
+VINTED_API_KEY=___________                             # [optional] Vinted partnership API
+
+# --- Wayfair [dry-run] ---
+WAYFAIR_CLIENT_ID=___________                          # [optional] Wayfair Partner Home API
+WAYFAIR_CLIENT_SECRET=___________                      # [optional] Same portal
+
+# --- WooCommerce [dry-run] ---
+WOOCOMMERCE_SITE_URL=___________                       # [optional] WordPress site URL
+WOOCOMMERCE_CONSUMER_KEY=___________                   # [optional] WooCommerce → Settings → Advanced → REST API
+WOOCOMMERCE_CONSUMER_SECRET=___________                # [optional] Same page
+
+# --- Zalando [dry-run] ---
+ZALANDO_CLIENT_ID=___________                          # [optional] Zalando Partner API — partner.zalando.com
+ZALANDO_CLIENT_SECRET=___________                      # [optional] Same portal
+
+
+# =============================================================================
+# SHIPPING & EMAIL (optional — mock rates when unset)
+# =============================================================================
+
+SHIPPING_FROM_NAME=___________                         # [optional] Default ship-from name on labels; default KAUF26 Seller
+SHIPPING_FROM_LINE1=___________                        # [optional] Ship-from street address
+SHIPPING_FROM_CITY=___________                         # [optional] Ship-from city
+SHIPPING_FROM_STATE=___________                        # [optional] Ship-from state
+SHIPPING_FROM_ZIP=___________                          # [optional] Ship-from postal code
+
+EASYPOST_API_KEY=___________                           # [optional] EasyPost API key — easypost.com → Account → API Keys
+SHIPPO_API_KEY=___________                             # [optional] Shippo API token — apps.goshippo.com → Settings → API
+USPS_WEB_TOOLS_USER_ID=___________                      # [optional] USPS Web Tools ID — usps.com/business/web-tools-apis
+FEDEX_CLIENT_ID=___________                            # [optional] FedEx Developer — developer.fedex.com → Projects
+FEDEX_CLIENT_SECRET=___________                        # [optional] Same FedEx project
+FEDEX_ACCOUNT_NUMBER=___________                       # [optional] FedEx account number from your FedEx account rep
+FEDEX_API_BASE_URL=___________                         # [optional] Production: https://apis.fedex.com (sandbox: https://apis-sandbox.fedex.com)
+UPS_CLIENT_ID=___________                              # [optional] UPS Developer — developer.ups.com
+UPS_CLIENT_SECRET=___________                          # [optional] Same UPS app
+UPS_ACCOUNT_NUMBER=___________                         # [optional] UPS shipper account number
+
+SMTP_HOST=___________                                  # [optional] SMTP server for shipping label emails
+SMTP_PORT=___________                                  # [optional] SMTP port; default 587
+SMTP_SECURE=___________                                # [optional] true for TLS on port 465; default false
+SMTP_USER=___________                                  # [optional] SMTP username — your email provider
+SMTP_PASS=___________                                  # [optional] SMTP password — your email provider
+SMTP_FROM=___________                                  # [optional] From address on outgoing emails
+
+
+# =============================================================================
+# SKIP ON RENDER — Dev, legacy, or local-only (do NOT set in production)
+# =============================================================================
+
+# REPLIT_DOMAINS=                                        # [skip Render] Legacy Replit hosting only
+# REPLIT_INTERNAL_APP_DOMAIN=                            # [skip Render] Legacy Replit meta images plugin
+# REPLIT_DEV_DOMAIN=                                     # [skip Render] Legacy Replit dev domain
+# EBAY_EMAIL=                                            # [skip Render] scripts/browser-auth-example.ts only
+# EBAY_PASSWORD=                                         # [skip Render] scripts/browser-auth-example.ts only
+# MARKETPLACE_EMAIL=                                     # [skip Render] scripts/browser-auth-example.ts only
+# MARKETPLACE_PASSWORD=                                  # [skip Render] scripts/browser-auth-example.ts only
+# EAS_BUILD_PROFILE=                                     # [mobile only] Set by EAS during mobile builds
+# APP_ENV=                                               # [mobile only] Set in mobile/eas.json production profile
+# NODE_ENV (mobile)                                      # [mobile only] Derived at build time
+
+
+# =============================================================================
+# NOT FOR RENDER — Mobile app (EAS build-time only)
+# Set in mobile/eas.json production profile or: eas secret:create --name VAR --value ...
+# =============================================================================
+
+# EXPO_PUBLIC_API_URL=https://api.kaufai.com             # [mobile only] [✓ in eas.json production] Backend API base URL
+# EXPO_PUBLIC_WEB_BASE_URL=https://kaufai.com            # [mobile only] [✓ in eas.json production] Privacy/Terms link base
+# EXPO_PUBLIC_PRIVACY_URL=https://kaufai.com/privacy     # [mobile only] [optional] Override privacy policy URL
+# EXPO_PUBLIC_TERMS_URL=https://kaufai.com/terms         # [mobile only] [optional] Override terms URL
+# EXPO_PUBLIC_* marketplace secrets                      # [mobile only] NOT used — secrets stay server-side via token-proxy
+
+
+# =============================================================================
+# NOT FOR RENDER — Vite web client (build-time, if deploying kaufai.com separately)
+# VITE_WEB_OAUTH_ENABLED and VITE_DEV_LOGIN_ENABLED are computed automatically at build.
+# =============================================================================
+
+# VITE_API_URL=https://api.kaufai.com                    # Same as APP_BASE_URL when building web client on Vercel
+
+
+# =============================================================================
+# NOT FOR RENDER — Database app config (not env vars)
+# commission_rate is stored in DB via config.get("commission_rate") in server/storage.ts
+# =============================================================================
+
+
+# =============================================================================
+# QUICK CHECKLIST — Minimum to go live on Render
+# =============================================================================
+#
+# Already in render.yaml (verify values):
+#   NODE_ENV, PORT, APP_BASE_URL, CLIENT_URL, VITE_API_URL, MOCK_OAUTH_MODE,
+#   EBAY_SANDBOX, APPLE_CLIENT_ID
+#
+# Secret slots in render.yaml — paste these:
+#   DATABASE_URL, SESSION_SECRET, SESSION_ENCRYPTION_KEY, OPENAI_API_KEY,
+#   GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, EBAY_CLIENT_ID, EBAY_CLIENT_SECRET,
+#   ETSY_CLIENT_ID, ETSY_CLIENT_SECRET, SHOPIFY_CLIENT_ID, SHOPIFY_CLIENT_SECRET,
+#   STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, APIFY_API_KEY, UNIFIED_API_KEY
+#
+# Strongly recommended — add manually (not in render.yaml):
+#   APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_PRIVATE_KEY,
+#   ALLEGRO_CLIENT_ID, ALLEGRO_CLIENT_SECRET,
+#   SHOPIFY_SHOP_DOMAIN, SHOPIFY_APP_BASE_URL, SHOPIFY_OAUTH_REDIRECT_URI,
+#   EBAY_MARKETPLACE_ID, EBAY_CATEGORY_ID, EBAY_FULFILLMENT/PAYMENT/RETURN_POLICY_ID,
+#   DEFAULT_PUBLISH_MARKETPLACES, TRIAL_START_DATE
+#
+# After deploy, verify:
+#   curl https://kauf26-api.onrender.com/api/health
+#   curl https://api.kaufai.com/api/health   (after DNS CNAME to Render)

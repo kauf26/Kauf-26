@@ -54,6 +54,9 @@ async function buildAll() {
     outfile: "dist/index.cjs",
     minify: true,
     external: externals,
+    define: {
+      "process.env.NODE_ENV": '"production"',
+    },
     logLevel: "info",
   });
 }

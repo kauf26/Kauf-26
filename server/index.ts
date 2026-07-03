@@ -2,7 +2,7 @@ import "dotenv/config";
 import express, { type Request, Response } from "express";
 import { createServer } from "http";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic } from "./vite";
+import { serveStatic } from "./static";
 import multer from "multer";
 import OpenAI from "openai";
 import { scrapeProduct as fetchMasterProductData } from "./scrapers/masterScraper";
@@ -1748,7 +1748,8 @@ const server = createServer(app);
  console.log("DEBUG: About to call registerRoutes");
  await registerRoutes(app);
 
- if (app.get("env") === "development") {
+ if (process.env.NODE_ENV !== "production") {
+   const { setupVite } = await import("./vite-dev");
    await setupVite(app, server);
  } else {
    serveStatic(app);
