@@ -1749,7 +1749,10 @@ const server = createServer(app);
  await registerRoutes(app);
 
  if (process.env.NODE_ENV !== "production") {
-   const { setupVite } = await import("./vite-dev");
+   // Non-literal specifier so esbuild never bundles Vite into the prod build.
+   // This branch only runs in local dev (tsx), never in the production container.
+   const devServerModule = "./vite-dev.js";
+   const { setupVite } = await import(devServerModule);
    await setupVite(app, server);
  } else {
    serveStatic(app);
