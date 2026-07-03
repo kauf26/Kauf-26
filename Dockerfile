@@ -9,6 +9,9 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
 RUN npm run build
+# Fail fast (with a clear message) if Vite ever leaks into the production bundle.
+# This runs in Render's build logs and proves the shipped bundle is Vite-free.
+RUN node -e "const s=require('fs').readFileSync('dist/index.cjs','utf8'); if(s.includes('require(\"vite\")')){console.error('FATAL: vite is bundled into dist/index.cjs'); process.exit(1);} console.log('OK: production bundle has no vite require');"
 
 FROM node:20-bookworm-slim AS run
 WORKDIR /app
