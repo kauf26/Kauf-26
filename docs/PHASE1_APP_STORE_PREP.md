@@ -56,7 +56,7 @@ Native iOS uses **Sign in with Apple** via `expo-apple-authentication`. The serv
 
 #### A. Confirm App ID
 1. Go to [Apple Developer → Identifiers](https://developer.apple.com/account/resources/identifiers/list)
-2. Find or create **App ID**: `com.globalmarketplacelister.app`
+2. Find or create **App ID**: `com.kaufai.app`
 3. Enable capability: **Sign in with Apple** → Configure → **Enable as primary App ID**
 4. Save
 
@@ -68,7 +68,7 @@ Native iOS uses **Sign in with Apple** via `expo-apple-authentication`. The serv
 
 1. [Keys](https://developer.apple.com/account/resources/authkeys/list) → **+** Create a key
 2. Name: `Kauf26 Sign In with Apple`
-3. Enable **Sign in with Apple** → Configure → select App ID `com.globalmarketplacelister.app`
+3. Enable **Sign in with Apple** → Configure → select App ID `com.kaufai.app`
 4. Register → **Download `.p8` file** (only downloadable once — store securely)
 5. Note **Key ID** (e.g. `XYZ123ABCD`)
 
@@ -78,7 +78,7 @@ Only needed for web Sign in with Apple at `https://api.kaufai.com/api/auth/apple
 #### E. Add to server `.env`
 ```bash
 # Required for native iOS Sign in with Apple
-APPLE_CLIENT_ID=com.globalmarketplacelister.app
+APPLE_CLIENT_ID=com.kaufai.app
 
 # Required for web Apple OAuth (optional for native-only)
 APPLE_TEAM_ID=YOUR_TEAM_ID

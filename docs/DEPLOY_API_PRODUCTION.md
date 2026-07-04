@@ -17,7 +17,7 @@ The Kauf26 API is a **long-running Express + PostgreSQL** server — **do not de
 | Item | Status |
 |------|--------|
 | Apple Developer account | ✅ |
-| `APPLE_CLIENT_ID` in `.env` | ✅ `com.globalmarketplacelister.app` |
+| `APPLE_CLIENT_ID` in `.env` | ✅ `com.kaufai.app` |
 | `api.kaufai.com` DNS | ⚠️ Points at Vercel — **SSL fails** (no API there) |
 | Production Postgres | ❌ Need Neon or Render Postgres |
 | API deployed | ❌ |
@@ -110,7 +110,7 @@ APP_BASE_URL=https://api.kaufai.com
 CLIENT_URL=https://kaufai.com
 VITE_API_URL=https://api.kaufai.com
 OPENAI_API_KEY=sk-proj-...
-APPLE_CLIENT_ID=com.globalmarketplacelister.app
+APPLE_CLIENT_ID=com.kaufai.app
 MOCK_OAUTH_MODE=false
 ```
 

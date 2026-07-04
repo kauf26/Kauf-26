@@ -4,7 +4,7 @@ Complete step-by-step guide for submitting **Kauf26: AI Marketplace Lister** to 
 
 | Field | Value |
 |-------|-------|
-| Bundle ID | `com.globalmarketplacelister.app` |
+| Bundle ID | `com.kaufai.app` |
 | Version | 1.0.0 (Build 1) |
 | API (production) | https://kauf-26.onrender.com |
 | Apple Team ID | `U2M253533S` |
@@ -38,12 +38,12 @@ Mark each item before submitting.
 - [x] Terms live: https://kauf-26.onrender.com/api/terms
 - [ ] `OPENAI_API_KEY` set on Render (required at boot)
 - [ ] `SESSION_SECRET` and `SESSION_ENCRYPTION_KEY` set on Render
-- [ ] `APPLE_CLIENT_ID=com.globalmarketplacelister.app` on Render
+- [ ] `APPLE_CLIENT_ID=com.kaufai.app` on Render
 - [ ] `APP_BASE_URL` and `CLIENT_URL` point to production URL
 
 ### App Store Connect
 
-- [ ] App record created with bundle ID `com.globalmarketplacelister.app`
+- [ ] App record created with bundle ID `com.kaufai.app`
 - [ ] App Privacy questionnaire completed (see `APP_PRIVACY_ANSWERS.md`)
 - [ ] Screenshots uploaded (6.7", 6.5", iPad 12.9")
 - [ ] Metadata pasted from `APP_STORE_METADATA.md`
@@ -112,7 +112,7 @@ curl -sI https://kauf-26.onrender.com/api/terms | head -3
 3. Platform: **iOS**
 4. Name: **Kauf26: AI Marketplace Lister**
 5. Primary Language: **English (U.S.)**
-6. Bundle ID: **com.globalmarketplacelister.app**
+6. Bundle ID: **com.kaufai.app**
 7. SKU: **kauf26-ios-2026**
 8. User Access: Full Access
 

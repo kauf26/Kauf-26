@@ -69,7 +69,7 @@ OAuth client secrets stay on the **server** only. Marketplace tokens are stored 
 ### Sign in with Apple (required when Google sign-in is offered)
 
 1. In [Apple Developer](https://developer.apple.com/account/resources/identifiers/list) → App IDs → your app → enable **Sign in with Apple**.
-2. Create a **Services ID** if using web OAuth; for native mobile, configure the App ID capability on `com.globalmarketplacelister.app`.
+2. Create a **Services ID** if using web OAuth; for native mobile, configure the App ID capability on `com.kaufai.app`.
 3. Set server `.env`: `APPLE_CLIENT_ID` (bundle ID or Services ID), `APPLE_TEAM_ID`, `APPLE_KEY_ID`, `APPLE_PRIVATE_KEY`.
 4. EAS builds use `expo-apple-authentication` — run `npx expo prebuild --clean` after changing `app.json` plugins.
 5. iOS shows the native **Sign in with Apple** button on the Login screen; Google uses system browser OAuth with `kauf26://auth/google` redirect.

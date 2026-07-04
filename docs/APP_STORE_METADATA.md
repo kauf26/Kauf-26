@@ -10,7 +10,7 @@ Copy-paste fields for App Store Connect. Last updated: July 4, 2026.
 |-------|-------|
 | **App Name** | Kauf26: AI Marketplace Lister |
 | **Subtitle** (30 chars max) | AI Listings for Marketplaces |
-| **Bundle ID** | `com.globalmarketplacelister.app` |
+| **Bundle ID** | `com.kaufai.app` |
 | **SKU** | `kauf26-ios-2026` |
 | **Primary Category** | Business |
 | **Secondary Category** | Productivity |

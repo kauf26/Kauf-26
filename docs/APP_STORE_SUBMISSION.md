@@ -1,6 +1,6 @@
 # App Store Submission Guide — Kauf26 (iOS)
 
-Bundle ID: `com.globalmarketplacelister.app`  
+Bundle ID: `com.kaufai.app`  
 API (current): https://kauf-26.onrender.com  
 API (production target): https://api.kaufai.com  
 Privacy URL: https://kauf-26.onrender.com/api/privacy → `/privacy`  
@@ -14,14 +14,14 @@ Terms URL: https://kauf-26.onrender.com/api/terms → `/terms`
 
 | Field | Value |
 |---|---|
-| Bundle ID | `com.globalmarketplacelister.app` |
+| Bundle ID | `com.kaufai.app` |
 | App name (display) | Kauf26 |
 | SKU | `kauf26-ios` |
 | Apple Team ID | `U2M253533S` |
 
 **Create in [Apple Developer → Identifiers](https://developer.apple.com/account/resources/identifiers/list):**
 
-1. App IDs → **+** → App → Explicit ID `com.globalmarketplacelister.app`
+1. App IDs → **+** → App → Explicit ID `com.kaufai.app`
 2. Enable **Sign in with Apple** (primary App ID)
 3. Register
 
@@ -29,7 +29,7 @@ Terms URL: https://kauf-26.onrender.com/api/terms → `/terms`
 
 1. My Apps → **+** → New App → iOS
 2. Name: **Kauf26**
-3. Bundle ID: `com.globalmarketplacelister.app`
+3. Bundle ID: `com.kaufai.app`
 4. Copy **Apple ID** (numeric) → set `ascAppId` in `mobile/eas.json`
 
 ### Privacy Manifest (iOS 17+)
@@ -160,7 +160,7 @@ marketplace,ebay,etsy,shopify,reseller,listing,AI,thrift,sell,inventory,ecommerc
 
 | Item | Status | Value / notes |
 |---|---|---|
-| `bundleIdentifier` | ✅ | `com.globalmarketplacelister.app` |
+| `bundleIdentifier` | ✅ | `com.kaufai.app` |
 | `CFBundleShortVersionString` | ✅ | `1.0.0` (`expo.version`) |
 | `CFBundleVersion` | ✅ Fixed | `1` (`ios.buildNumber`) — was `1.0.0`, now integer |
 | `LSApplicationCategoryType` | ✅ Added | `public.app-category.business` |
@@ -284,7 +284,7 @@ No special hardware required. Camera permission needed for photo capture; galler
 - [x] `OPENAI_API_KEY` set on Render
 - [x] `DATABASE_URL` Neon connection string
 - [x] `SESSION_SECRET` + `SESSION_ENCRYPTION_KEY` set
-- [x] `APPLE_CLIENT_ID=com.globalmarketplacelister.app`
+- [x] `APPLE_CLIENT_ID=com.kaufai.app`
 - [ ] DNS: `api.kaufai.com` → Render (for production mobile builds)
 - [ ] Run `bash render-selfcheck.sh`
 
@@ -331,7 +331,7 @@ cd mobile && eas submit --platform ios --profile production
 
 ## 9. Step-by-step App Store Connect submission
 
-1. **Create app** in App Store Connect (Bundle ID `com.globalmarketplacelister.app`)
+1. **Create app** in App Store Connect (Bundle ID `com.kaufai.app`)
 2. **Copy Apple ID** → update `mobile/eas.json` → `ascAppId`
 3. **Run** `eas build --platform ios --profile production`
 4. **Wait** for build → auto-upload to TestFlight (or `eas submit`)

@@ -1,6 +1,6 @@
 # Google Play — Listing Copy & Assets (Android)
 
-Draft store listing for **Kauf26** (package: `com.globalmarketplacelister.app`). Production builds use **AAB** (`eas.json` → `"buildType": "aab"`).
+Draft store listing for **Kauf26** (package: `com.kaufai.app`). Production builds use **AAB** (`eas.json` → `"buildType": "aab"`).
 
 ---
 

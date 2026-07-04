@@ -14,7 +14,7 @@
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.globalmarketplacelister.app",
+      "bundleIdentifier": "com.kaufai.app",
       "buildNumber": "1",
       "usesAppleSignIn": true,
       "infoPlist": {
@@ -47,7 +47,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.globalmarketplacelister.app",
+      "package": "com.kaufai.app",
       "intentFilters": [
         {
           "action": "VIEW",

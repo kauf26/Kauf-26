@@ -1,6 +1,6 @@
 # App Store Connect — Listing Copy & Assets (iOS)
 
-Use this as a draft for **Kauf26** (bundle ID: `com.globalmarketplacelister.app`). Adjust tone to match your brand before submission.
+Use this as a draft for **Kauf26** (bundle ID: `com.kaufai.app`). Adjust tone to match your brand before submission.
 
 ---
 

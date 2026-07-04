@@ -52,7 +52,7 @@ Use this alongside `render-env-production.txt`. Check boxes as you obtain and pa
 
 ### User sign-in
 
-- [ ] `APPLE_CLIENT_ID` = `com.globalmarketplacelister.app` — [✓ Render blueprint]
+- [ ] `APPLE_CLIENT_ID` = `com.kaufai.app` — [✓ Render blueprint]
 - [ ] `GOOGLE_CLIENT_ID` — [Google Cloud Console → Credentials](https://console.cloud.google.com/apis/credentials) — [○ Render secret slot]
 - [ ] `GOOGLE_CLIENT_SECRET` — same OAuth client — [○ Render secret slot]
 - [ ] Registered redirect: `https://api.kaufai.com/api/auth/google/callback`

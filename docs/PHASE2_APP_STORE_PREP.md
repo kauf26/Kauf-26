@@ -9,7 +9,7 @@ Complete after Phase 1 (`docs/PHASE1_APP_STORE_PREP.md`). Target: TestFlight + P
 | Item | Status | Notes |
 |------|--------|-------|
 | Production URLs (`.env`, `mobile/.env`) | ✅ Set | `api.kaufai.com`, `kaufai.com` |
-| `APPLE_CLIENT_ID` | ✅ Set | `com.globalmarketplacelister.app` |
+| `APPLE_CLIENT_ID` | ✅ Set | `com.kaufai.app` |
 | Apple Team ID / Key / `.p8` | ⏳ You | See §1 below |
 | Google OAuth | ⏳ You | Placeholders in `.env` |
 | Privacy policy | ✅ Live | https://kaufai.com/privacy (+ COPPA) |
@@ -27,7 +27,7 @@ Complete after Phase 1 (`docs/PHASE1_APP_STORE_PREP.md`). Target: TestFlight + P
 1. [Apple Developer → Identifiers](https://developer.apple.com/account/resources/identifiers/list)
 2. **+** → **App IDs** → **App**
 3. Description: `Kauf26`
-4. Bundle ID: **Explicit** → `com.globalmarketplacelister.app`
+4. Bundle ID: **Explicit** → `com.kaufai.app`
 5. Capabilities: enable **Sign in with Apple** → Configure → **Enable as primary App ID**
 6. Register
 
@@ -45,13 +45,13 @@ Complete after Phase 1 (`docs/PHASE1_APP_STORE_PREP.md`). Target: TestFlight + P
 1. [App Store Connect](https://appstoreconnect.apple.com/) → **My Apps** → **+** → New App
 2. Platform: iOS
 3. Name: **Kauf26**
-4. Bundle ID: `com.globalmarketplacelister.app`
+4. Bundle ID: `com.kaufai.app`
 5. SKU: `kauf26-ios`
 
 ### E. Server `.env`
 ```bash
 # Required for native iOS (already set locally)
-APPLE_CLIENT_ID=com.globalmarketplacelister.app
+APPLE_CLIENT_ID=com.kaufai.app
 
 # Optional — web Apple OAuth only
 APPLE_TEAM_ID=YOUR_TEAM_ID

@@ -32,7 +32,7 @@ CLIENT_URL=https://kaufai.com                          # [✓ RENDER FIXED] Web 
 VITE_API_URL=https://api.kaufai.com                    # [✓ RENDER FIXED] Build-time API URL if serving Vite static from same container
 MOCK_OAUTH_MODE=false                                  # [✓ RENDER FIXED] Never true in production; simulates OAuth without real keys
 EBAY_SANDBOX=false                                     # [✓ RENDER FIXED] Use production eBay APIs (not sandbox)
-APPLE_CLIENT_ID=com.globalmarketplacelister.app        # [✓ RENDER FIXED] Apple Sign-In client ID (iOS bundle ID)
+APPLE_CLIENT_ID=com.kaufai.app        # [✓ RENDER FIXED] Apple Sign-In client ID (iOS bundle ID)
 
 # SECRETS & CONFIG (need your actual values)
 TRIAL_START_DATE=___________                           # [+ ADD TO RENDER] Trial period start date (YYYY-MM-DD); from your product launch plan

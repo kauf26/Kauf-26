@@ -29,7 +29,7 @@ services:
       - key: OPENAI_API_KEY
         sync: false
       - key: APPLE_CLIENT_ID
-        value: com.globalmarketplacelister.app
+        value: com.kaufai.app
       - key: GOOGLE_CLIENT_ID
         sync: false
       - key: GOOGLE_CLIENT_SECRET
