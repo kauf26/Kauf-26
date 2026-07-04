@@ -119,6 +119,11 @@ function captureVideoFrame(
 ): void {
   const vw = video.videoWidth;
   const vh = video.videoHeight;
+  if (vw <= 0 || vh <= 0) {
+    throw new Error(
+      'Camera is not ready yet. Wait for the preview to appear, then try again.'
+    );
+  }
   canvas.width = vw;
   canvas.height = vh;
   const ctx = canvas.getContext('2d');
@@ -127,6 +132,11 @@ function captureVideoFrame(
 }
 
 function encodeCanvasForApi(canvas: HTMLCanvasElement): Promise<string> {
+  if (canvas.width <= 0 || canvas.height <= 0) {
+    return Promise.reject(
+      new Error('Could not capture photo — camera preview had no image data.')
+    );
+  }
   let outW = canvas.width;
   let outH = canvas.height;
   const maxSide = Math.max(outW, outH);
@@ -316,6 +326,7 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
   const progressTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [isVideoReady, setIsVideoReady] = useState(false);
   const [capturedImages, setCapturedImages] = useState<string[]>([]);
   const [isCapturingMore, setIsCapturingMore] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -339,10 +350,13 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
       streamRef.current = null;
     }
     setStream(null);
+    setIsVideoReady(false);
   };
 
   const startCamera = async () => {
     try {
+      setError(null);
+      setIsVideoReady(false);
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: VIDEO_CONSTRAINTS,
         audio: false,
@@ -350,9 +364,9 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
       await applyFocusExposure(mediaStream);
       streamRef.current = mediaStream;
       setStream(mediaStream);
-      if (videoRef.current) videoRef.current.srcObject = mediaStream;
     } catch {
       setError('Could not access camera. Please check permissions.');
+      setIsVideoReady(false);
     }
   };
 
@@ -480,6 +494,10 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
 
   const capturePhoto = async () => {
     if (!videoRef.current || !canvasRef.current || isLoading) return;
+    if (!isVideoReady) {
+      setError('Camera is still starting. Wait for the preview, then try again.');
+      return;
+    }
     setError(null);
 
     try {
@@ -557,6 +575,39 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
       void startCamera();
     }
   }, [showCamera, stream, capturedImages.length]);
+
+  // Attach stream after <video> mounts (stream is set before the element exists).
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !stream) {
+      setIsVideoReady(false);
+      return;
+    }
+
+    video.srcObject = stream;
+
+    const markReady = () => {
+      setIsVideoReady(video.videoWidth > 0 && video.videoHeight > 0);
+    };
+
+    const onLoadedMetadata = () => {
+      markReady();
+      void video.play().catch(() => {
+        setError('Could not start camera preview.');
+        setIsVideoReady(false);
+      });
+    };
+
+    video.addEventListener('loadedmetadata', onLoadedMetadata);
+    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+      onLoadedMetadata();
+    }
+
+    return () => {
+      video.removeEventListener('loadedmetadata', onLoadedMetadata);
+      setIsVideoReady(false);
+    };
+  }, [stream]);
 
   const angleLabel =
     capturedImages.length < ANGLE_ORDINALS.length
@@ -643,9 +694,15 @@ const ProductCamera: React.FC<ProductCameraProps> = ({ onScrapeSuccess }) => {
 
                 <CaptureShutterButton
                   onClick={() => void capturePhoto()}
-                  disabled={isLoading}
+                  disabled={isLoading || !isVideoReady}
                   label={captureLabel}
                 />
+
+                {!isVideoReady && (
+                  <p className="text-xs text-zinc-300 drop-shadow-md">
+                    Starting camera preview…
+                  </p>
+                )}
 
                 <label
                   htmlFor="product-camera-file-input"
