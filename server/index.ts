@@ -48,6 +48,7 @@ import { stripExternalUrlFields } from "./listingSanitizer";
 import { SUPPORTED_MARKETPLACE_IDS } from "./publishToMarketplaces";
 import { productRoutes } from "./productsRoutes";
 import { dashboardDataRoutes } from "./dashboardDataRoutes";
+import { renderPrivacyPolicyHtml, renderTermsOfServiceHtml } from "./legal/htmlPages";
 import { shippingRoutes } from "./shippingRoutes";
 import { marketplaceOAuthRoutes } from "./marketplaceOAuthRoutes";
 import { registerMarketplaceAuthRoutes } from "./authMarketplaceRoutes";
@@ -1627,12 +1628,12 @@ app.get('/api/health', (req: Request, res: Response) => {
  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-/** App Store / Play Store legal URLs — redirect to SPA pages served in production. */
+/** App Store / Play Store legal URLs — standalone HTML (no SPA required). */
 app.get('/api/privacy', (_req, res) => {
-  res.redirect(302, '/privacy');
+  res.type('html').send(renderPrivacyPolicyHtml());
 });
 app.get('/api/terms', (_req, res) => {
-  res.redirect(302, '/terms');
+  res.type('html').send(renderTermsOfServiceHtml());
 });
 
 // -------------------- MARKETPLACE VERIFY (standardized MarketplaceConnectionResult) --------------------

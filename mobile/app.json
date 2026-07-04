@@ -22,8 +22,9 @@
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
         },
-        "NSCameraUsageDescription": "Take photos of products to create marketplace listings with AI-powered descriptions.",
-        "NSPhotoLibraryUsageDescription": "Select product photos from your library to list on multiple marketplaces.",
+        "NSCameraUsageDescription": "Kauf26 uses your camera to scan product photos for AI-powered listing generation.",
+        "NSPhotoLibraryUsageDescription": "Kauf26 accesses your photo library to select product images for AI identification and listing creation.",
+        "NSPhotoLibraryAddUsageDescription": "Kauf26 saves generated product images to your photo library.",
         "NSFaceIDUsageDescription": "Use Face ID to quickly unlock the app instead of entering your PIN.",
         "LSApplicationCategoryType": "public.app-category.business",
         "CFBundleURLTypes": [
@@ -84,7 +85,8 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Take photos of products to create marketplace listings with AI-powered descriptions.",
+          "cameraPermission": "Kauf26 uses your camera to scan product photos for AI-powered listing generation.",
+          "photosPermission": "Kauf26 accesses your photo library to select product images for AI identification and listing creation.",
           "microphonePermission": false,
           "recordAudioAndroid": false
         }

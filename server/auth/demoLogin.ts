@@ -1,16 +1,16 @@
 import { timingSafeEqual } from "node:crypto";
 import type { Express, RequestHandler } from "express";
 import {
-  getReviewDemoCredentials,
-  isReviewDemoEnabled,
-} from "../../shared/reviewDemo";
+  DEMO_ACCOUNT_EMAIL,
+  DEMO_ACCOUNT_PASSWORD,
+  DEMO_ACCOUNT_USER_SUB,
+  isDemoAccountEnabled,
+} from "../../shared/demoAccount";
 import { completeOnboarding, upsertOAuthUser } from "./authStorage";
 import type { SessionUser } from "./types";
 
-export const REVIEW_DEMO_USER_SUB = "review_demo_user";
-
-const reviewLoginGuard: RequestHandler = (_req, res, next) => {
-  if (!isReviewDemoEnabled()) {
+const demoLoginGuard: RequestHandler = (_req, res, next) => {
+  if (!isDemoAccountEnabled()) {
     return res.status(404).json({ message: "Not found" });
   }
   return next();
@@ -23,28 +23,27 @@ function safeEqual(a: string, b: string): boolean {
   return timingSafeEqual(bufA, bufB);
 }
 
-export function registerReviewLoginRoutes(app: Express): void {
-  app.get("/api/auth/review-login/enabled", (_req, res) => {
-    res.json({ enabled: isReviewDemoEnabled() });
+export function registerDemoLoginRoutes(app: Express): void {
+  app.get("/api/auth/demo-login/enabled", (_req, res) => {
+    res.json({ enabled: isDemoAccountEnabled() });
   });
 
-  app.post("/api/auth/review-login", reviewLoginGuard, async (req, res, next) => {
-    const creds = getReviewDemoCredentials();
-    if (!creds) {
-      return res.status(404).json({ message: "Not found" });
-    }
-
+  app.post("/api/auth/demo-login", demoLoginGuard, async (req, res, next) => {
     const email = String(req.body?.email ?? "").trim();
     const password = String(req.body?.password ?? "").trim();
-    if (!safeEqual(email, creds.email) || !safeEqual(password, creds.password)) {
-      return res.status(401).json({ message: "Invalid review credentials" });
+
+    if (
+      !safeEqual(email, DEMO_ACCOUNT_EMAIL) ||
+      !safeEqual(password, DEMO_ACCOUNT_PASSWORD)
+    ) {
+      return res.status(401).json({ message: "Invalid demo credentials" });
     }
 
     try {
       const { user } = await upsertOAuthUser({
-        sub: REVIEW_DEMO_USER_SUB,
-        email: creds.email,
-        firstName: "App",
+        sub: DEMO_ACCOUNT_USER_SUB,
+        email: DEMO_ACCOUNT_EMAIL,
+        firstName: "Demo",
         lastName: "Reviewer",
         provider: "google",
       });
@@ -68,19 +67,19 @@ export function registerReviewLoginRoutes(app: Express): void {
           user: {
             id: sessionUser.id,
             email: sessionUser.email,
-            needsOnboarding: sessionUser.needsOnboarding,
+            needsOnboarding: false,
           },
         });
       });
     } catch (error) {
-      console.error("[auth] review-login", error);
-      return res.status(500).json({ message: "Review login failed" });
+      console.error("[auth] demo-login", error);
+      return res.status(500).json({ message: "Demo login failed" });
     }
   });
 
-  if (isReviewDemoEnabled()) {
+  if (isDemoAccountEnabled()) {
     console.warn(
-      "[auth] App Review demo login is ENABLED (APP_REVIEW_DEMO_ENABLED=true). Disable after App Store approval."
+      "[auth] Demo account login enabled (development only). Disabled automatically in production."
     );
   }
 }

@@ -1,17 +1,17 @@
 import * as SecureStore from 'expo-secure-store';
 import { API_BASE_URL } from './config';
 
-export const REVIEW_SESSION_KEY = 'kauf26_review_session';
+export const DEMO_SESSION_KEY = 'kauf26_demo_session';
 
-export type ReviewSession = {
+export type DemoSession = {
   userId: number;
   email?: string | null;
   loggedInAt: string;
 };
 
-export async function fetchReviewLoginEnabled(): Promise<boolean> {
+export async function fetchDemoLoginEnabled(): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/auth/review-login/enabled`, {
+    const res = await fetch(`${API_BASE_URL}/api/auth/demo-login/enabled`, {
       headers: { Accept: 'application/json' },
     });
     if (!res.ok) return false;
@@ -22,11 +22,11 @@ export async function fetchReviewLoginEnabled(): Promise<boolean> {
   }
 }
 
-export async function reviewLogin(
+export async function demoLogin(
   email: string,
   password: string
-): Promise<ReviewSession> {
-  const res = await fetch(`${API_BASE_URL}/api/auth/review-login`, {
+): Promise<DemoSession> {
+  const res = await fetch(`${API_BASE_URL}/api/auth/demo-login`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
@@ -38,13 +38,13 @@ export async function reviewLogin(
     message?: string;
   };
   if (!res.ok) {
-    throw new Error(data.message ?? 'Review login failed');
+    throw new Error(data.message ?? 'Demo login failed');
   }
-  const session: ReviewSession = {
+  const session: DemoSession = {
     userId: data.user?.id ?? 0,
     email: data.user?.email,
     loggedInAt: new Date().toISOString(),
   };
-  await SecureStore.setItemAsync(REVIEW_SESSION_KEY, JSON.stringify(session));
+  await SecureStore.setItemAsync(DEMO_SESSION_KEY, JSON.stringify(session));
   return session;
 }

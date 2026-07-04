@@ -18,10 +18,7 @@ import type { StackScreenProps } from '@react-navigation/stack';
 import { PRIVACY_POLICY_URL } from '../config/legal';
 import type { RootStackParamList } from '../types/navigation';
 import { devLoginWithPin, fetchDevLoginEnabled } from '../services/devAuth';
-import {
-  fetchReviewLoginEnabled,
-  reviewLogin,
-} from '../services/reviewAuth';
+import { demoLogin, fetchDemoLoginEnabled } from '../services/demoAuth';
 import {
   signInWithAppleNative,
   signInWithGoogleMobile,
@@ -34,17 +31,17 @@ const LOGO_IMAGE = require('../../assets/img-2482.jpg');
 type Props = StackScreenProps<RootStackParamList, 'Login'>;
 
 export default function LoginScreen({ navigation }: Props) {
-  const [loading, setLoading] = useState<'google' | 'apple' | 'dev' | 'review' | null>(null);
+  const [loading, setLoading] = useState<'google' | 'apple' | 'dev' | 'demo' | null>(null);
   const [devLoginAvailable, setDevLoginAvailable] = useState(false);
-  const [reviewLoginAvailable, setReviewLoginAvailable] = useState(false);
+  const [demoLoginAvailable, setDemoLoginAvailable] = useState(false);
   const [devPin, setDevPin] = useState('');
-  const [reviewEmail, setReviewEmail] = useState('');
-  const [reviewPassword, setReviewPassword] = useState('');
+  const [demoEmail, setDemoEmail] = useState('demo@kauf26.com');
+  const [demoPassword, setDemoPassword] = useState('');
   const [appleAvailable, setAppleAvailable] = useState(false);
 
   useEffect(() => {
     void fetchDevLoginEnabled().then(setDevLoginAvailable);
-    void fetchReviewLoginEnabled().then(setReviewLoginAvailable);
+    void fetchDemoLoginEnabled().then(setDemoLoginAvailable);
     if (Platform.OS === 'ios') {
       void AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
     }
@@ -63,11 +60,11 @@ export default function LoginScreen({ navigation }: Props) {
     }
   };
 
-  const handleReviewLogin = async () => {
-    setLoading('review');
+  const handleDemoLogin = async () => {
+    setLoading('demo');
     try {
-      await reviewLogin(reviewEmail.trim(), reviewPassword);
-      Alert.alert('Signed in', 'App Review demo account ready.');
+      await demoLogin(demoEmail.trim(), demoPassword);
+      Alert.alert('Signed in', 'Demo account ready (development only).');
       navigation.goBack();
     } catch (err) {
       Alert.alert(
@@ -169,17 +166,17 @@ export default function LoginScreen({ navigation }: Props) {
           <Text style={styles.privacyText}>Privacy Policy</Text>
         </TouchableOpacity>
 
-        {reviewLoginAvailable ? (
+        {demoLoginAvailable ? (
           <View style={styles.reviewBox}>
-            <Text style={styles.reviewTitle}>App Review login</Text>
+            <Text style={styles.reviewTitle}>Demo account (dev only)</Text>
             <Text style={styles.reviewHint}>
-              For Apple reviewers only. Enabled temporarily on the server during review.
+              Local development only. Disabled automatically in production builds.
             </Text>
             <TextInput
               style={styles.reviewInput}
-              value={reviewEmail}
-              onChangeText={setReviewEmail}
-              placeholder="Review email"
+              value={demoEmail}
+              onChangeText={setDemoEmail}
+              placeholder="demo@kauf26.com"
               placeholderTextColor="#9CA3AF"
               autoCapitalize="none"
               keyboardType="email-address"
@@ -187,24 +184,24 @@ export default function LoginScreen({ navigation }: Props) {
             />
             <TextInput
               style={styles.reviewInput}
-              value={reviewPassword}
-              onChangeText={setReviewPassword}
-              placeholder="Review password"
+              value={demoPassword}
+              onChangeText={setDemoPassword}
+              placeholder="Demo password"
               placeholderTextColor="#9CA3AF"
               secureTextEntry
               textContentType="password"
             />
             <TouchableOpacity
               style={[styles.button, styles.reviewButton]}
-              onPress={() => void handleReviewLogin()}
+              onPress={() => void handleDemoLogin()}
               disabled={
-                loading !== null || !reviewEmail.trim() || !reviewPassword
+                loading !== null || !demoEmail.trim() || !demoPassword
               }
             >
-              {loading === 'review' ? (
+              {loading === 'demo' ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.reviewButtonText}>Reviewer Sign In</Text>
+                <Text style={styles.reviewButtonText}>Demo Sign In</Text>
               )}
             </TouchableOpacity>
           </View>

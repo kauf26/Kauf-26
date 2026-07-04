@@ -9,7 +9,9 @@
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_API_URL": "http://192.168.1.186:2626",
-        "EXPO_PUBLIC_WEB_BASE_URL": "http://192.168.1.186:2626"
+        "EXPO_PUBLIC_WEB_BASE_URL": "http://192.168.1.186:2626",
+        "EXPO_PUBLIC_PRIVACY_URL": "http://192.168.1.186:2626/api/privacy",
+        "EXPO_PUBLIC_TERMS_URL": "http://192.168.1.186:2626/api/terms"
       },
       "ios": {
         "image": "macos-tahoe-26.4-xcode-26.4"
@@ -18,8 +20,10 @@
     "preview": {
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_API_URL": "http://192.168.1.186:2626",
-        "EXPO_PUBLIC_WEB_BASE_URL": "http://192.168.1.186:2626"
+        "EXPO_PUBLIC_API_URL": "https://kauf-26.onrender.com",
+        "EXPO_PUBLIC_WEB_BASE_URL": "https://kauf-26.onrender.com",
+        "EXPO_PUBLIC_PRIVACY_URL": "https://kauf-26.onrender.com/api/privacy",
+        "EXPO_PUBLIC_TERMS_URL": "https://kauf-26.onrender.com/api/terms"
       },
       "ios": {
         "image": "macos-tahoe-26.4-xcode-26.4"
@@ -28,8 +32,10 @@
     "production": {
       "env": {
         "APP_ENV": "production",
-        "EXPO_PUBLIC_API_URL": "https://api.kaufai.com",
-        "EXPO_PUBLIC_WEB_BASE_URL": "https://kaufai.com"
+        "EXPO_PUBLIC_API_URL": "https://kauf-26.onrender.com",
+        "EXPO_PUBLIC_WEB_BASE_URL": "https://kauf-26.onrender.com",
+        "EXPO_PUBLIC_PRIVACY_URL": "https://kauf-26.onrender.com/api/privacy",
+        "EXPO_PUBLIC_TERMS_URL": "https://kauf-26.onrender.com/api/terms"
       },
       "ios": {
         "resourceClass": "m-medium",
