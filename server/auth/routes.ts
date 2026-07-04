@@ -1,6 +1,7 @@
 import type { Express, Request, Response } from "express";
 import { getUserById, updateUserProfile, deleteAccountByUserId } from "./authStorage";
 import { registerDevLoginRoutes } from "./devLogin";
+import { registerReviewLoginRoutes } from "./reviewLogin";
 import { isAuthenticated } from "./setupAuth";
 import type { SessionUser } from "./types";
 
@@ -19,6 +20,7 @@ function profileResponse(user: NonNullable<Awaited<ReturnType<typeof getUserById
 
 export function registerAuthRoutes(app: Express): void {
   registerDevLoginRoutes(app);
+  registerReviewLoginRoutes(app);
 
   app.get("/api/auth/user", isAuthenticated, async (req, res) => {
     try {

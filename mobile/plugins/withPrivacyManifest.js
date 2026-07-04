@@ -15,6 +15,22 @@ const PRIVACY_MANIFEST = {
   NSPrivacyTrackingDomains: [],
   NSPrivacyCollectedDataTypes: [
     {
+      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeEmailAddress",
+      NSPrivacyCollectedDataTypeLinked: true,
+      NSPrivacyCollectedDataTypeTracking: false,
+      NSPrivacyCollectedDataTypePurposes: [
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      ],
+    },
+    {
+      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeName",
+      NSPrivacyCollectedDataTypeLinked: true,
+      NSPrivacyCollectedDataTypeTracking: false,
+      NSPrivacyCollectedDataTypePurposes: [
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      ],
+    },
+    {
       NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypePhotosorVideos",
       NSPrivacyCollectedDataTypeLinked: false,
       NSPrivacyCollectedDataTypeTracking: false,
@@ -24,6 +40,14 @@ const PRIVACY_MANIFEST = {
     },
     {
       NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeUserID",
+      NSPrivacyCollectedDataTypeLinked: true,
+      NSPrivacyCollectedDataTypeTracking: false,
+      NSPrivacyCollectedDataTypePurposes: [
+        "NSPrivacyCollectedDataTypePurposeAppFunctionality",
+      ],
+    },
+    {
+      NSPrivacyCollectedDataType: "NSPrivacyCollectedDataTypeProductInteraction",
       NSPrivacyCollectedDataTypeLinked: true,
       NSPrivacyCollectedDataTypeTracking: false,
       NSPrivacyCollectedDataTypePurposes: [

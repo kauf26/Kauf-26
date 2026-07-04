@@ -19,6 +19,10 @@ import { PRIVACY_POLICY_URL } from '../config/legal';
 import type { RootStackParamList } from '../types/navigation';
 import { devLoginWithPin, fetchDevLoginEnabled } from '../services/devAuth';
 import {
+  fetchReviewLoginEnabled,
+  reviewLogin,
+} from '../services/reviewAuth';
+import {
   signInWithAppleNative,
   signInWithGoogleMobile,
 } from '../services/userAccountAuth';
@@ -30,13 +34,17 @@ const LOGO_IMAGE = require('../../assets/img-2482.jpg');
 type Props = StackScreenProps<RootStackParamList, 'Login'>;
 
 export default function LoginScreen({ navigation }: Props) {
-  const [loading, setLoading] = useState<'google' | 'apple' | 'dev' | null>(null);
+  const [loading, setLoading] = useState<'google' | 'apple' | 'dev' | 'review' | null>(null);
   const [devLoginAvailable, setDevLoginAvailable] = useState(false);
+  const [reviewLoginAvailable, setReviewLoginAvailable] = useState(false);
   const [devPin, setDevPin] = useState('');
+  const [reviewEmail, setReviewEmail] = useState('');
+  const [reviewPassword, setReviewPassword] = useState('');
   const [appleAvailable, setAppleAvailable] = useState(false);
 
   useEffect(() => {
     void fetchDevLoginEnabled().then(setDevLoginAvailable);
+    void fetchReviewLoginEnabled().then(setReviewLoginAvailable);
     if (Platform.OS === 'ios') {
       void AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
     }
@@ -50,6 +58,22 @@ export default function LoginScreen({ navigation }: Props) {
       navigation.goBack();
     } catch (err) {
       Alert.alert('Dev login failed', err instanceof Error ? err.message : 'Invalid PIN');
+    } finally {
+      setLoading(null);
+    }
+  };
+
+  const handleReviewLogin = async () => {
+    setLoading('review');
+    try {
+      await reviewLogin(reviewEmail.trim(), reviewPassword);
+      Alert.alert('Signed in', 'App Review demo account ready.');
+      navigation.goBack();
+    } catch (err) {
+      Alert.alert(
+        'Sign in failed',
+        err instanceof Error ? err.message : 'Invalid credentials'
+      );
     } finally {
       setLoading(null);
     }
@@ -144,6 +168,47 @@ export default function LoginScreen({ navigation }: Props) {
         >
           <Text style={styles.privacyText}>Privacy Policy</Text>
         </TouchableOpacity>
+
+        {reviewLoginAvailable ? (
+          <View style={styles.reviewBox}>
+            <Text style={styles.reviewTitle}>App Review login</Text>
+            <Text style={styles.reviewHint}>
+              For Apple reviewers only. Enabled temporarily on the server during review.
+            </Text>
+            <TextInput
+              style={styles.reviewInput}
+              value={reviewEmail}
+              onChangeText={setReviewEmail}
+              placeholder="Review email"
+              placeholderTextColor="#9CA3AF"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              textContentType="username"
+            />
+            <TextInput
+              style={styles.reviewInput}
+              value={reviewPassword}
+              onChangeText={setReviewPassword}
+              placeholder="Review password"
+              placeholderTextColor="#9CA3AF"
+              secureTextEntry
+              textContentType="password"
+            />
+            <TouchableOpacity
+              style={[styles.button, styles.reviewButton]}
+              onPress={() => void handleReviewLogin()}
+              disabled={
+                loading !== null || !reviewEmail.trim() || !reviewPassword
+              }
+            >
+              {loading === 'review' ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.reviewButtonText}>Reviewer Sign In</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
         {devLoginAvailable ? (
           <View style={styles.devBox}>
@@ -251,4 +316,35 @@ const styles = StyleSheet.create({
   },
   devButton: { backgroundColor: '#B45309', marginTop: 4 },
   devButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  reviewBox: {
+    width: '100%',
+    maxWidth: 320,
+    marginTop: 16,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#93C5FD',
+    backgroundColor: '#EFF6FF',
+    gap: 8,
+  },
+  reviewTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1D4ED8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  reviewHint: { fontSize: 12, color: '#64748B', lineHeight: 16 },
+  reviewInput: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    backgroundColor: '#fff',
+    color: '#111827',
+  },
+  reviewButton: { backgroundColor: '#2563EB', marginTop: 4 },
+  reviewButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });

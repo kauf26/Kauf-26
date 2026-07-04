@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.globalmarketplacelister.app",
-      "buildNumber": "1.0.0",
+      "buildNumber": "1",
       "usesAppleSignIn": true,
       "infoPlist": {
         "CFBundleDisplayName": "Kauf26",
@@ -25,6 +25,7 @@
         "NSCameraUsageDescription": "Take photos of products to create marketplace listings with AI-powered descriptions.",
         "NSPhotoLibraryUsageDescription": "Select product photos from your library to list on multiple marketplaces.",
         "NSFaceIDUsageDescription": "Use Face ID to quickly unlock the app instead of entering your PIN.",
+        "LSApplicationCategoryType": "public.app-category.business",
         "CFBundleURLTypes": [
           {
             "CFBundleURLName": "kauf26.oauth",

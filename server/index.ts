@@ -1627,6 +1627,14 @@ app.get('/api/health', (req: Request, res: Response) => {
  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+/** App Store / Play Store legal URLs — redirect to SPA pages served in production. */
+app.get('/api/privacy', (_req, res) => {
+  res.redirect(302, '/privacy');
+});
+app.get('/api/terms', (_req, res) => {
+  res.redirect(302, '/terms');
+});
+
 // -------------------- MARKETPLACE VERIFY (standardized MarketplaceConnectionResult) --------------------
 
 /** Dashboard-friendly hint for common failure modes. */
