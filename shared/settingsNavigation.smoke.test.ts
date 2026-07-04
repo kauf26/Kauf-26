@@ -24,6 +24,12 @@ describe('Settings navigation smoke', () => {
     expect(src).toContain('getTabBarStyle');
   });
 
+  it('MainNavigator resets Settings tab to SettingsMain on tab press', () => {
+    const src = readFileSync(join(mobileRoot, 'navigation/MainNavigator.tsx'), 'utf8');
+    expect(src).toContain("screen: 'SettingsMain'");
+    expect(src).toContain('tabPress');
+  });
+
   it('App wires rootNavigationRef on NavigationContainer', () => {
     const src = readFileSync(join(mobileRoot, '../App.tsx'), 'utf8');
     expect(src).toContain('ref={rootNavigationRef}');
@@ -33,5 +39,14 @@ describe('Settings navigation smoke', () => {
     const src = readFileSync(join(mobileRoot, 'navigation/navigateToTab.ts'), 'utf8');
     expect(src).toContain('navigation: unknown');
     expect(src).toContain('navigateToConnectMarketplace');
+    expect(src).toContain('navigateToLogin');
+    expect(src).toContain('navigateToSettingsMain');
+  });
+
+  it('Settings stack does not mount HomeScreen (tab-level) inside settings', () => {
+    const src = readFileSync(join(mobileRoot, 'navigation/SettingsStackNavigator.tsx'), 'utf8');
+    expect(src).not.toContain('HomeScreen');
+    expect(src).not.toContain('UploadProduct');
+    expect(src).toContain('initialRouteName="SettingsMain"');
   });
 });

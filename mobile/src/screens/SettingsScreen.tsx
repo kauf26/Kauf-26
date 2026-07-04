@@ -37,7 +37,7 @@ import {
   signOutAccount,
   type UserAccount,
 } from '../services/userAccountAuth';
-import { navigateToTab, navigateToConnectMarketplace } from '../navigation/navigateToTab';
+import { navigateToTab, navigateToLogin } from '../navigation/navigateToTab';
 
 async function openLegalUrl(url: string, label: string) {
   try {
@@ -64,22 +64,31 @@ export default function SettingsScreen() {
   const [deleteConfirm, setDeleteConfirm] = useState('');
 
   useEffect(() => {
-    void getAutoTranslateEnabled().then(setAutoTranslate);
+    let cancelled = false;
     void (async () => {
-      const [enabled, cap, publishAuth, cached] = await Promise.all([
-        isBiometricEnabled(),
-        getBiometricCapability(),
-        isRequiresAuthForPublish(),
-        loadCachedUserAccount(),
-      ]);
-      setBiometricOn(enabled);
-      setBiometricCap(cap);
-      setRequirePublishAuth(publishAuth);
-      setAccount(cached);
-      void fetchCurrentUserAccount().then((live) => {
-        if (live) setAccount(live);
-      });
+      try {
+        const [translate, enabled, cap, publishAuth, cached] = await Promise.all([
+          getAutoTranslateEnabled(),
+          isBiometricEnabled(),
+          getBiometricCapability(),
+          isRequiresAuthForPublish(),
+          loadCachedUserAccount(),
+        ]);
+        if (cancelled) return;
+        setAutoTranslate(translate);
+        setBiometricOn(enabled);
+        setBiometricCap(cap);
+        setRequirePublishAuth(publishAuth);
+        setAccount(cached);
+        const live = await fetchCurrentUserAccount();
+        if (!cancelled && live) setAccount(live);
+      } catch {
+        // Avoid unhandled rejections that can destabilize the screen on mount
+      }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const onToggleAutoTranslate = (value: boolean) => {
@@ -137,8 +146,7 @@ export default function SettingsScreen() {
             setAccountBusy(true);
             try {
               await signOutAccount({
-                navigateToLogin: () =>
-                  navigation.getParent()?.getParent()?.navigate('Login'),
+                navigateToLogin,
               });
               setAccount(null);
             } finally {
@@ -187,8 +195,9 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.title}>Settings</Text>
         <Text style={styles.subtitle}>
           App preferences and legal information. Set{' '}
           <Text style={styles.mono}>EXPO_PUBLIC_WEB_BASE_URL</Text> (or{' '}
@@ -224,7 +233,7 @@ export default function SettingsScreen() {
           ) : (
             <TouchableOpacity
               style={styles.linkRow}
-              onPress={() => navigation.getParent()?.getParent()?.navigate('Login')}
+              onPress={() => navigateToLogin()}
             >
               <Ionicons name="log-in-outline" size={20} color="#3b82f6" />
               <View style={styles.linkTextWrap}>
@@ -381,7 +390,7 @@ export default function SettingsScreen() {
 
           <TouchableOpacity
             style={styles.linkRow}
-            onPress={() => navigation.navigate('UploadProduct')}
+            onPress={() => navigateToTab(navigation, 'Home', { screen: 'Identify' })}
           >
             <Ionicons name="cloud-upload-outline" size={20} color="#3b82f6" />
             <View style={styles.linkTextWrap}>
@@ -466,6 +475,12 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0a0a0f' },
   content: { padding: 16, paddingBottom: 32 },
+  title: {
+    color: '#ffffff',
+    fontSize: 28,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
   subtitle: { color: '#9ca3af', fontSize: 14, lineHeight: 20, marginBottom: 20 },
   mono: { fontFamily: 'Menlo', color: '#d1d5db' },
   sectionHeader: {

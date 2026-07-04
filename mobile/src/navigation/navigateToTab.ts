@@ -9,6 +9,14 @@ function asNavigationLike(navigation: unknown): TabNavCandidate | undefined {
   return navigation as TabNavCandidate;
 }
 
+/** Open the Login modal on the root stack. */
+export function navigateToLogin(): void {
+  if (rootNavigationRef.isReady()) {
+    rootNavigationRef.navigate('Login');
+    return;
+  }
+}
+
 /**
  * Switch to a bottom-tab screen from anywhere in the app.
  * Uses the root navigation ref when available (most reliable).
@@ -49,4 +57,9 @@ export function navigateToConnectMarketplace(navigation?: unknown, focus = 'ebay
     screen: 'ConnectMarketplace',
     params: { focus },
   });
+}
+
+/** Return to the Settings root screen (safe when switching tabs). */
+export function navigateToSettingsMain(navigation?: unknown): void {
+  navigateToTab(navigation, 'Settings', { screen: 'SettingsMain' });
 }

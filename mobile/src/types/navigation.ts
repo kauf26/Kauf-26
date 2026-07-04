@@ -37,7 +37,6 @@ export type SettingsStackParamList = {
   Tools: undefined;
   Sales: undefined;
   SoldProducts: undefined;
-  UploadProduct: undefined;
 };
 
 export type RootStackParamList = {

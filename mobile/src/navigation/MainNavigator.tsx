@@ -103,6 +103,12 @@ export default function MainNavigator() {
         name="Settings"
         component={SettingsStackNavigator}
         options={{ title: 'Settings', headerShown: false, tabBarStyle }}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            // Always show Settings root — avoids landing on a nested screen (e.g. old UploadProduct/Home)
+            navigation.navigate('Settings', { screen: 'SettingsMain' });
+          },
+        })}
       />
     </Tab.Navigator>
   );

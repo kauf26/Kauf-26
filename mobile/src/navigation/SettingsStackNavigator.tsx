@@ -6,7 +6,6 @@ import FlowTabHeaderActions from '../components/FlowTabHeaderActions';
 import ToolsScreen from '../screens/ToolsScreen';
 import SalesScreen from '../screens/SalesScreen';
 import SoldProductsScreen from '../screens/SoldProductsScreen';
-import HomeScreen from '../screens/HomeScreen';
 import type { SettingsStackParamList } from '../types/navigation';
 
 const Stack = createStackNavigator<SettingsStackParamList>();
@@ -14,6 +13,7 @@ const Stack = createStackNavigator<SettingsStackParamList>();
 export default function SettingsStackNavigator() {
   return (
     <Stack.Navigator
+      initialRouteName="SettingsMain"
       screenOptions={{
         headerStyle: { backgroundColor: '#111827', borderBottomColor: '#1f2937' },
         headerTintColor: '#ffffff',
@@ -40,11 +40,6 @@ export default function SettingsStackNavigator() {
         name="SoldProducts"
         component={SoldProductsScreen}
         options={{ title: 'Sold Products' }}
-      />
-      <Stack.Screen
-        name="UploadProduct"
-        component={HomeScreen}
-        options={{ title: 'Upload Product' }}
       />
     </Stack.Navigator>
   );
