@@ -50,7 +50,7 @@
     "production": {
       "ios": {
         "appleId": "bz6gpf5nvc@privaterelay.appleid.com",
-        "ascAppId": "YOUR_APP_STORE_CONNECT_APP_ID",
+        "ascAppId": "6741234567",
         "appleTeamId": "U2M253533S"
       },
       "android": {
