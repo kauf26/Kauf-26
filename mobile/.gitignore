@@ -3,6 +3,14 @@
 .expo/
 android/
 ios/
+build/
+
+# Fastlane secrets & reports
+fastlane/.env
+fastlane/AuthKey_*.p8
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/test_output
 
 # Uploads
 uploads/labels/

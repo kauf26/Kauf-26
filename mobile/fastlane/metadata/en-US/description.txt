@@ -1,0 +1,34 @@
+Turn product photos into polished marketplace listings in seconds. KaufAI is the AI-powered listing assistant built for resellers, thrift flippers, and ecommerce sellers who list on eBay, Etsy, Shopify, and more.
+
+HOW IT WORKS
+1. Capture or upload a product photo with your iPhone camera
+2. KaufAI's AI identifies the item, suggests a title, description, and price range
+3. Review and edit the draft, then publish to your connected marketplaces
+
+AI-POWERED IDENTIFICATION
+Powered by OpenAI GPT-4o, KaufAI analyzes your product images and generates professional listing copy tailored for each marketplace. No more staring at blank description fields — let AI do the heavy lifting while you stay in control of every publish.
+
+MULTI-MARKETPLACE LISTING
+Connect your seller accounts and publish from one app. KaufAI supports major marketplaces including eBay, Etsy, Shopify, Amazon, Mercado Libre, and more. OAuth tokens stay on your device in the iOS Keychain — your credentials never sit on our servers.
+
+BUILT FOR RESELLERS
+Whether you source from thrift stores, estate sales, wholesale, or your own inventory, KaufAI speeds up the listing workflow so you can list more products per day. Portrait-optimized for iPhone and iPad.
+
+KEY FEATURES
+• AI product identification from photos
+• Auto-generated titles, descriptions, and price suggestions
+• Multi-marketplace publishing (eBay, Etsy, Shopify, and more)
+• Listing draft management and inventory tracking
+• Sign in with Apple and Google
+• Secure OAuth — marketplace tokens stored on-device only
+
+PRIVACY FIRST
+• No cross-app tracking
+• No sale of personal data
+• GDPR and CCPA compliant
+• Full privacy policy at https://kaufai.com/privacy
+
+FREE TRIAL
+New users receive a free trial period. After the trial, a small service fee applies per listing as disclosed in-app.
+
+Download KaufAI and transform how you list products online. List smarter. Sell faster.

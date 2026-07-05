@@ -1,0 +1,5 @@
+# App Store Connect app — KaufAI (com.kaufai.app)
+app_identifier("com.kaufai.app")
+apple_id(ENV["FASTLANE_APPLE_ID"]) # optional when using API key only
+team_id(ENV["FASTLANE_TEAM_ID"] || "U2M253533S")
+itc_team_id(ENV["FASTLANE_ITC_TEAM_ID"]) # optional; set if you have multiple ASC teams

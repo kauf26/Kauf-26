@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "global-marketplace-lister",
+    "name": "KaufAI",
     "slug": "global-marketplace-lister",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -18,13 +18,13 @@
       "buildNumber": "1",
       "usesAppleSignIn": true,
       "infoPlist": {
-        "CFBundleDisplayName": "Kauf26",
+        "CFBundleDisplayName": "KaufAI",
         "NSAppTransportSecurity": {
           "NSAllowsLocalNetworking": true
         },
-        "NSCameraUsageDescription": "Kauf26 uses your camera to scan product photos for AI-powered listing generation.",
-        "NSPhotoLibraryUsageDescription": "Kauf26 accesses your photo library to select product images for AI identification and listing creation.",
-        "NSPhotoLibraryAddUsageDescription": "Kauf26 saves generated product images to your photo library.",
+        "NSCameraUsageDescription": "KaufAI uses your camera to scan product photos for AI-powered listing generation.",
+        "NSPhotoLibraryUsageDescription": "KaufAI accesses your photo library to select product images for AI identification and listing creation.",
+        "NSPhotoLibraryAddUsageDescription": "KaufAI saves generated product images to your photo library.",
         "NSFaceIDUsageDescription": "Use Face ID to quickly unlock the app instead of entering your PIN.",
         "LSApplicationCategoryType": "public.app-category.business",
         "CFBundleURLTypes": [
@@ -85,8 +85,8 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Kauf26 uses your camera to scan product photos for AI-powered listing generation.",
-          "photosPermission": "Kauf26 accesses your photo library to select product images for AI identification and listing creation.",
+          "cameraPermission": "KaufAI uses your camera to scan product photos for AI-powered listing generation.",
+          "photosPermission": "KaufAI accesses your photo library to select product images for AI identification and listing creation.",
           "microphonePermission": false,
           "recordAudioAndroid": false
         }

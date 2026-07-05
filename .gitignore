@@ -3,6 +3,8 @@ dist
 .env
 .env.local
 .env.*.local
+render-env-marketplace.paste.env
+render-kauf26-production.env
 # Local copy of env template — may contain secrets; canonical template is .env.example
 .env.template
 .DS_Store

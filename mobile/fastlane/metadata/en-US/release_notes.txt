@@ -1,0 +1,10 @@
+Welcome to KaufAI — your AI-powered marketplace listing assistant!
+
+• Snap or upload product photos for instant AI identification
+• Generate optimized titles and descriptions with GPT-4o
+• Connect eBay, Etsy, Shopify, and more
+• Publish listings to multiple marketplaces from one app
+• Track inventory and listing drafts in one place
+• Sign in securely with Apple or Google
+
+Start your free trial and list smarter, not harder.

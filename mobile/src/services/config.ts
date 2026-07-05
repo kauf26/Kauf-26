@@ -56,13 +56,32 @@ function warnDevMisconfiguration(url: string): void {
   }
 }
 
+function isSimulatorOrEmulator(): boolean {
+  return Platform.OS !== 'web' && !Constants.isDevice;
+}
+
+/** On simulator/emulator, localhost reaches the Mac host; LAN IPs in .env are rewritten. */
+function adaptUrlForRuntime(url: string): string {
+  if (!isDevBuild() || !isSimulatorOrEmulator()) {
+    return url;
+  }
+  const isLanIp =
+    /^https?:\/\/(?:192\.168\.|10\.|172\.(?:1[6-9]|2\d|3[01])\.)/i.test(url);
+  if (!isLanIp) {
+    return url;
+  }
+  const localhostUrl = url.replace(/^(https?:\/\/)[^:/?#]+/, '$1localhost');
+  console.log(`[Kauf26] Simulator — using ${localhostUrl} (configured: ${url})`);
+  return localhostUrl;
+}
+
 function resolveApiBaseUrl(): string {
   const fromEnv = process.env.EXPO_PUBLIC_API_URL?.trim();
   const fromExtra = readExtraApiUrl();
   const raw = fromEnv || fromExtra;
 
   if (raw) {
-    const url = normalizeApiBaseUrl(raw);
+    const url = adaptUrlForRuntime(normalizeApiBaseUrl(raw));
     if (!isDevBuild() && !url.startsWith('https://') && !isPrivateOrLocalHost(url)) {
       console.error(
         '[Kauf26] EXPO_PUBLIC_API_URL should use HTTPS in store builds; continuing with configured URL.'

@@ -1,0 +1,217 @@
+# KaufAI — Fastlane deployment lanes
+# Docs: fastlane/README.md
+
+require "dotenv"
+Dotenv.load(File.join(__dir__, ".env")) if File.exist?(File.join(__dir__, ".env"))
+
+default_platform(:ios)
+
+APP_IDENTIFIER = "com.kaufai.app"
+PROJECT_ROOT = File.expand_path("..", __dir__)
+
+def load_api_key!
+  key_path = ENV["APP_STORE_CONNECT_API_KEY_PATH"]
+  key_path = File.expand_path(key_path, PROJECT_ROOT) if key_path && !key_path.start_with?("/")
+
+  issuer_id = ENV["APP_STORE_CONNECT_ISSUER_ID"]&.strip
+  if issuer_id.nil? || issuer_id.empty? || issuer_id == "YOUR_ISSUER_ID"
+    UI.user_error!(
+      "APP_STORE_CONNECT_ISSUER_ID is not set. " \
+      "App Store Connect → Users and Access → Integrations → App Store Connect API → copy Issuer ID " \
+      "into fastlane/.env (UUID format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx)."
+    )
+  end
+
+  unless ENV["APP_STORE_CONNECT_API_KEY_ID"] && key_path && File.exist?(key_path)
+    UI.user_error!(
+      "App Store Connect API key not configured. Copy fastlane/.env.example to fastlane/.env " \
+      "and set APP_STORE_CONNECT_API_KEY_ID, APP_STORE_CONNECT_ISSUER_ID, APP_STORE_CONNECT_API_KEY_PATH. " \
+      "See fastlane/README.md and docs/EAS_IOS_DEPLOY.md"
+    )
+  end
+
+  app_store_connect_api_key(
+    key_id: ENV["APP_STORE_CONNECT_API_KEY_ID"],
+    issuer_id: issuer_id,
+    key_filepath: key_path,
+    duration: 1200,
+    in_house: false
+  )
+end
+
+def connect_api_key
+  load_api_key! unless lane_context[SharedValues::APP_STORE_CONNECT_API_KEY]
+  lane_context[SharedValues::APP_STORE_CONNECT_API_KEY]
+end
+
+def ios_bundle_id_in_project
+  pbxproj = Dir.glob(File.join(PROJECT_ROOT, "ios", "*.xcodeproj", "project.pbxproj")).first
+  return nil unless pbxproj && File.exist?(pbxproj)
+
+  content = File.read(pbxproj)
+  ids = content.scan(/PRODUCT_BUNDLE_IDENTIFIER = ([^;]+);/).flatten.map(&:strip).uniq
+  ids.reject { |id| id.start_with?("org.reactjs") || id.include?("$(PRODUCT_BUNDLE_IDENTIFIER)") }.first
+end
+
+def ensure_ios_bundle_id!
+  current = ios_bundle_id_in_project
+  return if current == APP_IDENTIFIER
+
+  if current
+    UI.important("ios/ uses #{current} — expected #{APP_IDENTIFIER}. Running expo prebuild --clean...")
+  else
+    UI.important("ios/ missing or has no bundle ID — running expo prebuild --clean...")
+  end
+  prebuild
+end
+
+def gym_xcargs
+  team = ENV["FASTLANE_TEAM_ID"] || "U2M253533S"
+  "DEVELOPMENT_TEAM=#{team} PRODUCT_BUNDLE_IDENTIFIER=#{APP_IDENTIFIER}"
+end
+
+def ios_project_paths
+  ios_dir = File.join(PROJECT_ROOT, "ios")
+  unless File.directory?(ios_dir)
+    UI.user_error!("ios/ not found. Run: bundle exec fastlane ios prebuild")
+  end
+
+  workspace = ENV["IOS_WORKSPACE"]
+  scheme = ENV["IOS_SCHEME"]
+
+  unless workspace
+    workspaces = Dir.glob(File.join(ios_dir, "*.xcworkspace"))
+    UI.user_error!("No .xcworkspace in ios/. Set IOS_WORKSPACE in fastlane/.env") if workspaces.empty?
+    workspace = workspaces.first
+  end
+
+  unless scheme
+    # Expo prebuild: scheme usually matches the single app target (folder name under ios/)
+    scheme = File.basename(workspace, ".xcworkspace")
+  end
+
+  { workspace: workspace, scheme: scheme, ios_dir: ios_dir }
+end
+
+platform :ios do
+  desc "Generate native ios/ project from Expo (required before gym)"
+  lane :prebuild do
+    Dir.chdir(PROJECT_ROOT) do
+      sh("npx expo prebuild --platform ios --clean")
+    end
+    paths = ios_project_paths
+    cocoapods(podfile: File.join(paths[:ios_dir], "Podfile"))
+    UI.success("Prebuild complete. Workspace: #{paths[:workspace]}, Scheme: #{paths[:scheme]}")
+  end
+
+  desc "Build App Store IPA with gym (regenerates ios/ if bundle ID is stale)"
+  lane :build do
+    ensure_ios_bundle_id!
+    paths = ios_project_paths
+
+    gym(
+      workspace: paths[:workspace],
+      scheme: paths[:scheme],
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: File.join(PROJECT_ROOT, "build"),
+      output_name: "KaufAI.ipa",
+      clean: true,
+      include_bitcode: false,
+      include_symbols: true,
+      xcargs: gym_xcargs
+    )
+  end
+
+  desc "Upload metadata and screenshots only (no binary)"
+  lane :upload_metadata do |options|
+    deliver(
+      api_key: connect_api_key,
+      app_identifier: APP_IDENTIFIER,
+      app_version: options[:app_version] || "1.0.0",
+      skip_binary_upload: true,
+      skip_screenshots: options.fetch(:skip_screenshots, false),
+      skip_metadata: false,
+      submit_for_review: false,
+      automatic_release: false,
+      force: true,
+      run_precheck_before_submit: false,
+      precheck_include_in_app_purchases: false
+    )
+  end
+
+  desc "Submit an IPA built by EAS (or downloaded from expo.dev)"
+  lane :submit_eas_ipa do |options|
+    ipa = options[:ipa_path] || ENV["IPA_PATH"]
+    UI.user_error!("Provide ipa_path: bundle exec fastlane ios submit_eas_ipa ipa_path:/path/to/app.ipa") unless ipa && File.exist?(ipa)
+
+    deliver(
+      api_key: connect_api_key,
+      app_identifier: APP_IDENTIFIER,
+      app_version: options[:app_version] || "1.0.0",
+      ipa: ipa,
+      skip_screenshots: options.fetch(:skip_screenshots, true),
+      skip_metadata: options.fetch(:skip_metadata, true),
+      submit_for_review: options.fetch(:submit_for_review, false),
+      automatic_release: false,
+      force: true,
+      precheck_include_in_app_purchases: false
+    )
+  end
+
+  desc "Recommended: build on EAS (handles code signing in the cloud). Run credentials setup first in Terminal."
+  lane :eas_production do
+    UI.header("EAS production build — run these in Terminal (interactive Apple login required)")
+    UI.message("1. cd #{PROJECT_ROOT}")
+    UI.message("2. npx eas credentials:configure-build --platform ios --profile production")
+    UI.message("3. npx eas build --platform ios --profile production")
+    UI.message("4. npx eas submit --platform ios --profile production --latest")
+    UI.message("")
+    UI.message("Or upload an EAS IPA with Fastlane after step 3:")
+    UI.message("   bundle exec fastlane ios submit_eas_ipa ipa_path:/path/to/build.ipa")
+  end
+
+  desc "Full deploy: gym build + deliver (local signing required — prefer eas_production)"
+  lane :deploy do |options|
+    build
+
+    ipa_path = lane_context[SharedValues::IPA_OUTPUT_PATH]
+
+    deliver(
+      api_key: connect_api_key,
+      app_identifier: APP_IDENTIFIER,
+      app_version: options[:app_version] || "1.0.0",
+      ipa: ipa_path,
+      skip_screenshots: options.fetch(:skip_screenshots, false),
+      skip_metadata: false,
+      submit_for_review: options.fetch(:submit_for_review, true),
+      automatic_release: false,
+      force: true,
+      submission_information: {
+        add_id_info_uses_idfa: false,
+        export_compliance_uses_encryption: false
+      },
+      precheck_include_in_app_purchases: false
+    )
+
+    UI.success("Deployed #{APP_IDENTIFIER} to App Store Connect.")
+  end
+
+  desc "Build + upload binary and metadata without submitting for review"
+  lane :beta_upload do |options|
+    build
+
+    deliver(
+      api_key: connect_api_key,
+      app_identifier: APP_IDENTIFIER,
+      app_version: options[:app_version] || "1.0.0",
+      ipa: lane_context[SharedValues::IPA_OUTPUT_PATH],
+      skip_screenshots: options.fetch(:skip_screenshots, true),
+      skip_metadata: options.fetch(:skip_metadata, false),
+      submit_for_review: false,
+      automatic_release: false,
+      force: true,
+      precheck_include_in_app_purchases: false
+    )
+  end
+end

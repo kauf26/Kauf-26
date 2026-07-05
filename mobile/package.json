@@ -8,7 +8,12 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "dev:ios": "expo run:ios --device",
-    "dev:android": "expo run:android --device"
+    "dev:android": "expo run:android --device",
+    "fastlane:prebuild": "bundle exec fastlane ios prebuild",
+    "fastlane:build": "bundle exec fastlane ios build",
+    "fastlane:deploy": "bundle exec fastlane ios deploy",
+    "fastlane:metadata": "bundle exec fastlane ios upload_metadata skip_screenshots:true",
+    "fastlane:submit-ipa": "bundle exec fastlane ios submit_eas_ipa"
   },
   "dependencies": {
     "@expo/vector-icons": "~14.0.4",

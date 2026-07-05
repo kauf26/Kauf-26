@@ -1,0 +1,7 @@
+# This directory prevents fastlane deliver from failing when screenshots are not yet added.
+# Replace with real screenshots before running deliver with skip_screenshots: false.
+#
+# Expected structure (see docs/FASTLANE.md):
+#   fastlane/screenshots/en-US/
+#     iPhone 6.7" Display/
+#     iPad Pro (12.9-inch) (6th generation)/

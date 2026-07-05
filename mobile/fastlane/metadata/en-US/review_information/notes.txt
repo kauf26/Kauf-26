@@ -1,0 +1,33 @@
+KaufAI is an AI-powered marketplace listing assistant for resellers.
+
+SIGN IN
+Please use Sign in with Apple on the login screen.
+No demo account is available on the production server.
+
+HOW TO TEST
+1. Open the app and tap Sign in with Apple
+2. Complete onboarding if prompted
+3. Tap the camera icon to capture or upload a product photo
+4. Tap Identify — AI generates title, description, and price suggestion
+5. Review the listing draft
+
+PERMISSIONS
+- Camera: scan product photos for AI listing generation
+- Photo Library: select existing product images
+
+AI FEATURES
+Product images are sent to OpenAI GPT-4o for identification.
+Users review all AI output before publishing.
+
+MARKETPLACE INTEGRATION
+OAuth tokens are stored in iOS Keychain on-device.
+Connecting seller accounts is optional for testing the core AI identify flow.
+
+BACKEND
+API: https://kauf-26.onrender.com (api.kaufai.com pending DNS)
+Health: https://kauf-26.onrender.com/api/health
+Privacy: https://kaufai.com/privacy
+Terms: https://kaufai.com/terms
+
+ACCOUNT DELETION
+Available in in-app Settings.
